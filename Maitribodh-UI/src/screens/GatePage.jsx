@@ -6,9 +6,14 @@ import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined';
 import LoginOutlinedIcon from '@mui/icons-material/LoginOutlined';
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import { api } from '../api.js';
-import { requestMessage, useResource } from '../utils/resources.js';
+import { blobRequestMessage, requestMessage, useResource } from '../utils/resources.js';
 
 const profilePhotoDimension = 600;
+
+async function releaseScanner(current) {
+  if (current.isScanning) await current.stop();
+  current.clear();
+}
 
 const states = {
   ELIGIBLE: { title: 'PROFILE FOUND', message: 'Active profile · No blacklist match', severity: 'success' },
@@ -29,6 +34,10 @@ export default function GatePage() {
   const [items, setItems] = useState(null);
   const [selected, setSelected] = useState(null);
   const [photoUrl, setPhotoUrl] = useState('');
+  const [photoError, setPhotoError] = useState('');
+  const [photoLoading, setPhotoLoading] = useState(false);
+  const [photoMissing, setPhotoMissing] = useState(false);
+  const [photoRevision, setPhotoRevision] = useState(0);
   const [verified, setVerified] = useState(false);
   const [locationAcknowledged, setLocationAcknowledged] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -36,11 +45,16 @@ export default function GatePage() {
   const [notice, setNotice] = useState('');
   const [online, setOnline] = useState(navigator.onLine);
   const [scanning, setScanning] = useState(false);
+  const [cameraStarting, setCameraStarting] = useState(false);
   const [cameraFallback, setCameraFallback] = useState(false);
   const [photoCameraOpen, setPhotoCameraOpen] = useState(false);
   const [photoCameraError, setPhotoCameraError] = useState('');
   const scanner = useRef(null);
   const cameraInput = useRef(null);
+  const qrImageInput = useRef(null);
+  const profilePhotoInput = useRef(null);
+  const scannerSession = useRef(0);
+  const scannerStarting = useRef(false);
   const profileVideo = useRef(null);
   const scanned = useRef(false);
   const [photoCaptureBusy, setPhotoCaptureBusy] = useState(false);
@@ -49,6 +63,7 @@ export default function GatePage() {
   const selectedGate = gateId || gates[0]?.location_id;
   const selectedArea = areaId || areas[0]?.location_id;
   const state = states[selected?.outcome];
+  const canRecoverPhoto = ['ELIGIBLE', 'LOCATION_WARNING', 'ALREADY_INSIDE'].includes(selected?.outcome);
   useEffect(() => {
     const update = () => setOnline(navigator.onLine);
     window.addEventListener('online', update); window.addEventListener('offline', update);
@@ -57,12 +72,28 @@ export default function GatePage() {
   useEffect(() => {
     let active = true;
     let url;
-    if (selected?.photoKey) api.get(`/persons/${selected.personId}/files/${selected.photoKey}`, { responseType: 'blob' }).then(({ data }) => {
+    setPhotoUrl('');
+    setPhotoError('');
+    setPhotoMissing(false);
+    setVerified(false);
+    setPhotoLoading(Boolean(selected?.photoKey));
+    if (selected?.photoKey) api.get(`/persons/${selected.personId}/files/${encodeURIComponent(selected.photoKey)}`, { responseType: 'blob' }).then(({ data }) => {
       if (active) { url = URL.createObjectURL(data); setPhotoUrl(url); }
-    }).catch(() => { if (active) setPhotoUrl(''); });
+    }).catch(async (failure) => {
+      const detail = await blobRequestMessage(failure);
+      if (active) {
+        setPhotoMissing(failure.response?.status === 404);
+        setPhotoError(`Could not load the profile photo. ${detail} Verification is unavailable until the photo loads.`);
+      }
+    }).finally(() => { if (active) setPhotoLoading(false); });
     return () => { active = false; if (url) URL.revokeObjectURL(url); };
-  }, [selected?.personId, selected?.photoKey]);
-  useEffect(() => () => { if (scanner.current?.isScanning) scanner.current.stop().then(() => scanner.current.clear()).catch(() => {}); }, []);
+  }, [selected?.personId, selected?.photoKey, photoRevision]);
+  useEffect(() => () => {
+    scannerSession.current += 1;
+    const current = scanner.current;
+    scanner.current = null;
+    if (current && !scannerStarting.current) releaseScanner(current).catch((failure) => console.warn('Could not release QR camera', failure));
+  }, []);
   useEffect(() => {
     if (!photoCameraOpen) return undefined;
     let active = true;
@@ -109,7 +140,7 @@ export default function GatePage() {
 
   async function lookup(payload) {
     if (!selectedArea) { setError('Select a gate and area.'); return; }
-    setBusy(true); setError(''); setSelected(null); setVerified(false); setLocationAcknowledged(false); setPhotoUrl('');
+    setBusy(true); setError(''); setItems(null); setSelected(null); setVerified(false); setLocationAcknowledged(false); setPhotoUrl('');
     try {
       const { data } = await api.post('/gate/lookups', { ...payload, locationId: Number(selectedArea) });
       setItems(data.items);
@@ -123,7 +154,9 @@ export default function GatePage() {
     return {
       ...person,
       locationWarning,
-      outcome: locationWarning ? 'LOCATION_WARNING' : person.outcome === 'LOCATION_WARNING' ? 'ELIGIBLE' : person.outcome,
+      outcome: ['ELIGIBLE', 'LOCATION_WARNING'].includes(person.outcome)
+        ? locationWarning ? 'LOCATION_WARNING' : 'ELIGIBLE'
+        : person.outcome,
     };
   }
   function selectPerson(person) {
@@ -137,47 +170,69 @@ export default function GatePage() {
     setSelected(personForArea(person, locationId));
     setVerified(false);
     setLocationAcknowledged(false);
-    setPhotoUrl('');
   }
   async function stopCamera() {
     const current = scanner.current;
-    if (current?.isScanning) await current.stop();
-    if (current) current.clear();
-    scanner.current = null; setScanning(false);
+    try {
+      if (current) await releaseScanner(current);
+      return true;
+    } catch (failure) {
+      console.warn('Could not release QR camera', failure);
+      setError('Could not stop the QR camera. Reload this page before starting another scan.');
+      return false;
+    } finally {
+      if (!current?.isScanning) scanner.current = null;
+      setScanning(Boolean(current?.isScanning));
+    }
   }
   async function startCamera() {
+    if (scanning || busy) return;
+    const session = scannerSession.current;
     setError(''); scanned.current = false;
+    setItems(null); setSelected(null); setVerified(false); setLocationAcknowledged(false); setPhotoUrl('');
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
       setCameraFallback(true);
-      setError('Live camera scanning requires HTTPS on mobile. Opening the phone camera to capture the QR code.');
+      setError('Live camera scanning requires HTTPS or localhost and a supported browser. Upload a QR image or capture it with the phone camera.');
       cameraInput.current?.click();
       return;
     }
     setCameraFallback(false);
     setScanning(true);
+    setCameraStarting(true);
+    scannerStarting.current = true;
+    let current;
     try {
-      const { Html5Qrcode } = await import('html5-qrcode');
-      const current = new Html5Qrcode('gate-camera'); scanner.current = current;
-      await current.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 220, height: 220 } }, async (value) => {
+      const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import('html5-qrcode');
+      if (session !== scannerSession.current) return;
+      current = new Html5Qrcode('gate-camera', { formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE] }); scanner.current = current;
+      await current.start({ facingMode: { ideal: 'environment' } }, { fps: 10 }, async (value) => {
+        if (session !== scannerSession.current) return;
         if (scanned.current) return;
         scanned.current = true;
-        await stopCamera();
-        await lookup({ qrPayload: value });
+        const [stopped] = await Promise.all([
+          stopCamera(),
+          lookup({ qrPayload: value }),
+        ]);
+        if (!stopped && session === scannerSession.current) setError('Could not stop the QR camera. Reload this page before starting another scan.');
       }, () => {});
-    } catch {
-      const current = scanner.current;
+      if (session !== scannerSession.current) await releaseScanner(current);
+    } catch (failure) {
       if (current) {
         try {
-          if (current.isScanning) await current.stop();
-          current.clear();
-        } catch {
-          scanner.current = null;
+          await releaseScanner(current);
+        } catch (cleanupFailure) {
+          console.warn('Could not release QR camera after startup failure', cleanupFailure);
         }
       }
+      if (session !== scannerSession.current) return;
       scanner.current = null;
-      setError('Live camera unavailable. Allow camera access or use the phone camera capture option below.');
+      const detail = failure instanceof Error ? failure.message : String(failure);
+      setError(`Live camera unavailable. ${detail.slice(0, 180)} Allow camera access for this site, close other apps using the camera, or upload a QR image.`);
       setCameraFallback(true);
       setScanning(false);
+    } finally {
+      scannerStarting.current = false;
+      if (session === scannerSession.current) setCameraStarting(false);
     }
   }
   async function scanCapturedQr(event) {
@@ -185,18 +240,23 @@ export default function GatePage() {
     event.currentTarget.value = '';
     if (!image) return;
 
+    const session = scannerSession.current;
     setScanning(true);
+    setCameraStarting(true);
     setError('');
+    setItems(null); setSelected(null); setVerified(false); setLocationAcknowledged(false); setPhotoUrl('');
     let current;
     let value;
     try {
-      const { Html5Qrcode } = await import('html5-qrcode');
-      current = new Html5Qrcode('gate-camera');
+      const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import('html5-qrcode');
+      if (session !== scannerSession.current) return;
+      current = new Html5Qrcode('gate-camera', { formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE] });
       scanner.current = current;
-      value = await current.scanFile(image, false);
+      const { scanQrImage } = await import('../utils/qrImage.js');
+      value = await scanQrImage(current, image);
     } catch (failure) {
       const detail = failure instanceof Error ? failure.message : String(failure);
-      setError(`Could not read a QR code from that image. ${detail.slice(0, 180)} Try again with a clear JPEG or PNG photo, or search by mobile number, name or Person ID.`);
+      setError(`Could not read a QR code from that image. ${detail.slice(0, 240)} Use the original downloaded QR PNG or a close-up with all four corners and the white border visible. You can also search by mobile number, name or Person ID.`);
     } finally {
       try {
         current?.clear();
@@ -204,9 +264,12 @@ export default function GatePage() {
         console.warn('Could not clear captured QR image from scanner', cleanupFailure);
       }
       scanner.current = null;
-      setScanning(false);
+      if (session === scannerSession.current) {
+        setScanning(false);
+        setCameraStarting(false);
+      }
     }
-    if (value) await lookup({ qrPayload: value });
+    if (value && session === scannerSession.current) await lookup({ qrPayload: value });
   }
   async function uploadProfilePhoto(file) {
     if (!file || !selected) return;
@@ -263,20 +326,40 @@ export default function GatePage() {
     {notice && <Alert severity="success" role="status" sx={{ mb: 2 }}>{notice}</Alert>}
     {route.state?.registered && <Alert severity="success" sx={{ mb: 2 }}>Visitor registered. Find the profile and verify the photograph before check-in.</Alert>}
       <Box className="gate-layout">
-      <Box className="gate-scanner"><Box id="gate-camera" sx={{ width: '100%', minHeight: 240 }} />
-        <Button startIcon={<CameraAltOutlinedIcon />} onClick={scanning ? stopCamera : startCamera} disabled={!online || !selectedArea}>{scanning ? 'Stop camera scan' : 'Start camera scan'}</Button>
+      <Box className="gate-scanner"><Typography color="text.secondary" sx={{ mb: 1 }}>Point the camera at the QR code. Person information appears automatically when detected; no Find Person click is needed.</Typography><Box id="gate-camera" sx={{ width: '100%', minHeight: 240 }} />
+        <Button startIcon={<CameraAltOutlinedIcon />} onClick={scanning ? stopCamera : startCamera} disabled={!online || !selectedArea || busy || cameraStarting}>{scanning ? 'Stop camera scan' : 'Start camera scan'}</Button>
+        <input ref={qrImageInput} aria-label="Upload QR image" type="file" accept="image/jpeg,image/png" hidden onChange={scanCapturedQr} />
+        <Button onClick={() => qrImageInput.current?.click()} disabled={!online || !selectedArea || busy || scanning}>Upload QR image</Button>
         <input ref={cameraInput} aria-label="Capture QR code with phone camera" type="file" accept="image/jpeg,image/png" capture="environment" hidden onChange={scanCapturedQr} />
-        {cameraFallback && <Button onClick={() => cameraInput.current?.click()} disabled={!online || !selectedArea || scanning}>Capture QR with phone camera</Button>}
-        <Box component="form" onSubmit={(event) => { event.preventDefault(); lookup({ query: query.trim() }); }} sx={{ display: 'grid', gap: 2, mt: 2 }}><TextField label="Mobile number, name or Person ID" value={query} onChange={(event) => setQuery(event.target.value)} required /><Button type="submit" startIcon={<SearchOutlinedIcon />} variant="contained" disabled={busy || !online}>Find Person</Button></Box>
+        {cameraFallback && <Button onClick={() => cameraInput.current?.click()} disabled={!online || !selectedArea || busy || scanning}>Capture QR with phone camera</Button>}
+        <Box component="form" onSubmit={(event) => { event.preventDefault(); const value = query.trim(); lookup(value.startsWith('AMS1.') ? { qrPayload: value } : { query: value }); }} sx={{ display: 'grid', gap: 2, mt: 2 }}><TextField label="Mobile number, name or Person ID" helperText="You can also scan with a USB QR reader or paste QR text here." value={query} onChange={(event) => setQuery(event.target.value)} required /><Button type="submit" startIcon={<SearchOutlinedIcon />} variant="contained" disabled={busy || scanning || !online}>Find Person</Button></Box>
         {items?.length > 1 && <Box sx={{ mt: 2 }}><Typography>{items.length} registrations found</Typography>{items.map((item) => <Button key={item.personId} onClick={() => selectPerson(item)} fullWidth>{item.name} · {item.category} · {item.personCode}</Button>)}</Box>}
       </Box>
       <Box className="gate-result-panel">
         <Box className="form-grid"><Autocomplete options={gates} value={gates.find((item) => String(item.location_id) === String(selectedGate)) ?? null} getOptionLabel={(item) => item.name} isOptionEqualToValue={(item, value) => item.location_id === value.location_id} onChange={(_event, item) => { setGateId(item?.location_id ?? ''); setSelected(null); setLocationAcknowledged(false); }} renderInput={(inputParams) => <TextField {...inputParams} label="Gate" required />} /><Autocomplete options={areas} value={areas.find((item) => String(item.location_id) === String(selectedArea)) ?? null} getOptionLabel={(item) => item.name} isOptionEqualToValue={(item, value) => item.location_id === value.location_id} onChange={(_event, item) => { if (!item) return; const nextArea = Number(item.location_id); setAreaId(nextArea); setVerified(false); setLocationAcknowledged(false); if (selected) setSelected(personForArea(selected, nextArea)); else setItems(null); }} renderInput={(inputParams) => <TextField {...inputParams} label="Area" required />} /></Box>
-        <Alert severity={state?.severity ?? 'info'} sx={{ my: 3 }}><Typography variant="h3">{state?.title ?? (items?.length === 0 ? 'PERSON NOT FOUND' : 'READY TO VERIFY')}</Typography>{state?.message ?? (items?.length === 0 ? 'A valid person record is required before entry.' : 'Search by registered mobile number, name, or Person ID.')}</Alert>
+        {busy && <Box role="status" sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 2 }}><CircularProgress size={20} /><Typography>Loading person information...</Typography></Box>}
+        <Alert severity={state?.severity ?? 'info'} sx={{ my: 3 }}><Typography variant="h3">{state?.title ?? (items?.length === 0 ? 'PERSON NOT FOUND' : 'READY TO VERIFY')}</Typography>{state?.message ?? (items?.length === 0 ? 'A valid person record is required before entry.' : 'Scan a QR code to automatically display the person, or search by registered mobile number, name, or Person ID.')}</Alert>
         <Box sx={{ display: 'flex', gap: 2 }}><Button variant="contained" startIcon={busy ? <CircularProgress size={18} /> : <LoginOutlinedIcon />} onClick={() => movement(true)} disabled={busy || !online || !['ELIGIBLE', 'LOCATION_WARNING'].includes(selected?.outcome) || !verified || !photoUrl || (selected?.locationWarning && !locationAcknowledged) || !selectedGate}>Check-In</Button><Button variant="outlined" startIcon={<LogoutOutlinedIcon />} onClick={() => movement(false)} disabled={busy || !online || !selected?.openVisitId || !selectedGate}>Check-Out</Button></Box>
         {items?.length === 0 && <Button sx={{ mt: 3 }} component={Link} to={`/register?from=gate&gate=${selectedGate}&area=${selectedArea}`} disabled={!online}>Register Visitor</Button>}
       </Box>
-      {selected && <Box className="gate-person-panel"><Avatar src={photoUrl} sx={{ width: 100, height: 100, mb: 2 }}>{selected.name?.split(' ').map((part) => part[0]).join('').slice(0, 2)}</Avatar><Typography variant="h3">{selected.name}</Typography><Typography>{selected.category}</Typography><Typography>{selected.personCode}</Typography><Typography>{selected.mobileMasked}</Typography><Typography>{selected.status}</Typography><Typography>Additional people: {selected.accompanyingCount ?? 0}</Typography>{selected.outcome === 'ELIGIBLE' && !selected.hasPhoto && !selected.photoKey && <Box sx={{ my: 1 }}><Typography color="text.secondary">No profile photo. Capture one before check-in.</Typography><Button startIcon={<CameraAltOutlinedIcon />} onClick={() => setPhotoCameraOpen(true)} disabled={!online || photoCaptureBusy}>{photoCaptureBusy ? 'Saving photo' : 'Open camera'}</Button></Box>}<FormControlLabel control={<Checkbox checked={verified} disabled={!photoUrl} onChange={(event) => setVerified(event.target.checked)} />} label="I verified the person against the profile photo" />{selected.locationWarning && <FormControlLabel control={<Checkbox checked={locationAcknowledged} onChange={(event) => setLocationAcknowledged(event.target.checked)} />} label="I acknowledge this person is not assigned to the selected restricted area" />}</Box>}
+      {selected && <Box className="gate-person-panel">
+        <Avatar src={photoUrl} sx={{ width: 100, height: 100, mb: 2 }}>{selected.name?.split(' ').map((part) => part[0]).join('').slice(0, 2)}</Avatar>
+        <Typography variant="h3">{selected.name}</Typography><Typography>{selected.category}</Typography><Typography>{selected.personCode}</Typography><Typography>{selected.mobileMasked}</Typography><Typography>{selected.status}</Typography><Typography>Additional people: {selected.accompanyingCount ?? 0}</Typography>
+        {photoLoading && <Typography role="status">Loading profile photo...</Typography>}
+        {photoError && <Alert severity="error" sx={{ my: 1 }}>{photoError}{!photoMissing && <Button onClick={() => setPhotoRevision((value) => value + 1)} disabled={!online || photoLoading}>Retry profile photo</Button>}</Alert>}
+        {(!selected.photoKey || photoMissing) && <Box sx={{ my: 1 }}>
+          <Typography color="text.secondary">{photoMissing ? 'The stored profile photo is missing. Capture or upload a real photo before check-in.' : 'No profile photo. Capture one before check-in.'}</Typography>
+          {canRecoverPhoto && (!selected.hasPhoto || photoMissing) && <>
+            <Button startIcon={<CameraAltOutlinedIcon />} onClick={() => setPhotoCameraOpen(true)} disabled={!online || photoCaptureBusy}>{photoCaptureBusy ? 'Saving photo' : 'Open camera'}</Button>
+            <input ref={profilePhotoInput} aria-label="Upload profile photo" type="file" accept="image/jpeg,image/png" hidden onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ''; if (file) uploadProfilePhoto(file); }} />
+            <Button onClick={() => profilePhotoInput.current?.click()} disabled={!online || photoCaptureBusy}>Upload profile photo</Button>
+          </>}
+          {!canRecoverPhoto && <Alert severity="warning">Photo recovery is unavailable for this profile state. Ask an administrator to restore the actual profile photo and resolve the profile status or QR issue.</Alert>}
+          {selected.hasPhoto && !photoMissing && <Alert severity="warning">The profile photo reference is missing. Ask an administrator to correct this profile, then scan again.</Alert>}
+        </Box>}
+        <FormControlLabel control={<Checkbox checked={verified} disabled={!photoUrl || photoLoading} onChange={(event) => setVerified(event.target.checked)} />} label="I verified the person against the profile photo" />
+        {selected.locationWarning && <FormControlLabel control={<Checkbox checked={locationAcknowledged} onChange={(event) => setLocationAcknowledged(event.target.checked)} />} label="I acknowledge this person is not assigned to the selected restricted area" />}
+      </Box>}
     </Box>
     <Dialog open={photoCameraOpen} onClose={() => setPhotoCameraOpen(false)} fullWidth maxWidth="sm"><DialogTitle>Capture profile photo</DialogTitle><DialogContent><Box component="video" ref={profileVideo} autoPlay playsInline muted aria-label="Live profile photo camera preview" sx={{ display: 'block', width: '100%', maxHeight: '60vh', aspectRatio: '4 / 3', objectFit: 'cover', backgroundColor: '#161616' }} />{photoCameraError && <Alert severity="error" sx={{ mt: 2 }}>{photoCameraError}</Alert>}</DialogContent><DialogActions><Button onClick={() => setPhotoCameraOpen(false)} disabled={photoCaptureBusy}>Cancel</Button><Button startIcon={<CameraAltOutlinedIcon />} onClick={captureProfilePhoto} variant="contained" disabled={photoCaptureBusy || Boolean(photoCameraError)}>Capture photo</Button></DialogActions></Dialog>
   </Box>;

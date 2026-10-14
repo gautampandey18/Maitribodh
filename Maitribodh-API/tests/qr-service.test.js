@@ -29,6 +29,7 @@ test('QR payload signs person code and version and asks encoder for PNG', async 
 
   assert.equal(encodedPayload, `${prefix}.${signature}`);
   assert.equal(encoderOptions.type, 'png');
+  assert.equal(encoderOptions.margin, 4);
   assert.equal(result.image.toString(), 'png-data');
   assert.equal(result.version, 3);
 });

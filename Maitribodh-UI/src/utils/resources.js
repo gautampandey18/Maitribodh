@@ -9,6 +9,22 @@ export function requestMessage(error, fallback = 'The request could not be compl
   return `${message} (${context})`;
 }
 
+export async function blobRequestMessage(error) {
+  const response = error.response;
+  if (response?.data instanceof Blob && response.data.type.includes('json')) {
+    try {
+      const data = JSON.parse(await response.data.text());
+      return requestMessage({ ...error, response: { ...response, data } });
+    } catch (failure) {
+      console.warn('Could not read API error from file response', failure);
+    }
+  }
+  const fallback = response?.status
+    ? `The photo request failed (HTTP ${response.status}).`
+    : 'The photo server could not be reached. Check the network connection and try again.';
+  return requestMessage(error, fallback);
+}
+
 export function useResource(path) {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');

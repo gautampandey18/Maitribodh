@@ -42,13 +42,13 @@ export function createRegistrationRepository(pool) {
       delete person.draft_data;
       return person;
     },
-    async capturePhoto({ personId, photoKey, actor }) {
+    async capturePhoto({ personId, photoKey, expectedMissingPhotoKey, actor }) {
       return transaction(async (client) => {
         const current = (await client.query('SELECT p.photo_key, p.status, c.form_type FROM mams.person p JOIN mams.category c USING(category_id) WHERE p.person_id = $1 FOR UPDATE OF p', [personId])).rows[0];
         if (!current) throw new ApiError(404, 'PERSON_NOT_FOUND', 'Person not found');
         if (current.form_type === 'STAFF' && !['ADMIN', 'SUPER_ADMIN'].includes(actor.role)) throw new ApiError(403, 'FORBIDDEN', 'Only an administrator can edit Staff profiles');
         if (actor.role === 'SECURITY_GUARD' && current.status !== 'ACTIVE') throw new ApiError(409, 'INVALID_STATE', 'A photo can only be captured for an active person');
-        if (actor.role === 'SECURITY_GUARD' && current.photo_key) throw new ApiError(409, 'PHOTO_ALREADY_EXISTS', 'This person already has a profile photo');
+        if (actor.role === 'SECURITY_GUARD' && current.photo_key && current.photo_key !== expectedMissingPhotoKey) throw new ApiError(409, 'PHOTO_ALREADY_EXISTS', 'This person already has a profile photo');
         if (current.status === 'DRAFT') throw new ApiError(409, 'INVALID_STATE', 'A photo cannot be saved for a draft registration');
         await client.query('UPDATE mams.person SET photo_key = $2, updated_by = $3, updated_at = now() WHERE person_id = $1', [personId, photoKey, actor.userId]);
         await audit(client, actor, current.photo_key ? 'PHOTO_UPDATED' : 'PHOTO_CAPTURED', personId, current.photo_key ? { photo_key: current.photo_key } : null, { photo_key: photoKey });

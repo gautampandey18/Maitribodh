@@ -67,7 +67,7 @@ async function generateQrForRecord(person, hmacSecret, toBuffer) {
   const image = await toBuffer(payload, {
     type: 'png',
     errorCorrectionLevel: 'M',
-    margin: 1,
+    margin: 4,
     scale: 6,
   });
   return { image, personCode: person.person_code, version: person.qr_version };

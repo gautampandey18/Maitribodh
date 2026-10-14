@@ -81,6 +81,25 @@ test('registration rolls back the profile when audit insertion fails', async () 
   assert.equal(calls.at(-1), 'ROLLBACK');
   assert.equal(calls.includes('COMMIT'), false);
 });
+test('guard can repair only the missing photo reference checked by the server', async () => {
+  const calls = [];
+  const currentKey = 'dev-seed/no-object-asha.jpg';
+  const client = {
+    async query(sql, values) {
+      calls.push({ sql, values });
+      return { rows: sql.includes('SELECT p.photo_key, p.status') ? [{ photo_key: currentKey, status: 'ACTIVE', form_type: 'VISITOR' }] : [], rowCount: 1 };
+    },
+    release() {},
+  };
+  const repository = createRegistrationRepository({ async connect() { return client; } });
+  const actor = { userId: 9, role: 'SECURITY_GUARD' };
+  await assert.rejects(repository.capturePhoto({ personId: 10, photoKey: 'new.jpg', actor }), (error) => error.code === 'PHOTO_ALREADY_EXISTS');
+  await assert.rejects(repository.capturePhoto({ personId: 10, photoKey: 'new.jpg', expectedMissingPhotoKey: 'different.jpg', actor }), (error) => error.code === 'PHOTO_ALREADY_EXISTS');
+  const result = await repository.capturePhoto({ personId: 10, photoKey: 'new.jpg', expectedMissingPhotoKey: currentKey, actor });
+  assert.equal(result.previous_photo_key, currentKey);
+  assert.ok(calls.some((call) => call.sql.includes('INSERT INTO mams.audit_log')));
+  assert.equal(calls.at(-1).sql, 'COMMIT');
+});
 test('pending persons cannot be deactivated and later reactivated to bypass approval', async () => {
   const client = { async query(sql) { return { rows: sql.includes('FOR UPDATE') ? [{ status: 'PENDING' }] : [] }; }, release() {} };
   const repository = createRegistrationRepository({ async connect() { return client; } });

@@ -17,6 +17,16 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: REG
 const documentUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: REGISTRATION_LIMITS.fileBytes, files: REGISTRATION_LIMITS.documentCount } }).array('documents', REGISTRATION_LIMITS.documentCount);
 const profilePhotoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: REGISTRATION_LIMITS.photoBytes, files: 1 } }).single('photo');
 const uploadRoot = path.resolve(process.env.UPLOAD_DIRECTORY ?? './private-uploads');
+const isStoredKey = (key) => typeof key === 'string' && /^[a-f0-9-]+\.(jpg|pdf)$/.test(key);
+async function readStoredFile(key) {
+  if (!isStoredKey(key)) return null;
+  try {
+    return await readFile(path.join(uploadRoot, key));
+  } catch (error) {
+    if (error.code === 'ENOENT') return null;
+    throw error;
+  }
+}
 const actorFrom = (request) => ({ userId: request.auth.userId, role: request.auth.role, ipAddress: request.ip, device: request.get('user-agent') });
 const idFrom = (value) => {
   const parsed = z.coerce.number().int().positive().safeParse(value);
@@ -101,12 +111,20 @@ export function createRegistrationRouter({ repository, authenticate, encryptionS
     try { image = await sharp(file.buffer, { limitInputPixels: 40000000 }).rotate().resize(REGISTRATION_LIMITS.photoDimension, REGISTRATION_LIMITS.photoDimension, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 86 }).toBuffer(); }
     catch { throw new ApiError(400, 'VALIDATION_ERROR', 'Choose a valid JPG or PNG photograph.'); }
     const personId = idFrom(request.params.personId);
+    let expectedMissingPhotoKey;
+    if (request.auth.role === 'SECURITY_GUARD') {
+      const person = await repository.get(personId);
+      if (person.photo_key && !await readStoredFile(person.photo_key)) expectedMissingPhotoKey = person.photo_key;
+    }
     const photoKey = `${randomUUID()}.jpg`;
     await mkdir(uploadRoot, { recursive: true });
     await writeFile(path.join(uploadRoot, photoKey), image, { flag: 'wx' });
     try {
-      const result = await repository.capturePhoto({ personId, photoKey, actor: actorFrom(request) });
-      if (result.previous_photo_key && result.previous_photo_key !== photoKey) await unlink(path.join(uploadRoot, result.previous_photo_key)).catch(() => {});
+      const result = await repository.capturePhoto({ personId, photoKey, expectedMissingPhotoKey, actor: actorFrom(request) });
+      if (isStoredKey(result.previous_photo_key) && result.previous_photo_key !== photoKey) {
+        try { await unlink(path.join(uploadRoot, result.previous_photo_key)); }
+        catch (error) { if (error.code !== 'ENOENT') request.log?.warn({ err: error }, 'Could not remove previous profile photo'); }
+      }
       response.json({ photo_key: result.photo_key });
     } catch (error) {
       await unlink(path.join(uploadRoot, photoKey)).catch(() => {});
@@ -117,9 +135,9 @@ export function createRegistrationRouter({ repository, authenticate, encryptionS
     const person = await repository.get(idFrom(request.params.personId));
     const key = request.params.key;
     const document = person.documents.find((item) => item.key === key);
-    if (!/^[a-f0-9-]+\.(jpg|pdf)$/.test(key) || (key !== person.photo_key && !document)) throw new ApiError(404, 'FILE_NOT_FOUND', 'File not found');
+    if (!isStoredKey(key) || (key !== person.photo_key && !document)) throw new ApiError(404, 'FILE_NOT_FOUND', 'File not found');
     if (request.auth.role === 'SECURITY_GUARD' && key !== person.photo_key) throw new ApiError(403, 'FORBIDDEN', 'Document access is not permitted');
-    const buffer = await readFile(path.join(uploadRoot, key)).catch(() => null);
+    const buffer = await readStoredFile(key);
     if (!buffer) throw new ApiError(404, 'FILE_NOT_FOUND', 'File not found');
     response.set({ 'Content-Type': document?.type ?? 'image/jpeg', 'Cache-Control': 'private, no-store', 'Content-Disposition': 'attachment' }).send(buffer);
   }));

@@ -61,7 +61,7 @@ test('registration rejects a missing photograph', async () => {
 });
 test('security guard can save a valid first profile photo', async () => {
   let captured;
-  const repository = { async capturePhoto(value) { captured = value; return { photo_key: value.photoKey }; } };
+  const repository = { async get() { return { photo_key: null }; }, async capturePhoto(value) { captured = value; return { photo_key: value.photoKey }; } };
   const image = await sharp({ create: { width: 320, height: 240, channels: 3, background: '#f7d327' } }).png().toBuffer();
   try {
     const response = await request(appFor('SECURITY_GUARD', repository)).post('/api/v1/persons/10/photo')
@@ -73,6 +73,27 @@ test('security guard can save a valid first profile photo', async () => {
     assert.equal(metadata.format, 'jpeg');
   } finally { if (captured) await unlink(path.resolve('./private-uploads', captured.photoKey)); }
 });
+test('guard can recover a seed profile with a missing photo and fetch the saved photograph', async () => {
+  let captured;
+  let photoKey = 'dev-seed/no-object-asha.jpg';
+  const repository = {
+    async get() { return { photo_key: photoKey, documents: [] }; },
+    async capturePhoto(value) { captured = value; const previous = photoKey; photoKey = value.photoKey; return { photo_key: photoKey, previous_photo_key: previous }; },
+  };
+  const app = appFor('SECURITY_GUARD', repository);
+  const image = await sharp({ create: { width: 160, height: 160, channels: 3, background: '#f7d327' } }).png().toBuffer();
+  try {
+    const missing = await request(app).get(`/api/v1/persons/10/files/${encodeURIComponent(photoKey)}`).expect(404);
+    assert.equal(missing.body.error.code, 'FILE_NOT_FOUND');
+    await request(app).post('/api/v1/persons/10/photo').attach('photo', image, { filename: 'photo.png', contentType: 'image/png' }).expect(200);
+    assert.equal(captured.expectedMissingPhotoKey, 'dev-seed/no-object-asha.jpg');
+    const response = await request(app).get(`/api/v1/persons/10/files/${photoKey}`).expect(200);
+    assert.match(response.headers['content-type'], /image\/jpeg/);
+    const metadata = await sharp(response.body).metadata();
+    assert.equal(metadata.width, 160);
+  } finally { if (captured) await unlink(path.join('./private-uploads', captured.photoKey)); }
+});
+
 test('registration options expose active categories, schemas and master data', async () => {
   const expected = { categories: [{ category_id: 1, name: 'Visitor', schema: { fields: [] } }], lookups: [], locations: [] };
   const repository = { async options() { return expected; } };
