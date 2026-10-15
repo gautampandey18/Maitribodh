@@ -17,6 +17,7 @@
     "migrate": "node db/migrate.js",
     "migrate:local": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File db/migrate_dev.ps1",
     "user:create-super-admin:local": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File db/create_super_admin_dev.ps1",
+    "user:reset-password:local": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File db/reset_user_password_dev.ps1",
     "seed:dev": "node db/seed_dev.js",
     "seed:dev:local": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File db/seed_dev.ps1",
     "seed:demo-users": "node db/seed_demo_users.js",
