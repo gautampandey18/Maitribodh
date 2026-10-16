@@ -163,3 +163,36 @@ it('resubmits a rejected registration and shows it in Pending Registration', asy
   expect(await screen.findByText('Nita Rao')).toBeInTheDocument();
   expect(get).toHaveBeenLastCalledWith('/approvals', { params: { status: 'PENDING', page: 1, pageSize: 5 } });
 }, 30_000);
+
+it('filters pending, approved, and rejected registrations by name and category', async () => {
+  const get = vi.spyOn(api, 'get').mockResolvedValue({
+    data: { items: [], total: 0, page: 1, pageSize: 5 },
+  });
+  const user = userEvent.setup();
+
+  render(
+    <Provider store={store}>
+      <MemoryRouter>
+        <ApprovalsPage />
+      </MemoryRouter>
+    </Provider>,
+  );
+
+  await screen.findByRole('textbox', { name: 'Name' });
+  await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Asha');
+  await user.type(screen.getByRole('textbox', { name: 'Category' }), 'Staff');
+  await user.click(screen.getByRole('button', { name: 'Search' }));
+  await waitFor(() => expect(get).toHaveBeenLastCalledWith('/approvals', {
+    params: { status: 'PENDING', page: 1, pageSize: 5, name: 'Asha', category: 'Staff' },
+  }));
+
+  await user.click(screen.getByRole('tab', { name: 'Approved' }));
+  await waitFor(() => expect(get).toHaveBeenLastCalledWith('/approvals', {
+    params: { status: 'ACTIVE', page: 1, pageSize: 5, name: 'Asha', category: 'Staff' },
+  }));
+
+  await user.click(screen.getByRole('tab', { name: 'Rejected' }));
+  await waitFor(() => expect(get).toHaveBeenLastCalledWith('/approvals', {
+    params: { status: 'REJECTED', page: 1, pageSize: 5, name: 'Asha', category: 'Staff' },
+  }));
+}, 30_000);

@@ -95,21 +95,25 @@ export function createUsersRepository(pool) {
       }
     },
 
-    async updateUser({ targetUserId, deactivate, canBulkUpload, actorUserId, actorRole, ipAddress, device }) {
+    async updateUser({ targetUserId, firstName, lastName, mobile, email, username, role, isSecurityHead, deactivate = false, activate = false, canBulkUpload, actorUserId, actorRole, ipAddress, device }) {
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
         await client.query('SELECT pg_advisory_xact_lock($1)', [adminMembershipLockId]);
         const result = await client.query(
-          `UPDATE mams.app_user
-              SET status = CASE WHEN $2::boolean THEN 'INACTIVE' ELSE status END,
-                  can_bulk_upload = COALESCE($3::boolean, can_bulk_upload),
-                  token_version = CASE WHEN $2::boolean THEN token_version + 1 ELSE token_version END,
+            `UPDATE mams.app_user
+              SET first_name = COALESCE($4, first_name), last_name = COALESCE($5, last_name),
+                mobile = COALESCE($6, mobile), email = COALESCE($7, email),
+                username = COALESCE($8, username), role = COALESCE($9, role),
+                is_security_head = COALESCE($10::boolean, is_security_head),
+                status = CASE WHEN $2::boolean THEN 'INACTIVE' WHEN $11::boolean THEN 'ACTIVE' ELSE status END,
+                can_bulk_upload = COALESCE($3::boolean, can_bulk_upload),
+                token_version = CASE WHEN $2::boolean OR $11::boolean THEN token_version + 1 ELSE token_version END,
                   updated_at = now()
-            WHERE user_id = $1 AND status = 'ACTIVE'
+            WHERE user_id = $1
           RETURNING user_id, first_name, last_name, mobile, email, username,
                     role, is_security_head, can_bulk_upload, status, updated_at`,
-          [targetUserId, deactivate, canBulkUpload ?? null],
+          [targetUserId, deactivate, canBulkUpload ?? null, firstName ?? null, lastName ?? null, mobile ?? null, email ?? null, username ?? null, role ?? null, isSecurityHead ?? null, activate],
         );
         const user = result.rows[0];
         if (!user) {
@@ -118,8 +122,11 @@ export function createUsersRepository(pool) {
         }
 
         const changes = {};
+        for (const [key, value] of Object.entries({ firstName, lastName, mobile, email, username, role, isSecurityHead, canBulkUpload })) {
+          if (value !== undefined) changes[key] = value;
+        }
         if (deactivate) changes.status = 'INACTIVE';
-        if (canBulkUpload !== undefined) changes.can_bulk_upload = canBulkUpload;
+        if (activate) changes.status = 'ACTIVE';
 
         await client.query(
           `INSERT INTO mams.audit_log
@@ -130,6 +137,32 @@ export function createUsersRepository(pool) {
         );
         await client.query('COMMIT');
         return user;
+      } catch (error) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+
+    async deleteUser({ targetUserId, actorUserId, actorRole, ipAddress, device }) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query('SELECT pg_advisory_xact_lock($1)', [adminMembershipLockId]);
+        const result = await client.query('DELETE FROM mams.app_user WHERE user_id = $1 RETURNING user_id, username', [targetUserId]);
+        if (!result.rows[0]) {
+          await client.query('ROLLBACK');
+          return null;
+        }
+        await client.query(
+          `INSERT INTO mams.audit_log
+             (user_id, user_role, module, activity, entity_type, entity_id, new_value, ip_address, device)
+           VALUES ($1, $2, 'USER', 'USER_DELETED', 'APP_USER', $3, $4::jsonb, $5, $6)`,
+          [actorUserId, actorRole, targetUserId, JSON.stringify({ username: result.rows[0].username }), ipAddress ?? null, device?.slice(0, 100) ?? null],
+        );
+        await client.query('COMMIT');
+        return result.rows[0];
       } catch (error) {
         await client.query('ROLLBACK').catch(() => {});
         throw error;

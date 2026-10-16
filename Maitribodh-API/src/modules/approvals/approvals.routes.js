@@ -13,6 +13,10 @@ export function createApprovalsRouter({ approvalsService, authenticate }) {
     reason: z.string().max(500).optional(),
   }).refine((input) => input.decision !== 'REJECT' || Boolean(input.reason?.trim() && input.reason.trim().length >= 10));
   const queueStatusSchema = z.enum(['PENDING', 'ACTIVE', 'REJECTED']).default('PENDING');
+  const filterSchema = z.object({
+    name: z.string().trim().max(100).default(''),
+    category: z.string().trim().max(100).default(''),
+  });
 
   router.get(
     '/',
@@ -21,10 +25,15 @@ export function createApprovalsRouter({ approvalsService, authenticate }) {
     asyncHandler(async (request, response) => {
       const status = queueStatusSchema.safeParse(request.query.status);
       if (!status.success) throw new ApiError(400, 'VALIDATION_ERROR', 'Invalid approval queue status');
+      const filters = filterSchema.safeParse({
+        name: request.query.name ?? '',
+        category: request.query.category ?? '',
+      });
+      if (!filters.success) throw new ApiError(400, 'VALIDATION_ERROR', 'Invalid approval queue filters');
       const pagination = parsePagination(request.query);
       const result = status.data === 'PENDING'
-        ? await approvalsService.listPending(pagination)
-        : await approvalsService.listByStatus({ status: status.data, ...pagination });
+        ? await approvalsService.listPending({ ...pagination, ...filters.data })
+        : await approvalsService.listByStatus({ status: status.data, ...pagination, ...filters.data });
       response.status(200).json(result);
     }),
   );

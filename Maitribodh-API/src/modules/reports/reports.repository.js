@@ -60,7 +60,7 @@ export function createReportsRepository(pool) {
       return result.rows;
     },
 
-    async staff(pagination) {
+    async staff({ name = '', jobRole = '', pagination } = {}) {
       const result = await pool.query(
         `SELECT p.person_code, p.first_name || ' ' || p.last_name AS name,
                 d.name AS department, j.name AS job_role,
@@ -73,13 +73,17 @@ export function createReportsRepository(pool) {
            LEFT JOIN mams.lookup_value AS j
              ON j.lookup_id = (p.category_details ->> 'job_role_id')::int
           WHERE p.status <> 'DRAFT'
-          ORDER BY p.created_at DESC, p.person_id${pagination ? ' LIMIT $1 OFFSET $2' : ''}`,
-        pagination ? [pagination.pageSize, pagination.offset] : [],
+            AND ($1 = '' OR p.first_name || ' ' || p.last_name ILIKE '%' || $1 || '%')
+            AND ($2 = '' OR j.name ILIKE '%' || $2 || '%')
+          ORDER BY p.created_at DESC, p.person_id${pagination ? ' LIMIT $3 OFFSET $4' : ''}`,
+        pagination
+          ? [name, jobRole, pagination.pageSize, pagination.offset]
+          : [name, jobRole],
       );
       return result.rows;
     },
 
-    async approvals({ fromDate, toDate, pagination }) {
+    async approvals({ fromDate, toDate, user = '', pagination }) {
       const result = await pool.query(
         `SELECT p.person_code, p.first_name || ' ' || p.last_name AS name,
                 h.action, h.reason, u.username AS by_user, h.acted_at${pagination ? ', count(*) OVER()::int AS total' : ''}
@@ -88,16 +92,19 @@ export function createReportsRepository(pool) {
            JOIN mams.app_user AS u ON u.user_id = h.acted_by
           WHERE ($1::date IS NULL OR (h.acted_at AT TIME ZONE 'Asia/Kolkata')::date >= $1::date)
             AND ($2::date IS NULL OR (h.acted_at AT TIME ZONE 'Asia/Kolkata')::date <= $2::date)
-          ORDER BY h.acted_at DESC, h.approval_id${pagination ? ' LIMIT $3 OFFSET $4' : ''}`,
-        pagination ? [fromDate, toDate, pagination.pageSize, pagination.offset] : [fromDate, toDate],
+            AND ($3 = '' OR u.username ILIKE '%' || $3 || '%')
+          ORDER BY h.acted_at DESC, h.approval_id${pagination ? ' LIMIT $4 OFFSET $5' : ''}`,
+        pagination
+          ? [fromDate, toDate, user, pagination.pageSize, pagination.offset]
+          : [fromDate, toDate, user],
       );
       return result.rows;
     },
 
-    async blacklist(pagination) {
+    async blacklist({ name = '', category = '', pagination } = {}) {
       const result = await pool.query(
         `SELECT p.person_code, p.first_name || ' ' || p.last_name AS name,
-                r.name AS reason, b.remarks, b.start_date, b.end_date,
+                c.name AS category, r.name AS reason, b.remarks, b.start_date, b.end_date,
                 CASE
                   WHEN b.lifted_at IS NOT NULL THEN 'LIFTED'
                   WHEN b.end_date < (now() AT TIME ZONE 'Asia/Kolkata')::date THEN 'EXPIRED'
@@ -105,9 +112,14 @@ export function createReportsRepository(pool) {
                 END AS state${pagination ? ', count(*) OVER()::int AS total' : ''}
            FROM mams.blacklist AS b
            JOIN mams.person AS p ON p.person_id = b.person_id
+           JOIN mams.category AS c ON c.category_id = p.category_id
            JOIN mams.lookup_value AS r ON r.lookup_id = b.reason_id
-          ORDER BY b.added_at DESC, b.blacklist_id${pagination ? ' LIMIT $1 OFFSET $2' : ''}`,
-        pagination ? [pagination.pageSize, pagination.offset] : [],
+          WHERE ($1 = '' OR p.first_name || ' ' || p.last_name ILIKE '%' || $1 || '%')
+            AND ($2 = '' OR c.name ILIKE '%' || $2 || '%')
+          ORDER BY b.added_at DESC, b.blacklist_id${pagination ? ' LIMIT $3 OFFSET $4' : ''}`,
+        pagination
+          ? [name, category, pagination.pageSize, pagination.offset]
+          : [name, category],
       );
       return result.rows;
     },

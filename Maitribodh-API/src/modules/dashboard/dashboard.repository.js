@@ -54,8 +54,9 @@ export function createDashboardRepository(pool) {
       return result.rows;
     },
 
-    async recentActivity() {
-      const result = await pool.query(
+    async recentActivity({ pageSize, offset }) {
+      const [result, count] = await Promise.all([
+        pool.query(
         `SELECT a.occurred_at, coalesce(u.username, 'system') AS actor,
                 nullif(trim(concat_ws(' ', p.first_name, p.last_name)), '') AS person_name,
                 c.name AS category, l.name AS location, a.module, a.activity
@@ -69,10 +70,13 @@ export function createDashboardRepository(pool) {
            LEFT JOIN mams.location AS l ON l.location_id = CASE
              WHEN a.activity = 'CHECK_OUT' THEN v.checkout_location_id
              WHEN a.entity_type = 'VISIT' THEN v.checkin_location_id END
-          ORDER BY a.occurred_at DESC
-          LIMIT 5`,
-      );
-      return result.rows;
+          ORDER BY a.occurred_at DESC, a.audit_id DESC
+          LIMIT $1 OFFSET $2`,
+        [pageSize, offset],
+        ),
+        pool.query('SELECT count(*)::int AS total FROM mams.audit_log'),
+      ]);
+      return { items: result.rows, total: count.rows[0].total };
     },
 
     async securityAlerts() {

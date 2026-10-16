@@ -117,3 +117,33 @@ it('allows an expired unlifted entry to be closed with a reason', async () => {
   await waitFor(() => expect(post).toHaveBeenCalledWith('/blacklist/8/lifts', { liftNote: 'Reviewed by Security' }));
   expect(await screen.findByText('LIFTED')).toBeInTheDocument();
 }, 30_000);
+
+it('filters blacklist entries by name and category on the server', async () => {
+  const get = vi.spyOn(api, 'get').mockResolvedValue({
+    data: { items: [], total: 0, page: 1, pageSize: 5 },
+  });
+  const user = userEvent.setup();
+
+  render(
+    <Provider store={store}>
+      <MemoryRouter>
+        <BlacklistPage />
+      </MemoryRouter>
+    </Provider>,
+  );
+
+  await screen.findByRole('textbox', { name: 'Name' });
+  await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Asha');
+  await user.type(screen.getByRole('textbox', { name: 'Category' }), 'Staff');
+  await user.click(screen.getByRole('button', { name: 'Search' }));
+
+  await waitFor(() => expect(get).toHaveBeenCalledWith('/blacklist', {
+    params: { page: 1, pageSize: 5, name: 'Asha', category: 'Staff' },
+  }));
+
+  await user.click(screen.getByRole('button', { name: 'Clear' }));
+  await waitFor(() => expect(get.mock.calls.filter(([path]) => path === '/blacklist').at(-1)).toEqual([
+    '/blacklist',
+    { params: { page: 1, pageSize: 5 } },
+  ]));
+}, 30_000);

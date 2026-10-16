@@ -133,6 +133,31 @@ test('lookup update preserves its type hierarchy and records old/new values', as
   assert.equal(calls[4].sql, 'COMMIT');
 });
 
+test('lookup deletion locks the typed value and audits the deletion atomically', async () => {
+  const calls = [];
+  const client = {
+    async query(sql, values = []) {
+      calls.push({ sql, values });
+      if (sql.includes('FOR UPDATE')) {
+        return { rows: [{ lookup_id: 6, lookup_type: 'DEPARTMENT', name: 'Operations', parent_id: null, category_id: null, extra: {}, status: 'ACTIVE' }] };
+      }
+      return { rows: [], rowCount: 1 };
+    },
+    release() {},
+  };
+  const repository = createLookupsRepository({ async connect() { return client; } });
+
+  const deleted = await repository.deleteValue({ lookupType: 'DEPARTMENT', lookupId: 6, actorUserId: 2, actorRole: 'ADMIN' });
+
+  assert.equal(deleted.lookup_id, 6);
+  assert.equal(calls[0].sql, 'BEGIN');
+  assert.match(calls[1].sql, /lookup_id = \$1 AND lookup_type = \$2\s+FOR UPDATE/);
+  assert.deepEqual(calls[1].values, [6, 'DEPARTMENT']);
+  assert.match(calls[2].sql, /DELETE FROM mams\.lookup_value/);
+  assert.match(calls[3].sql, /LOOKUP_DELETED/);
+  assert.equal(calls[4].sql, 'COMMIT');
+});
+
 test('lookup table pagination is opt-in and returns page metadata', async () => {
   let queryInput;
   const repository = createLookupsRepository({

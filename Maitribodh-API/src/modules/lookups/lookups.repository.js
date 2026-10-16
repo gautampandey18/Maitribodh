@@ -148,5 +148,54 @@ export function createLookupsRepository(pool) {
         client.release();
       }
     },
+
+    async deleteValue({ lookupType, lookupId, actorUserId, actorRole, ipAddress, device }) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const currentResult = await client.query(
+          `SELECT lookup_id, lookup_type, name, parent_id, category_id, extra, status
+             FROM mams.lookup_value
+            WHERE lookup_id = $1 AND lookup_type = $2
+            FOR UPDATE`,
+          [lookupId, lookupType],
+        );
+        const value = currentResult.rows[0];
+        if (!value) {
+          await client.query('ROLLBACK');
+          return null;
+        }
+        await client.query(
+          'DELETE FROM mams.lookup_value WHERE lookup_id = $1 AND lookup_type = $2',
+          [lookupId, lookupType],
+        );
+        await client.query(
+          `INSERT INTO mams.audit_log
+             (user_id, user_role, module, activity, entity_type, entity_id,
+              old_value, ip_address, device)
+           VALUES ($1, $2, 'MASTER', 'LOOKUP_DELETED', 'LOOKUP_VALUE', $3, $4::jsonb, $5, $6)`,
+          [
+            actorUserId,
+            actorRole,
+            lookupId,
+            JSON.stringify({
+              lookup_type: value.lookup_type,
+              name: value.name,
+              parent_id: value.parent_id,
+              category_id: value.category_id,
+            }),
+            ipAddress ?? null,
+            device?.slice(0, 100) ?? null,
+          ],
+        );
+        await client.query('COMMIT');
+        return value;
+      } catch (error) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
   };
 }

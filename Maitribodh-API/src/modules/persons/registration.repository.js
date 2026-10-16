@@ -111,9 +111,10 @@ export function createRegistrationRepository(pool) {
         const current = (await client.query('SELECT p.*, c.form_type FROM mams.person p JOIN mams.category c USING(category_id) WHERE person_id = $1 FOR UPDATE OF p', [personId])).rows[0];
         if (!current) throw new ApiError(404, 'PERSON_NOT_FOUND', 'Person not found');
         if (current.form_type === 'STAFF' && !['ADMIN', 'SUPER_ADMIN'].includes(actor.role)) throw new ApiError(403, 'FORBIDDEN', 'Only an administrator can edit Staff profiles');
-        const updated = (await client.query(`UPDATE mams.person SET first_name = $2, last_name = $3, mobile = $4::varchar(10), alternate_mobile = $5,
+        if (current.form_type !== 'VISITOR' && !changes.mobile.startsWith('+91')) throw new ApiError(400, 'VALIDATION_ERROR', 'Only Visitor profiles can use a non-Indian mobile number');
+        const updated = (await client.query(`UPDATE mams.person SET first_name = $2, last_name = $3, mobile = $4::varchar(16), alternate_mobile = $5,
           email = $6, address = $7, emergency_contact_name = $8, emergency_contact_mobile = $9,
-          qr_version = CASE WHEN mobile IS DISTINCT FROM $11::varchar(10) AND status = 'ACTIVE' THEN qr_version + 1 ELSE qr_version END,
+          qr_version = CASE WHEN mobile IS DISTINCT FROM $11::varchar(16) AND status = 'ACTIVE' THEN qr_version + 1 ELSE qr_version END,
           updated_by = $10, updated_at = now() WHERE person_id = $1 RETURNING person_id, person_code, first_name, last_name, mobile, status, qr_version`,
         [personId, changes.firstName, changes.lastName, changes.mobile, changes.alternateMobile || null, changes.email || null, changes.address || null,
           changes.emergencyName || null, changes.emergencyMobile || null, actor.userId, changes.mobile])).rows[0];
@@ -121,6 +122,26 @@ export function createRegistrationRepository(pool) {
         await audit(client, actor, 'UPDATE', personId, before, updated);
         if (current.mobile !== changes.mobile) await audit(client, actor, 'QR_REGENERATION', personId, { qr_version: current.qr_version }, { qr_version: updated.qr_version });
         return updated;
+      });
+    },
+    async delete({ personId, actor }) {
+      return transaction(async (client) => {
+        const current = (await client.query(
+          'SELECT person_id, first_name, last_name, status, photo_key, documents FROM mams.person WHERE person_id = $1 FOR UPDATE',
+          [personId],
+        )).rows[0];
+        if (!current) throw new ApiError(404, 'PERSON_NOT_FOUND', 'Person not found');
+
+        await client.query('DELETE FROM mams.person WHERE person_id = $1', [personId]);
+        await audit(
+          client,
+          actor,
+          'DELETE',
+          personId,
+          { first_name: current.first_name, last_name: current.last_name, status: current.status },
+          null,
+        );
+        return { photo_key: current.photo_key, documents: current.documents ?? [] };
       });
     },
     async addDocuments({ personId, documents, actor }) {

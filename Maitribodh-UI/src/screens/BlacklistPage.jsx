@@ -33,6 +33,9 @@ export default function BlacklistPage() {
   const [totalEntries, setTotalEntries] = useState(0);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(5);
+  const [nameFilter, setNameFilter] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [activeFilters, setActiveFilters] = useState({ name: '', category: '' });
   const [reasons, setReasons] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -51,7 +54,7 @@ export default function BlacklistPage() {
   const [formError, setFormError] = useState('');
   const requestId = useRef(0);
 
-  async function loadData(nextPage = page, nextRowsPerPage = rowsPerPage) {
+  async function loadData(nextPage = page, nextRowsPerPage = rowsPerPage, nextFilters = activeFilters) {
     const currentRequestId = ++requestId.current;
     setPage(nextPage);
     setRowsPerPage(nextRowsPerPage);
@@ -59,7 +62,12 @@ export default function BlacklistPage() {
     setError('');
     try {
       const [entryResponse, reasonResponse] = await Promise.all([
-        api.get('/blacklist', { params: { page: nextPage + 1, pageSize: nextRowsPerPage } }),
+        api.get('/blacklist', { params: {
+          page: nextPage + 1,
+          pageSize: nextRowsPerPage,
+          ...(nextFilters.name ? { name: nextFilters.name } : {}),
+          ...(nextFilters.category ? { category: nextFilters.category } : {}),
+        } }),
         api.get('/lookups/BLACKLIST_REASON'),
       ]);
       if (currentRequestId !== requestId.current) return;
@@ -77,6 +85,21 @@ export default function BlacklistPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  function searchEntries(event) {
+    event.preventDefault();
+    const nextFilters = { name: nameFilter.trim(), category: categoryFilter.trim() };
+    setActiveFilters(nextFilters);
+    loadData(0, rowsPerPage, nextFilters);
+  }
+
+  function clearFilters() {
+    setNameFilter('');
+    setCategoryFilter('');
+    const nextFilters = { name: '', category: '' };
+    setActiveFilters(nextFilters);
+    loadData(0, rowsPerPage, nextFilters);
+  }
 
   function openAdd() {
     setPersonQuery('');
@@ -179,6 +202,22 @@ export default function BlacklistPage() {
         <Box className="table-panel-heading">
           <Typography variant="h3">Blacklist entries</Typography>
           <Typography variant="body2" color="text.secondary">{loading ? 'Loading' : `${totalEntries} entries`}</Typography>
+        </Box>
+        <Box component="form" className="filter-toolbar" onSubmit={searchEntries} sx={{ p: 1.25 }}>
+          <TextField
+            label="Name"
+            value={nameFilter}
+            onChange={(event) => setNameFilter(event.target.value)}
+            inputProps={{ maxLength: 100 }}
+          />
+          <TextField
+            label="Category"
+            value={categoryFilter}
+            onChange={(event) => setCategoryFilter(event.target.value)}
+            inputProps={{ maxLength: 100 }}
+          />
+          <Button type="submit" variant="contained" disabled={loading}>Search</Button>
+          <Button type="button" onClick={clearFilters} disabled={loading || (!nameFilter && !categoryFilter && !activeFilters.name && !activeFilters.category)}>Clear</Button>
         </Box>
         {loading ? (
           <Box className="loading-state"><CircularProgress size={28} /></Box>

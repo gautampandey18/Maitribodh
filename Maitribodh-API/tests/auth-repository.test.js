@@ -29,10 +29,12 @@ test('temporary password reset truncates audit device metadata to the database l
 
 test('Admin may reset another Admin account password', async () => {
   const statements = [];
+  let updateValues;
   const client = {
-    async query(sql) {
-      statements.push(sql);
+    async query(sql, values) {
+      statements.push({ sql, values });
       if (sql.includes('SELECT user_id, role')) return { rows: [{ user_id: 12, role: 'ADMIN' }] };
+      if (sql.includes('UPDATE mams.app_user')) updateValues = values;
       return { rows: [], rowCount: 1 };
     },
     release() {},
@@ -48,5 +50,9 @@ test('Admin may reset another Admin account password', async () => {
   });
 
   assert.equal(reset, true);
-  assert.ok(statements.some((sql) => sql.includes('UPDATE mams.app_user')));
+  const update = statements.find(({ sql }) => sql.includes('UPDATE mams.app_user'));
+  assert.ok(update);
+  assert.match(update.sql, /token_version = token_version \+ 1/);
+  assert.match(update.sql, /WHERE user_id = \$1/);
+  assert.equal(updateValues[0], 12);
 });

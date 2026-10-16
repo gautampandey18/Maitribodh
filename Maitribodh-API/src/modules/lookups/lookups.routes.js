@@ -107,5 +107,30 @@ export function createLookupsRouter({ lookupsService, authenticate }) {
     }),
   );
 
+  router.delete(
+    '/:lookupType/:lookupId',
+    authenticate,
+    authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN),
+    asyncHandler(async (request, response) => {
+      const lookupType = z.enum(lookupTypes).safeParse(request.params.lookupType.toUpperCase());
+      const lookupId = z.coerce.number().int().positive().safeParse(request.params.lookupId);
+      if (!lookupType.success || !lookupId.success) {
+        throw new ApiError(404, 'LOOKUP_NOT_FOUND', 'Lookup value not found');
+      }
+
+      await lookupsService.deleteValue({
+        lookupType: lookupType.data,
+        lookupId: lookupId.data,
+        actor: {
+          userId: request.auth.userId,
+          role: request.auth.role,
+          ipAddress: request.ip,
+          device: request.get('user-agent'),
+        },
+      });
+      response.status(204).end();
+    }),
+  );
+
   return router;
 }

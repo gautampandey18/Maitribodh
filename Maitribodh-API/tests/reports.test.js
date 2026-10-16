@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import express from 'express';
 import request from 'supertest';
 import test from 'node:test';
+import ExcelJS from 'exceljs';
 import { errorHandler } from '../src/middleware/errorHandler.js';
 import { createReportsRouter } from '../src/modules/reports/reports.routes.js';
 import { createReportsService } from '../src/modules/reports/reports.service.js';
@@ -55,9 +56,9 @@ test('report table queries apply page limits and return window totals', async ()
   await repository.visitHistory({ fromDate: '2026-10-01', toDate: '2026-10-09', pagination });
   await repository.registrations({ pagination });
   await repository.occupancy({ fromDate: '2026-10-01', toDate: '2026-10-09', pagination });
-  await repository.staff(pagination);
+  await repository.staff({ pagination });
   await repository.approvals({ fromDate: '2026-10-01', toDate: '2026-10-09', pagination });
-  await repository.blacklist(pagination);
+  await repository.blacklist({ pagination });
 
   assert.equal(calls.length, 6);
   for (const call of calls) {
@@ -66,6 +67,60 @@ test('report table queries apply page limits and return window totals', async ()
     assert.match(call.sql, /OFFSET \$/);
     assert.deepEqual(call.values.slice(-2), [10, 10]);
   }
+});
+
+test('blacklist report filters by person name and category before pagination', async () => {
+  let call;
+  const repository = createReportsRepository({
+    async query(sql, values) { call = { sql, values }; return { rows: [] }; },
+  });
+
+  await repository.blacklist({
+    name: 'Asha',
+    category: 'Staff',
+    pagination: { page: 2, pageSize: 10, offset: 10 },
+  });
+
+  assert.match(call.sql, /p\.first_name \|\| ' ' \|\| p\.last_name ILIKE/);
+  assert.match(call.sql, /c\.name ILIKE/);
+  assert.match(call.sql, /LIMIT \$3 OFFSET \$4/);
+  assert.deepEqual(call.values, ['Asha', 'Staff', 10, 10]);
+});
+
+test('staff report filters by person name and job role before pagination', async () => {
+  let call;
+  const repository = createReportsRepository({
+    async query(sql, values) { call = { sql, values }; return { rows: [] }; },
+  });
+
+  await repository.staff({
+    name: 'Asha',
+    jobRole: 'Coordinator',
+    pagination: { page: 2, pageSize: 10, offset: 10 },
+  });
+
+  assert.match(call.sql, /p\.first_name \|\| ' ' \|\| p\.last_name ILIKE/);
+  assert.match(call.sql, /j\.name ILIKE/);
+  assert.match(call.sql, /LIMIT \$3 OFFSET \$4/);
+  assert.deepEqual(call.values, ['Asha', 'Coordinator', 10, 10]);
+});
+
+test('approvals report filters by acting username before pagination', async () => {
+  let call;
+  const repository = createReportsRepository({
+    async query(sql, values) { call = { sql, values }; return { rows: [] }; },
+  });
+
+  await repository.approvals({
+    fromDate: '2026-10-01',
+    toDate: '2026-10-09',
+    user: 'approver',
+    pagination: { page: 2, pageSize: 10, offset: 10 },
+  });
+
+  assert.match(call.sql, /u\.username ILIKE/);
+  assert.match(call.sql, /LIMIT \$4 OFFSET \$5/);
+  assert.deepEqual(call.values, ['2026-10-01', '2026-10-09', 'approver', 10, 10]);
 });
 
 test('Visit History export audit records actor, filters, and row count', async () => {
@@ -109,7 +164,7 @@ test('report service masks mobile numbers for non-Admin roles', async () => {
   assert.equal(adminRows[0].mobile, '9876543210');
 });
 
-test('report routes load without date filters, validate supplied ranges, and export formula-safe CSV', async () => {
+test('report routes load without date filters, validate supplied ranges, and export Visit History to Excel', async () => {
   let visitFilters;
   const router = createReportsRouter({
     authenticate(request_, _response, next) {
@@ -117,6 +172,14 @@ test('report routes load without date filters, validate supplied ranges, and exp
       next();
     },
     reportsService: {
+      async blacklist(input) {
+        visitFilters = input;
+        return { items: [], total: 0, page: input.pagination.page, pageSize: input.pagination.pageSize };
+      },
+      async approvals(input) {
+        visitFilters = input;
+        return { items: [], total: 0, page: input.pagination.page, pageSize: input.pagination.pageSize };
+      },
       async visitHistory(input) {
         visitFilters = input;
         return input.pagination
@@ -143,6 +206,28 @@ test('report routes load without date filters, validate supplied ranges, and exp
   assert.equal(singleDate.status, 200);
   assert.deepEqual(visitFilters.filters, { fromDate: '2026-10-01', toDate: undefined, categoryId: undefined, locationId: undefined });
 
+  const blacklist = await request(app).get('/api/v1/reports/blacklist')
+    .query({ name: 'Asha', category: 'Staff', page: 2, pageSize: 10 });
+  assert.equal(blacklist.status, 200);
+  assert.deepEqual(visitFilters, {
+    filters: { name: 'Asha', category: 'Staff' },
+    pagination: { page: 2, pageSize: 10, offset: 10 },
+  });
+  const invalidBlacklistFilter = await request(app).get('/api/v1/reports/blacklist')
+    .query({ name: 'x'.repeat(101) });
+  assert.equal(invalidBlacklistFilter.status, 400);
+
+  const approvals = await request(app).get('/api/v1/reports/approvals')
+    .query({ user: 'approver', fromDate: '2026-10-01', toDate: '2026-10-09', page: 2, pageSize: 10 });
+  assert.equal(approvals.status, 200);
+  assert.deepEqual(visitFilters, {
+    filters: { fromDate: '2026-10-01', toDate: '2026-10-09', user: 'approver' },
+    pagination: { page: 2, pageSize: 10, offset: 10 },
+  });
+  const invalidApprovalsUser = await request(app).get('/api/v1/reports/approvals')
+    .query({ user: 'x'.repeat(101) });
+  assert.equal(invalidApprovalsUser.status, 400);
+
   const page = await request(app).get('/api/v1/reports/visit-history')
     .query({ fromDate: '2026-10-01', toDate: '2026-10-09', page: 2, pageSize: 10 });
   assert.equal(page.status, 200);
@@ -155,15 +240,73 @@ test('report routes load without date filters, validate supplied ranges, and exp
   assert.equal(visitFilters.pagination.offset, 10);
 
   const response = await request(app).get('/api/v1/reports/visit-history/export')
-    .query({ fromDate: '2026-10-01', toDate: '2026-10-09' });
+    .query({ fromDate: '2026-10-01', toDate: '2026-10-09' })
+    .buffer(true)
+    .parse(parseBuffer);
 
   assert.equal(response.status, 200);
-  assert.match(response.headers['content-type'], /text\/csv/);
-  assert.match(response.headers['content-disposition'], /visit-history\.csv/);
-  assert.match(response.text, /'=HYPERLINK/);
+  assert.match(response.headers['content-type'], /spreadsheetml\.sheet/);
+  assert.match(response.headers['content-disposition'], /visit-history\.xlsx/);
   assert.equal(visitFilters.actorRole, 'VIEWER');
   assert.equal(visitFilters.exportAudit.rowCount, 1);
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(response.body);
+  assert.equal(workbook.worksheets[0].getCell('A1').value, 'Name');
+  assert.equal(workbook.worksheets[0].getCell('A2').value, '=HYPERLINK("https://example.invalid")');
 });
+
+test('every report has an unpaginated Excel export endpoint', async () => {
+  const calls = [];
+  const reportsService = Object.fromEntries([
+    ['visitHistory', 'visit-history'],
+    ['registrations', 'registrations'],
+    ['occupancy', 'occupancy'],
+    ['staff', 'staff'],
+    ['approvals', 'approvals'],
+    ['blacklist', 'blacklist'],
+  ].map(([method, report]) => [method, async (input) => {
+    calls.push({ report, input });
+    return [{ report }];
+  }]));
+  reportsService.recordVisitHistoryExport = async () => {};
+  const app = express();
+  app.use('/api/v1/reports', createReportsRouter({
+    authenticate(request_, _response, next) {
+      request_.auth = { userId: 3, role: 'ADMIN' };
+      next();
+    },
+    reportsService,
+  }));
+  app.use(errorHandler);
+
+  const exports = [
+    ['visit-history', { fromDate: '2026-10-01', categoryId: 2, locationId: 4 }, { filters: { fromDate: '2026-10-01', toDate: undefined, categoryId: 2, locationId: 4 }, actorRole: 'ADMIN' }],
+    ['registrations', { categoryId: 3, status: 'ACTIVE' }, { filters: { categoryId: 3, status: 'ACTIVE' }, actorRole: 'ADMIN' }],
+    ['occupancy', { toDate: '2026-10-15' }, { filters: { fromDate: undefined, toDate: '2026-10-15' } }],
+    ['staff', { name: 'Asha', jobRole: 'Coordinator' }, { filters: { name: 'Asha', jobRole: 'Coordinator' } }],
+    ['approvals', { fromDate: '2026-10-01', user: 'approver' }, { filters: { fromDate: '2026-10-01', toDate: undefined, user: 'approver' } }],
+    ['blacklist', { name: 'Asha', category: 'Staff' }, { filters: { name: 'Asha', category: 'Staff' } }],
+  ];
+  for (const [report, query, expectedInput] of exports) {
+    const response = await request(app).get(`/api/v1/reports/${report}/export`).query(query).buffer(true).parse(parseBuffer);
+    assert.equal(response.status, 200, `${report} should export`);
+    assert.match(response.headers['content-type'], /spreadsheetml\.sheet/);
+    assert.match(response.headers['content-disposition'], new RegExp(`${report}\\.xlsx`));
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(response.body);
+    assert.equal(workbook.worksheets[0].getRow(2).getCell(1).value, report);
+    assert.deepEqual(calls.at(-1).input, expectedInput);
+  }
+  assert.deepEqual(calls.map(({ report }) => report), ['visit-history', 'registrations', 'occupancy', 'staff', 'approvals', 'blacklist']);
+  assert.ok(calls.every(({ input }) => !input.pagination));
+  await request(app).get('/api/v1/reports/unknown/export').expect(404);
+});
+
+function parseBuffer(response, callback) {
+  const chunks = [];
+  response.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+  response.on('end', () => callback(null, Buffer.concat(chunks)));
+}
 
 test('report routes reject roles without report access', async () => {
   const router = createReportsRouter({
@@ -181,4 +324,33 @@ test('report routes reject roles without report access', async () => {
 
   assert.equal(response.status, 403);
   assert.equal(response.body.error.code, 'FORBIDDEN');
+});
+
+test('staff report route validates and forwards name and job-role filters', async () => {
+  let received;
+  const app = express();
+  app.use('/api/v1/reports', createReportsRouter({
+    authenticate(request_, _response, next) {
+      request_.auth = { userId: 3, role: 'VIEWER' };
+      next();
+    },
+    reportsService: {
+      async staff(input) {
+        received = input;
+        return { items: [], total: 0, page: input.pagination.page, pageSize: input.pagination.pageSize };
+      },
+    },
+  }));
+  app.use(errorHandler);
+
+  await request(app).get('/api/v1/reports/staff')
+    .query({ name: 'Asha', jobRole: 'Coordinator', page: 2, pageSize: 10 })
+    .expect(200);
+  assert.deepEqual(received, {
+    filters: { name: 'Asha', jobRole: 'Coordinator' },
+    pagination: { page: 2, pageSize: 10, offset: 10 },
+  });
+  await request(app).get('/api/v1/reports/staff')
+    .query({ jobRole: 'x'.repeat(101) })
+    .expect(400);
 });

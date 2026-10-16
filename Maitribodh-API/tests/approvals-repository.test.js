@@ -7,7 +7,7 @@ test('pending queue sorts by submission and returns no object storage key', asyn
   const repository = createApprovalsRepository({
     async query(statement, params) {
       sql = statement;
-      assert.deepEqual(params, [25, 0]);
+      assert.deepEqual(params, ['', '', 25, 0]);
       return { rows: [{ person_id: 1, has_photo: true, total: 1 }] };
     },
   });
@@ -16,10 +16,12 @@ test('pending queue sorts by submission and returns no object storage key', asyn
 
   assert.equal(rows[0].has_photo, true);
   assert.match(sql, /WHERE p\.status = 'PENDING'/);
+  assert.match(sql, /concat_ws\(' ', p\.first_name, p\.last_name\) ILIKE '%' \|\| \$1 \|\| '%'/);
+  assert.match(sql, /c\.name ILIKE '%' \|\| \$2 \|\| '%'/);
   assert.match(sql, /ORDER BY h\.acted_at/);
   assert.match(sql, /p\.photo_key IS NOT NULL AS has_photo/);
   assert.doesNotMatch(sql, /SELECT[^;]*p\.photo_key,/s);
-  assert.match(sql, /LIMIT \$1 OFFSET \$2/);
+  assert.match(sql, /LIMIT \$3 OFFSET \$4/);
 });
 
 test('status queue lists paginated registrations for the requested state', async () => {
@@ -33,12 +35,14 @@ test('status queue lists paginated registrations for the requested state', async
     },
   });
 
-  const rows = await repository.listByStatus({ status: 'ACTIVE', pageSize: 10, offset: 20 });
+  const rows = await repository.listByStatus({ status: 'ACTIVE', pageSize: 10, offset: 20, name: 'Asha', category: 'Staff' });
 
   assert.equal(rows[0].status, 'ACTIVE');
   assert.match(sql, /WHERE p\.status = \$1/);
+  assert.match(sql, /concat_ws\(' ', p\.first_name, p\.last_name\) ILIKE '%' \|\| \$2 \|\| '%'/);
+  assert.match(sql, /c\.name ILIKE '%' \|\| \$3 \|\| '%'/);
   assert.match(sql, /LEFT JOIN LATERAL/);
-  assert.deepEqual(params, ['ACTIVE', 10, 20]);
+  assert.deepEqual(params, ['ACTIVE', 'Asha', 'Staff', 10, 20]);
 });
 
 test('approval writes status, history, notification, audit, and commit in order', async () => {
