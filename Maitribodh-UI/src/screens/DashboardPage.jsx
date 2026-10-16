@@ -19,7 +19,6 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { Link } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { api } from '../api.js';
@@ -41,6 +40,10 @@ export default function DashboardPage() {
   const [insideTotal, setInsideTotal] = useState(0);
   const [insidePage, setInsidePage] = useState(0);
   const [insideRowsPerPage, setInsideRowsPerPage] = useState(5);
+  const [recentActivity, setRecentActivity] = useState([]);
+  const [recentActivityTotal, setRecentActivityTotal] = useState(0);
+  const [recentActivityPage, setRecentActivityPage] = useState(0);
+  const [recentActivityRowsPerPage, setRecentActivityRowsPerPage] = useState(5);
   const [occupancyByLocation, setOccupancyByLocation] = useState([]);
   const [occupancyByCategory, setOccupancyByCategory] = useState([]);
   const [lastSyncedAt, setLastSyncedAt] = useState(null);
@@ -52,6 +55,7 @@ export default function DashboardPage() {
   const [reconciliationError, setReconciliationError] = useState('');
   const [reconciling, setReconciling] = useState(false);
   const insideRequestId = useRef(0);
+  const recentActivityRequestId = useRef(0);
   const canReviewApprovals = ['SUPER_ADMIN', 'ADMIN', 'APPROVER'].includes(user?.role);
 
   async function loadInside(nextPage = insidePage, nextRowsPerPage = insideRowsPerPage) {
@@ -70,9 +74,23 @@ export default function DashboardPage() {
     setOccupancyByCategory(response.data.byCategory ?? []);
   }
 
+  async function loadRecentActivity(nextPage = recentActivityPage, nextRowsPerPage = recentActivityRowsPerPage) {
+    const currentRequestId = ++recentActivityRequestId.current;
+    setRecentActivityPage(nextPage);
+    setRecentActivityRowsPerPage(nextRowsPerPage);
+    const response = await api.get('/dashboard/recent-activity', {
+      params: { page: nextPage + 1, pageSize: nextRowsPerPage },
+    });
+    if (currentRequestId !== recentActivityRequestId.current) return;
+    setRecentActivity(response.data.items);
+    setRecentActivityTotal(response.data.total ?? response.data.items.length);
+    setRecentActivityPage(response.data.page - 1);
+    setRecentActivityRowsPerPage(response.data.pageSize ?? nextRowsPerPage);
+  }
+
   useEffect(() => {
     let active = true;
-    Promise.all([api.get('/dashboard'), loadInside(0, 5)])
+    Promise.all([api.get('/dashboard'), loadInside(0, 5), loadRecentActivity(0, 5)])
       .then(([summaryResponse]) => {
         if (!active) return;
         setSummary(summaryResponse.data);
@@ -94,6 +112,7 @@ export default function DashboardPage() {
     return () => {
       active = false;
       insideRequestId.current += 1;
+      recentActivityRequestId.current += 1;
     };
   }, [canReviewApprovals]);
 
@@ -103,7 +122,7 @@ export default function DashboardPage() {
     setReconciliationError('');
     try {
       await api.post(`/visits/${reconciliationTarget.visit_id}/reconciliation`, { note: reconciliationNote.trim() });
-      const [summaryResponse] = await Promise.all([api.get('/dashboard'), loadInside()]);
+      const [summaryResponse] = await Promise.all([api.get('/dashboard'), loadInside(), loadRecentActivity(0, recentActivityRowsPerPage)]);
       setSummary(summaryResponse.data);
       setLastSyncedAt(Date.now());
       setReconciliationTarget(null);
@@ -143,9 +162,6 @@ export default function DashboardPage() {
                   <Typography variant="h3">Current Occupancy <Box component="span" className="occupancy-count">{insideTotal} inside</Box></Typography>
                   <Typography variant="body2" color="text.secondary">Open check-ins require manual review before reconciliation.</Typography>
               </Box>
-              {user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN' ? (
-                <Button component={Link} to="/locations" endIcon={<ArrowForwardIcon />}>Manage locations</Button>
-              ) : null}
             </Box>
             <TableContainer>
               <Table size="medium" aria-label="People currently inside">
@@ -231,7 +247,7 @@ export default function DashboardPage() {
                 <Table size="small" aria-label="Recent activity">
                   <TableHead><TableRow><TableCell>Person</TableCell><TableCell>Category</TableCell><TableCell>Location</TableCell><TableCell>Time</TableCell><TableCell>Event</TableCell></TableRow></TableHead>
                   <TableBody>
-                    {(summary?.recent_activity ?? []).map((event, index) => (
+                    {recentActivity.map((event, index) => (
                       <TableRow key={`${event.occurred_at}-${index}`}>
                         <TableCell>{event.person_name ?? event.actor}</TableCell>
                         <TableCell>{event.category ?? '—'}</TableCell>
@@ -240,10 +256,19 @@ export default function DashboardPage() {
                         <TableCell>{event.activity?.replaceAll('_', ' ')}</TableCell>
                       </TableRow>
                     ))}
-                    {!summary?.recent_activity?.length && <TableRow><TableCell colSpan={5} className="empty-table">No recorded activity.</TableCell></TableRow>}
+                    {!recentActivity.length && <TableRow><TableCell colSpan={5} className="empty-table">No recorded activity.</TableCell></TableRow>}
                   </TableBody>
                 </Table>
               </TableContainer>
+              <TablePagination
+                component="div"
+                count={recentActivityTotal}
+                page={recentActivityPage}
+                rowsPerPage={recentActivityRowsPerPage}
+                rowsPerPageOptions={[5, 10, 25, 50, 100]}
+                onPageChange={(_event, nextPage) => loadRecentActivity(nextPage).catch(() => setError('Recent activity could not be loaded.'))}
+                onRowsPerPageChange={(event) => loadRecentActivity(0, Number(event.target.value)).catch(() => setError('Recent activity could not be loaded.'))}
+              />
             </Paper>
             <Box className="dashboard-side-widgets">
               {canReviewApprovals && (

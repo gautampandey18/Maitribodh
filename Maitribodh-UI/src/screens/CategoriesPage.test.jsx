@@ -27,3 +27,22 @@ it('filters categories by name, form type, and status', async () => {
     '/categories', { params: { query: 'visitor', formType: 'VISITOR', status: 'ACTIVE', page: 1, pageSize: 5 } },
   ]));
 }, 30_000);
+
+it('deletes an unreferenced category after confirmation', async () => {
+  const get = vi.spyOn(api, 'get').mockImplementation((path) => Promise.resolve({
+    data: path === '/categories'
+      ? { items: [{ category_id: 1, name: 'Visitor', form_type: 'VISITOR', approval_required: false, status: 'ACTIVE' }], total: 1, page: 1, pageSize: 5 }
+      : { items: [] },
+  }));
+  const remove = vi.spyOn(api, 'delete').mockResolvedValue({ status: 204 });
+  const user = userEvent.setup();
+  render(<CategoriesPage />);
+
+  await screen.findByText('Visitor');
+  await user.click(screen.getByRole('button', { name: 'Delete Visitor' }));
+  expect(screen.getByText(/permanently delete this category/i)).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Delete', exact: true }));
+
+  await waitFor(() => expect(remove).toHaveBeenCalledWith('/categories/1'));
+  expect(get).toHaveBeenCalled();
+}, 30_000);

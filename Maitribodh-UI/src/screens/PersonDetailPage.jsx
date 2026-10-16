@@ -1,12 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Alert, Avatar, Box, Button, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, InputLabel, MenuItem, Select, Tab, Tabs, TextField, Typography } from '@mui/material';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
 import UploadOutlinedIcon from '@mui/icons-material/UploadOutlined';
 import { api } from '../api.js';
 import { downloadBlob, requestMessage, useResource } from '../utils/resources.js';
+import InternationalPhoneField from '../components/InternationalPhoneField.jsx';
+import { formatPhoneNumber, splitPhoneNumber, toE164Phone } from '../utils/phone.js';
 
 export function QrPreview({ personId, personCode }) {
   const [image, setImage] = useState('');
@@ -24,6 +26,9 @@ export function QrPreview({ personId, personCode }) {
 
 export default function PersonDetailPage() {
   const { personId } = useParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const autoEditStarted = useRef(false);
   const { data: person, error, reload } = useResource(`/persons/${personId}`);
   const role = useSelector((state) => state.auth.user?.role);
   const [tab, setTab] = useState('overview');
@@ -38,6 +43,9 @@ export default function PersonDetailPage() {
   const [activity, setActivity] = useState([]);
   const [statusTarget, setStatusTarget] = useState('');
   const [reason, setReason] = useState('');
+  const changePhoneCountry = useCallback((country) => {
+    setEdit((previous) => previous ? { ...previous, country } : previous);
+  }, []);
   const canEdit = person?.form_type !== 'STAFF' || ['ADMIN', 'SUPER_ADMIN'].includes(role);
   async function chooseTab(value) {
     setTab(value); setFailure('');
@@ -52,12 +60,21 @@ export default function PersonDetailPage() {
   }
   function beginEdit() {
     setProfilePhoto(null);
-    setEdit({ firstName: person.first_name, lastName: person.last_name, mobile: person.mobile, alternateMobile: person.alternate_mobile ?? '', email: person.email ?? '', address: person.address ?? '', emergencyName: person.emergency_contact_name ?? '', emergencyMobile: person.emergency_contact_mobile ?? '' });
+    const phone = splitPhoneNumber(person.mobile);
+    setEdit({ firstName: person.first_name, lastName: person.last_name, mobile: phone.number, country: phone.country, alternateMobile: person.alternate_mobile ?? '', email: person.email ?? '', address: person.address ?? '', emergencyName: person.emergency_contact_name ?? '', emergencyMobile: person.emergency_contact_mobile ?? '' });
   }
+  useEffect(() => {
+    if (!person || new URLSearchParams(location.search).get('edit') !== '1' || autoEditStarted.current) return;
+    autoEditStarted.current = true;
+    beginEdit();
+    navigate(location.pathname, { replace: true });
+  }, [person, location.pathname, location.search, navigate]);
   async function save(event) {
     event.preventDefault(); setBusy(true); setFailure('');
     try {
-      await api.patch(`/persons/${personId}`, edit);
+      const mobile = toE164Phone(edit.mobile, person.form_type === 'VISITOR' ? edit.country : 'IN');
+      if (!mobile) { setFailure('Enter a valid mobile number for the selected country.'); setBusy(false); return; }
+      await api.patch(`/persons/${personId}`, { ...edit, mobile });
       if (profilePhoto) {
         const form = new FormData();
         form.append('photo', profilePhoto);
@@ -98,6 +115,11 @@ export default function PersonDetailPage() {
   const areas = accessOptions?.locations.filter((item) => item.location_type === 'AREA') ?? [];
   const locationNames = new Map(areas.map((area) => [String(area.location_id), area.name]));
   const categoryFieldNames = new Map((category?.schema?.fields ?? []).map((field) => [field.key, field.label]));
+  const builtInCategoryFieldNames = new Map([
+    ['driver_available', 'Driver available'],
+    ['driver_name', 'Driver name'],
+    ['driver_mobile', 'Driver contact number'],
+  ]);
   const resolvedCategoryDetails = Object.entries(person?.category_details ?? {}).map(([key, value]) => {
     const field = category?.schema?.fields?.find((item) => item.key === key);
     let displayValue = value;
@@ -105,17 +127,17 @@ export default function PersonDetailPage() {
       const sourceItems = field.source === 'AREA' ? areas : accessOptions?.lookups.filter((item) => item.lookup_type === field.source) ?? [];
       displayValue = sourceItems.find((item) => String(item.location_id ?? item.lookup_id) === String(value))?.name ?? value;
     }
-    return [categoryFieldNames.get(key) ?? key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' '), displayValue];
+    return [categoryFieldNames.get(key) ?? builtInCategoryFieldNames.get(key) ?? key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' '), key === 'driver_available' ? (value === 'YES' ? 'Yes' : value === 'NO' ? 'No' : value) : displayValue];
   });
   const profileFields = !person ? [] : edit ? [
     ['First Name', 'firstName'], ['Last Name', 'lastName'], ['Mobile Number', 'mobile'], ['Alternate Mobile', 'alternateMobile'], ['Email', 'email'], ['Address', 'address'], ['Emergency Contact Name', 'emergencyName'], ['Emergency Contact Mobile', 'emergencyMobile'], ['Category', null, person.category], ['Passport Number', null, person.passport_last4 ? `******${person.passport_last4}` : ''],
   ] : [
-    ['Full Name', `${person.first_name} ${person.last_name}`], ['Mobile Number', person.mobile], ['Alternate Mobile', person.alternate_mobile], ['Email', person.email], ['Category', person.category], ['Address', person.address], ['Emergency Contact', `${person.emergency_contact_name ?? ''} ${person.emergency_contact_mobile ?? ''}`], ['Passport Number', person.passport_last4 ? `******${person.passport_last4}` : ''],
+    ['Full Name', `${person.first_name} ${person.last_name}`], ['Mobile Number', formatPhoneNumber(person.mobile)], ['Alternate Mobile', person.alternate_mobile], ['Email', person.email], ['Category', person.category], ['Address', person.address], ['Emergency Contact', `${person.emergency_contact_name ?? ''} ${person.emergency_contact_mobile ?? ''}`], ['Passport Number', person.passport_last4 ? `******${person.passport_last4}` : ''],
   ];
   return <Box className="person-detail-page"><Button size="small" component={Link} to="/persons">Back to Person Management</Button>{(error || failure) && <Alert severity="error" sx={{ my: 1 }}>{error || failure}</Alert>}{person && <>
     <Box className="page-heading"><Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}><Avatar sx={{ width: 40, height: 40 }}>{person.first_name?.[0]}{person.last_name?.[0]}</Avatar><Box><Typography component="h1" variant="h2">{person.first_name} {person.last_name}</Typography><Typography variant="body2" color="text.secondary">{person.person_code} · {person.category} · {person.status}</Typography></Box></Box><Box>{<Button size="small" onClick={() => chooseTab('qr')}>View QR</Button>}{['ADMIN', 'SUPER_ADMIN'].includes(role) && <Button size="small" onClick={() => setStatusTarget(person.status === 'DEACTIVATED' ? 'ACTIVE' : 'DEACTIVATED')}>{person.status === 'DEACTIVATED' ? 'Reactivate' : 'Deactivate'}</Button>}</Box></Box>
     <Tabs value={tab} onChange={(_event, value) => chooseTab(value)} variant="scrollable"><Tab value="overview" label="Overview" /><Tab value="documents" label="Documents" /><Tab value="access" label="Access Details" /><Tab value="activity" label="Activity" /><Tab value="qr" label="QR" />{['ADMIN', 'SUPER_ADMIN'].includes(role) && <Tab value="audit" label="Audit" />}</Tabs>
-    {tab === 'overview' && <Box component="form" onSubmit={save} sx={{ mt: 1.5 }}><Box className="person-section-heading"><Typography variant="h3">Profile details</Typography>{canEdit && (edit ? <Box><Button size="small" onClick={() => { setEdit(null); setProfilePhoto(null); }} disabled={busy}>Cancel</Button><Button size="small" type="submit" variant="contained" disabled={busy}>Save</Button></Box> : <Button size="small" startIcon={<EditOutlinedIcon />} onClick={beginEdit}>Edit profile</Button>)}</Box>{edit ? <Box className="form-grid person-overview-grid">{profileFields.map(([label, key, value]) => <TextField key={key ?? label} label={label} value={key ? edit[key] : value ?? ''} InputProps={{ readOnly: !key }} required={['firstName', 'lastName', 'mobile'].includes(key)} type={key === 'email' ? 'email' : 'text'} onChange={key ? (event) => setEdit({ ...edit, [key]: event.target.value }) : undefined} inputProps={{ maxLength: key?.toLowerCase().includes('mobile') ? 10 : ['firstName', 'lastName', 'emergencyName'].includes(key) ? 100 : key === 'email' ? 150 : 500, ...(key?.toLowerCase().includes('mobile') ? { pattern: '[6-9][0-9]{9}' } : {}) }} />)}<Box><Typography component="label" htmlFor="profile-photo-edit">Profile photo (optional)</Typography><input id="profile-photo-edit" type="file" accept="image/jpeg,image/png" capture="environment" onChange={(event) => { const file = event.target.files?.[0] ?? null; if (file && (file.size > 5 * 1024 * 1024 || !['image/jpeg', 'image/png'].includes(file.type))) { setFailure('Choose a JPG or PNG photograph no larger than 5 MB.'); setProfilePhoto(null); event.target.value = ''; return; } setFailure(''); setProfilePhoto(file); }} /><Typography variant="caption">{profilePhoto?.name ?? (person.photo_key ? 'Leave empty to keep the current photo.' : 'Leave empty; Security will capture a photo at first check-in.')}</Typography></Box></Box> : <Box className="person-readonly-grid">{profileFields.map(([label, value]) => <Box className="person-readonly-field" key={label}><Typography variant="caption" color="text.secondary">{label}</Typography><Typography>{value || '—'}</Typography></Box>)}</Box>}</Box>}
+    {tab === 'overview' && <Box component="form" onSubmit={save} sx={{ mt: 1.5 }}><Box className="person-section-heading"><Typography variant="h3">Profile details</Typography>{canEdit && (edit ? <Box><Button size="small" onClick={() => { setEdit(null); setProfilePhoto(null); }} disabled={busy}>Cancel</Button><Button size="small" type="submit" variant="contained" disabled={busy}>Save</Button></Box> : <Button size="small" startIcon={<EditOutlinedIcon />} onClick={beginEdit}>Edit profile</Button>)}</Box>{edit ? <Box className="form-grid person-overview-grid">{profileFields.map(([label, key, value]) => key === 'mobile' && person.form_type === 'VISITOR' ? <InternationalPhoneField key={key} country={edit.country} number={edit.mobile} onCountryChange={changePhoneCountry} onNumberChange={(mobile) => setEdit({ ...edit, mobile })} required /> : <TextField key={key ?? label} label={label} value={key ? edit[key] : value ?? ''} InputProps={{ readOnly: !key }} required={['firstName', 'lastName'].includes(key)} type={key === 'email' ? 'email' : 'text'} onChange={key ? (event) => setEdit({ ...edit, [key]: event.target.value }) : undefined} inputProps={{ maxLength: key?.toLowerCase().includes('mobile') ? 10 : ['firstName', 'lastName', 'emergencyName'].includes(key) ? 100 : key === 'email' ? 150 : 500, ...(key?.toLowerCase().includes('mobile') ? { pattern: '[6-9][0-9]{9}' } : {}) }} />)}<Box><Typography component="label" htmlFor="profile-photo-edit">Profile photo (optional)</Typography><input id="profile-photo-edit" type="file" accept="image/jpeg,image/png" capture="environment" onChange={(event) => { const file = event.target.files?.[0] ?? null; if (file && (file.size > 5 * 1024 * 1024 || !['image/jpeg', 'image/png'].includes(file.type))) { setFailure('Choose a JPG or PNG photograph no larger than 5 MB.'); setProfilePhoto(null); event.target.value = ''; return; } setFailure(''); setProfilePhoto(file); }} /><Typography variant="caption">{profilePhoto?.name ?? (person.photo_key ? 'Leave empty to keep the current photo.' : 'Leave empty; Security will capture a photo at first check-in.')}</Typography></Box></Box> : <Box className="person-readonly-grid">{profileFields.map(([label, value]) => <Box className="person-readonly-field" key={label}><Typography variant="caption" color="text.secondary">{label}</Typography><Typography>{value || '—'}</Typography></Box>)}</Box>}</Box>}
     {tab === 'documents' && <Box sx={{ mt: 1.5 }}><Box className="person-section-heading"><Typography variant="h3">Documents</Typography>{canEdit && (person.documents?.length ?? 0) < 12 && <Button size="small" component="label" startIcon={<UploadOutlinedIcon />} disabled={documentBusy}>{documentBusy ? 'Uploading' : 'Add documents'}<input hidden type="file" multiple accept="application/pdf,image/jpeg,image/png" onChange={uploadDocuments} /></Button>}</Box>{person.documents?.length ? <Box className="person-document-list">{person.documents.map((document) => <Box className="person-document-row" key={document.key}><Typography>{document.name}</Typography><Button size="small" startIcon={<DownloadOutlinedIcon />} onClick={() => downloadDocument(document)}>Download</Button></Box>)}</Box> : <Typography color="text.secondary">No documents uploaded.</Typography>}</Box>}
     {tab === 'access' && <Box sx={{ mt: 1.5 }}><Box className="person-section-heading"><Typography variant="h3">Access details</Typography>{canEdit && (accessEdit ? <Box><Button size="small" onClick={() => setAccessEdit(false)} disabled={busy}>Cancel</Button><Button size="small" type="submit" form="person-access-form" variant="contained" disabled={busy}>Save</Button></Box> : <Button size="small" startIcon={<EditOutlinedIcon />} onClick={() => { setAccessDraft({ permissionLevelId: person.permission_level_id ?? '', locationIds: person.location_ids ?? [], expiresOn: person.expires_on ? String(person.expires_on).slice(0, 10) : '' }); setAccessEdit(true); }}>Edit access</Button>)}</Box>{accessEdit ? <Box id="person-access-form" component="form" onSubmit={saveAccess} className="form-grid person-overview-grid">
       <TextField select label="Permission level" value={accessDraft.permissionLevelId} onChange={(event) => setAccessDraft({ ...accessDraft, permissionLevelId: event.target.value })}><MenuItem value="">None</MenuItem>{permissionLevels.map((level) => <MenuItem key={level.lookup_id} value={level.lookup_id}>{level.name}</MenuItem>)}</TextField>

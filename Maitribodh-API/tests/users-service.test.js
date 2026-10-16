@@ -114,3 +114,25 @@ test('user update forwards deactivation and bulk-upload changes with actor conte
   assert.equal(updateInput.canBulkUpload, false);
   assert.equal(updateInput.actorUserId, 7);
 });
+
+test('user update forwards activation with actor context', async () => {
+  let updateInput;
+  const service = createUsersService({
+    repository: {
+      async updateUser(input) {
+        updateInput = input;
+        return { user_id: input.targetUserId, status: 'ACTIVE' };
+      },
+    },
+  });
+
+  const user = await service.updateUser({
+    targetUserId: 25,
+    input: { activate: true },
+    actor: { userId: 7, role: ROLES.ADMIN },
+  });
+
+  assert.equal(user.status, 'ACTIVE');
+  assert.equal(updateInput.activate, true);
+  assert.equal(updateInput.actorUserId, 7);
+});

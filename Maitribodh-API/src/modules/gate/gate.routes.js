@@ -7,7 +7,7 @@ import { ROLES } from '../../constants/roles.js';
 
 const gateLookupSchema = z.object({
   qrPayload: z.string().min(1).max(256).optional(),
-  mobile: z.string().regex(/^\d{10}$/).optional(),
+  mobile: z.union([z.string().regex(/^\d{10}$/), z.string().regex(/^\+[1-9]\d{7,14}$/)]).optional(),
   query: z.string().trim().min(1).max(100).optional(),
   locationId: z.number().int().positive(),
 }).refine((input) => [input.qrPayload, input.mobile, input.query].filter(Boolean).length === 1);

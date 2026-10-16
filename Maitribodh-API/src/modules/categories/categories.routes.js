@@ -125,5 +125,28 @@ export function createCategoriesRouter({ categoriesService, authenticate }) {
     }),
   );
 
+  router.delete(
+    '/:categoryId',
+    authenticate,
+    authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN),
+    asyncHandler(async (request, response) => {
+      const parsedId = categoryIdSchema.safeParse(request.params.categoryId);
+      if (!parsedId.success) {
+        throw new ApiError(404, 'CATEGORY_NOT_FOUND', 'Category not found');
+      }
+
+      await categoriesService.deleteCategory({
+        categoryId: parsedId.data,
+        actor: {
+          userId: request.auth.userId,
+          role: request.auth.role,
+          ipAddress: request.ip,
+          device: request.get('user-agent'),
+        },
+      });
+      response.status(204).end();
+    }),
+  );
+
   return router;
 }

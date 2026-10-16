@@ -117,6 +117,52 @@ test('failed passwords update the lockout counter and return a generic error', a
   assert.equal(recordedUserId, 12);
 });
 
+test('deactivated accounts return an administrator guidance error only after a valid password', async () => {
+  let completedLogin = false;
+  let recordedFailure = false;
+  const service = createAuthService({
+    repository: {
+      ...createRepository({ userOverrides: { status: 'INACTIVE' } }),
+      async completeLogin() {
+        completedLogin = true;
+        return null;
+      },
+      async recordFailedLogin() {
+        recordedFailure = true;
+      },
+    },
+    comparePassword: async (_password, passwordHash) => passwordHash === 'stored-hash',
+    issueToken: async () => 'unused',
+  });
+
+  await assert.rejects(
+    service.login({ username: 'inactive-user', password: 'valid-password' }),
+    (error) => error.statusCode === 403
+      && error.code === 'ACCOUNT_DEACTIVATED'
+      && error.message === 'Your account is deactivated. Contact the administrator to restore access.',
+  );
+  assert.equal(completedLogin, false);
+  assert.equal(recordedFailure, false);
+});
+
+test('invalid password for a deactivated account keeps the generic credentials error', async () => {
+  const service = createAuthService({
+    repository: {
+      ...createRepository({ userOverrides: { status: 'INACTIVE' } }),
+      async recordFailedLogin() {},
+    },
+    comparePassword: async () => false,
+    issueToken: async () => 'unused',
+  });
+
+  await assert.rejects(
+    service.login({ username: 'inactive-user', password: 'wrong-password' }),
+    (error) => error.statusCode === 401
+      && error.code === 'INVALID_CREDENTIALS'
+      && error.message === 'Invalid username or password',
+  );
+});
+
 test('logout revokes sessions through the repository', async () => {
   let revokedUserId;
   const service = createAuthService({

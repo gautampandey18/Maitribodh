@@ -42,3 +42,14 @@ test('invalid lookup references become a validation response', async () => {
     (error) => error.statusCode === 400 && error.code === 'INVALID_MASTER_REFERENCE',
   );
 });
+
+test('category deletion reports when records still reference the category', async () => {
+  const service = createCategoriesService({
+    repository: { async deleteCategory() { throw { code: '23503' }; } },
+  });
+
+  await assert.rejects(
+    service.deleteCategory({ categoryId: 4, actor: { userId: 1, role: 'ADMIN' } }),
+    (error) => error.statusCode === 409 && error.code === 'MASTER_DATA_IN_USE',
+  );
+});

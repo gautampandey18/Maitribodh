@@ -21,6 +21,7 @@ export function createPersonsRepository(pool) {
           WHERE p.status <> 'DRAFT'
             AND ($1 = '' OR p.person_code = upper($1)
               OR p.mobile = $1
+              OR ($1 ~ '^[0-9]{10}$' AND p.mobile = '+91' || $1)
               OR lower(p.first_name || ' ' || p.last_name) LIKE '%' || lower($1) || '%')
             AND ($2::smallint IS NULL OR p.category_id = $2)
             AND ($3::varchar IS NULL OR p.status = $3)

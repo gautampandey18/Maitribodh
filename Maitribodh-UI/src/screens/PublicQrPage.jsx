@@ -7,16 +7,18 @@ import {
   CircularProgress,
   IconButton,
   Paper,
-  TextField,
   Tooltip,
   Typography,
 } from '@mui/material';
 import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
 import { api } from '../api.js';
+import InternationalPhoneField from '../components/InternationalPhoneField.jsx';
+import { toE164Phone } from '../utils/phone.js';
 
 export default function PublicQrPage() {
   const [mobile, setMobile] = useState('');
+  const [country, setCountry] = useState('IN');
   const [items, setItems] = useState([]);
   const [searched, setSearched] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -24,8 +26,9 @@ export default function PublicQrPage() {
 
   async function lookup(event) {
     event.preventDefault();
-    if (!/^\d{10}$/.test(mobile)) {
-      setError('Enter a valid 10-digit mobile number.');
+    const internationalMobile = toE164Phone(mobile, country);
+    if (!internationalMobile) {
+      setError('Enter a valid mobile number for the selected country.');
       return;
     }
 
@@ -34,7 +37,7 @@ export default function PublicQrPage() {
     setItems([]);
     setSearched(false);
     try {
-      const response = await api.post('/public/qr-lookups', { mobile });
+      const response = await api.post('/public/qr-lookups', { mobile: internationalMobile });
       setItems(response.data.items);
       setSearched(true);
     } catch (requestError) {
@@ -75,17 +78,15 @@ export default function PublicQrPage() {
         </Box>
 
         <Paper component="form" className="public-qr-search" elevation={0} onSubmit={lookup}>
-          <TextField
+          <InternationalPhoneField
+            country={country}
+            number={mobile}
+            onCountryChange={setCountry}
+            onNumberChange={setMobile}
+            required
             label="Mobile number"
-            value={mobile}
-            onChange={(event) => setMobile(event.target.value.replace(/\D/g, '').slice(0, 10))}
-            type="tel"
-            autoComplete="tel"
-            inputProps={{ inputMode: 'numeric', maxLength: 10 }}
-            fullWidth
-            error={Boolean(error) && !/^\d{10}$/.test(mobile)}
           />
-          <Button type="submit" variant="contained" color="secondary" disabled={loading || mobile.length !== 10}>
+          <Button type="submit" variant="contained" color="secondary" disabled={loading || !mobile}>
             {loading ? <CircularProgress size={18} color="inherit" /> : 'Find QR'}
           </Button>
         </Paper>

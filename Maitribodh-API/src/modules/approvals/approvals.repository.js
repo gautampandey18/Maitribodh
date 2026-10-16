@@ -1,6 +1,6 @@
 export function createApprovalsRepository(pool) {
   return {
-    async listPending({ pageSize, offset }) {
+    async listPending({ pageSize, offset, name = '', category = '' }) {
       const result = await pool.query(
         `SELECT p.person_id, p.person_code, p.first_name || ' ' || p.last_name AS name,
                 c.name AS category, p.photo_key IS NOT NULL AS has_photo,
@@ -17,14 +17,16 @@ export function createApprovalsRepository(pool) {
               LIMIT 1
            ) AS h ON true
           WHERE p.status = 'PENDING'
+            AND ($1 = '' OR concat_ws(' ', p.first_name, p.last_name) ILIKE '%' || $1 || '%')
+            AND ($2 = '' OR c.name ILIKE '%' || $2 || '%')
           ORDER BY h.acted_at
-          LIMIT $1 OFFSET $2`,
-        [pageSize, offset],
+          LIMIT $3 OFFSET $4`,
+        [name, category, pageSize, offset],
       );
       return result.rows;
     },
 
-    async listByStatus({ status, pageSize, offset }) {
+    async listByStatus({ status, pageSize, offset, name = '', category = '' }) {
       const result = await pool.query(
         `SELECT p.person_id, p.person_code, p.first_name || ' ' || p.last_name AS name,
                 c.name AS category, p.photo_key IS NOT NULL AS has_photo,
@@ -40,9 +42,11 @@ export function createApprovalsRepository(pool) {
               LIMIT 1
            ) AS h ON true
           WHERE p.status = $1
+            AND ($2 = '' OR concat_ws(' ', p.first_name, p.last_name) ILIKE '%' || $2 || '%')
+            AND ($3 = '' OR c.name ILIKE '%' || $3 || '%')
           ORDER BY COALESCE(h.acted_at, p.created_at) DESC, p.person_id DESC
-          LIMIT $2 OFFSET $3`,
-        [status, pageSize, offset],
+          LIMIT $4 OFFSET $5`,
+        [status, name, category, pageSize, offset],
       );
       return result.rows;
     },

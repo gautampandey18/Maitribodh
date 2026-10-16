@@ -185,5 +185,43 @@ export function createCategoriesRepository(pool) {
         client.release();
       }
     },
+
+    async deleteCategory({ categoryId, actorUserId, actorRole, ipAddress, device }) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const currentResult = await client.query(
+          'SELECT * FROM mams.category WHERE category_id = $1 FOR UPDATE',
+          [categoryId],
+        );
+        const category = currentResult.rows[0];
+        if (!category) {
+          await client.query('ROLLBACK');
+          return null;
+        }
+        await client.query('DELETE FROM mams.category WHERE category_id = $1', [categoryId]);
+        await client.query(
+          `INSERT INTO mams.audit_log
+             (user_id, user_role, module, activity, entity_type, entity_id,
+              old_value, ip_address, device)
+           VALUES ($1, $2, 'MASTER', 'CATEGORY_DELETED', 'CATEGORY', $3, $4::jsonb, $5, $6)`,
+          [
+            actorUserId,
+            actorRole,
+            categoryId,
+            JSON.stringify({ name: category.name, form_type: category.form_type }),
+            ipAddress ?? null,
+            device?.slice(0, 100) ?? null,
+          ],
+        );
+        await client.query('COMMIT');
+        return category;
+      } catch (error) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
   };
 }

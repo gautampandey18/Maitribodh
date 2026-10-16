@@ -18,9 +18,17 @@ const createUserSchema = z.object({
   canBulkUpload: z.boolean().optional().default(false),
 });
 const updateUserSchema = z.object({
+  firstName: z.string().trim().min(1).max(100).optional(),
+  lastName: z.string().trim().min(1).max(100).optional(),
+  mobile: z.string().trim().min(1).max(10).optional(),
+  email: z.union([z.string().trim().email().max(150), z.literal('')]).optional(),
+  username: z.string().trim().min(1).max(50).optional(),
+  role: z.enum(Object.values(ROLES)).optional(),
+  isSecurityHead: z.boolean().optional(),
   deactivate: z.literal(true).optional(),
+  activate: z.literal(true).optional(),
   canBulkUpload: z.boolean().optional(),
-}).refine((input) => input.deactivate === true || input.canBulkUpload !== undefined);
+}).refine((input) => Object.keys(input).length > 0 && !(input.activate && input.deactivate));
 
 export function createUsersRouter({ authService, usersService, authenticate }) {
   const router = express.Router();
@@ -70,7 +78,10 @@ export function createUsersRouter({ authService, usersService, authenticate }) {
 
       const temporaryCredential = await authService.issueTemporaryPassword({
         targetUserId: parsedUserId.data,
-        ...actorFromRequest(request),
+        adminUserId: request.auth.userId,
+        adminRole: request.auth.role,
+        ipAddress: request.ip,
+        device: request.get('user-agent'),
       });
       response.set({
         'Cache-Control': 'no-store, max-age=0',
@@ -105,7 +116,7 @@ export function createUsersRouter({ authService, usersService, authenticate }) {
         throw new ApiError(404, 'USER_NOT_FOUND', 'Active user not found');
       }
       if (!parsedInput.success) {
-        throw new ApiError(400, 'VALIDATION_ERROR', 'Provide deactivation or bulk-upload permission');
+        throw new ApiError(400, 'VALIDATION_ERROR', 'Provide user details or an account action');
       }
 
       const user = await usersService.updateUser({
@@ -114,6 +125,24 @@ export function createUsersRouter({ authService, usersService, authenticate }) {
         actor: actorFromRequest(request),
       });
       response.status(200).json(user);
+    }),
+  );
+
+  router.delete(
+    '/:userId',
+    authenticate,
+    authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN),
+    asyncHandler(async (request, response) => {
+      const parsedUserId = userIdSchema.safeParse(request.params.userId);
+      if (!parsedUserId.success) throw new ApiError(404, 'USER_NOT_FOUND', 'User not found');
+      if (parsedUserId.data === request.auth.userId) throw new ApiError(400, 'SELF_DELETE_FORBIDDEN', 'You cannot delete your own account');
+      try {
+        await usersService.deleteUser({ targetUserId: parsedUserId.data, actor: actorFromRequest(request) });
+      } catch (error) {
+        if (error.code === '23503') throw new ApiError(409, 'USER_IN_USE', 'This user is referenced by audit or operational records and cannot be deleted. Deactivate the user instead.');
+        throw error;
+      }
+      response.status(204).send();
     }),
   );
 

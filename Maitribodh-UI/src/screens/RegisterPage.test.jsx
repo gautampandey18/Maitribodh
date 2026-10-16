@@ -26,6 +26,39 @@ it('renders fields from the API schema and saves a partial draft', async () => {
   await waitFor(() => expect(post).toHaveBeenCalledWith('/persons/drafts', expect.objectContaining({ firstName: 'Asha', categoryId: 1 })));
   expect(await screen.findByText('Draft saved for Asha.')).toBeInTheDocument();
 }, 30_000);
+it('shows optional driver details only when a visitor has a driver and saves them', async () => {
+  const post = vi.spyOn(api, 'post').mockResolvedValue({ data: { person_id: 8 } });
+  const user = userEvent.setup();
+  renderPage('ADMIN');
+  await user.click(await screen.findByRole('button', { name: /^Visitor/ }));
+  expect(screen.queryByRole('textbox', { name: /Driver Name/ })).not.toBeInTheDocument();
+  await user.click(screen.getByRole('combobox', { name: 'Is a driver available?' }));
+  await user.click(screen.getByRole('option', { name: 'Yes' }));
+  await user.type(screen.getByRole('textbox', { name: /Driver Name/ }), 'Ravi Kumar');
+  await user.type(screen.getByRole('textbox', { name: /Driver Contact Number/ }), '9876543210');
+  await user.click(screen.getByRole('button', { name: 'Save Draft' }));
+
+  await waitFor(() => expect(post).toHaveBeenCalledWith('/persons/drafts', expect.objectContaining({
+    categoryDetails: expect.objectContaining({ driver_available: 'YES', driver_name: 'Ravi Kumar', driver_mobile: '9876543210' }),
+  })));
+  expect(screen.getByRole('textbox', { name: /Driver Contact Number/ })).toHaveValue('9876543210');
+}, 30_000);
+it('clears hidden driver details when driver availability changes to No', async () => {
+  const post = vi.spyOn(api, 'post').mockResolvedValue({ data: { person_id: 8 } });
+  const user = userEvent.setup();
+  renderPage('ADMIN');
+  await user.click(await screen.findByRole('button', { name: /^Visitor/ }));
+  await user.click(screen.getByRole('combobox', { name: 'Is a driver available?' }));
+  await user.click(screen.getByRole('option', { name: 'Yes' }));
+  await user.type(screen.getByRole('textbox', { name: /Driver Name/ }), 'Ravi Kumar');
+  await user.click(screen.getByRole('combobox', { name: 'Is a driver available?' }));
+  await user.click(screen.getByRole('option', { name: 'No' }));
+  expect(screen.queryByRole('textbox', { name: /Driver Name/ })).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Save Draft' }));
+  await waitFor(() => expect(post).toHaveBeenCalledWith('/persons/drafts', expect.objectContaining({
+    categoryDetails: expect.objectContaining({ driver_available: 'NO', driver_name: '', driver_mobile: '' }),
+  })));
+}, 30_000);
 it('restricts guards to the visitor category', async () => {
   renderPage('SECURITY_GUARD', options, ['/register?from=gate&gate=1&area=2']);
   expect(await screen.findByRole('button', { name: /^Visitor/ })).toBeInTheDocument();
@@ -55,7 +88,9 @@ it('requires and submits a photograph with a valid registration', async () => {
   expect(screen.getByText('Category: Visitor')).toBeInTheDocument();
   await user.type(screen.getByRole('textbox', { name: 'First Name' }), 'Asha');
   await user.type(screen.getByRole('textbox', { name: 'Last Name' }), 'Patel');
-  await user.type(screen.getByRole('textbox', { name: 'Mobile Number' }), '9820000000');
+  await user.click(screen.getByRole('combobox', { name: 'Country code' }));
+  await user.click(screen.getByRole('option', { name: /United States \(\+1\)/ }));
+  await user.type(screen.getByRole('textbox', { name: 'Mobile Number' }), '4155552671');
   const photo = new File(['portrait'], 'asha.png', { type: 'image/png' });
   fireEvent.change(screen.getByLabelText('Photograph *'), { target: { files: [photo] } });
   await user.click(screen.getByRole('combobox', { name: 'Gender' }));
@@ -69,4 +104,5 @@ it('requires and submits a photograph with a valid registration', async () => {
 
   await waitFor(() => expect(post).toHaveBeenCalledWith('/persons', expect.any(FormData), expect.any(Object)));
   expect(post.mock.calls.at(-1)[1].get('photo')).toBe(photo);
+  expect(JSON.parse(post.mock.calls.at(-1)[1].get('metadata')).mobile).toBe('+14155552671');
 }, 30_000);

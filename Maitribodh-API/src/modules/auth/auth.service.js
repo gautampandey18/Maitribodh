@@ -21,7 +21,6 @@ export function createAuthService({
 
       if (
         !user
-        || user.status !== 'ACTIVE'
         || isLocked(user.locked_until, now)
         || !user.password_hash
         || isTemporaryPasswordUnavailable(user, now)
@@ -33,6 +32,10 @@ export function createAuthService({
       if (!passwordMatches) {
         await repository.recordFailedLogin(user.user_id, now);
         throw invalidCredentials();
+      }
+
+      if (user.status !== 'ACTIVE') {
+        throw new ApiError(403, 'ACCOUNT_DEACTIVATED', 'Your account is deactivated. Contact the administrator to restore access.');
       }
 
       const authenticatedUser = await repository.completeLogin(user.user_id, now);

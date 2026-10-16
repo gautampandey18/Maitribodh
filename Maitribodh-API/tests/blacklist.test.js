@@ -7,6 +7,23 @@ import { createBlacklistRouter } from '../src/modules/blacklist/blacklist.routes
 import { createBlacklistRepository } from '../src/modules/blacklist/blacklist.repository.js';
 import { createBlacklistService } from '../src/modules/blacklist/blacklist.service.js';
 
+test('blacklist list applies name and category filters before pagination', async () => {
+  let query;
+  const repository = createBlacklistRepository({
+    async query(sql, values) {
+      query = { sql, values };
+      return { rows: [] };
+    },
+  });
+
+  await repository.listEntries({ pageSize: 10, offset: 10, name: 'Asha', category: 'Staff' });
+
+  assert.match(query.sql, /p\.first_name \|\| ' ' \|\| p\.last_name ILIKE/);
+  assert.match(query.sql, /c\.name ILIKE/);
+  assert.match(query.sql, /LIMIT \$3 OFFSET \$4/);
+  assert.deepEqual(query.values, ['Asha', 'Staff', 10, 10]);
+});
+
 test('blacklist add writes the entry and audit atomically after validating person and reason', async () => {
   const calls = [];
   const client = {
@@ -112,6 +129,25 @@ test('blacklist writes require Admin authorization and forward actor data', asyn
       async listEntries() { return []; },
       async liftEntry() { return { blacklist_id: 4 }; },
     },
+  });
+
+  test('blacklist list route validates and forwards name and category filters', async () => {
+    let received;
+    const app = express();
+    app.use('/api/v1/blacklist', createBlacklistRouter({
+      authenticate(request_, _response, next) {
+        request_.auth = { userId: 2, role: 'ADMIN' };
+        next();
+      },
+      blacklistService: {
+        async listEntries(input) { received = input; return { items: [], total: 0, page: input.page, pageSize: input.pageSize }; },
+      },
+    }));
+    app.use(errorHandler);
+
+    await request(app).get('/api/v1/blacklist?page=2&pageSize=10&name=Asha&category=Staff').expect(200);
+    assert.deepEqual(received, { page: 2, pageSize: 10, offset: 10, name: 'Asha', category: 'Staff' });
+    await request(app).get(`/api/v1/blacklist?name=${'x'.repeat(101)}`).expect(400);
   });
   const app = express();
   app.use(express.json());

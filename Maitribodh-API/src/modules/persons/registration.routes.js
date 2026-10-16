@@ -180,6 +180,27 @@ export function createRegistrationRouter({ repository, authenticate, encryptionS
     const schema = registrationInputSchema.pick({ firstName: true, lastName: true, mobile: true, alternateMobile: true, email: true, address: true, emergencyName: true, emergencyMobile: true });
     response.json(await repository.update({ personId: idFrom(request.params.personId), changes: parseInput(schema, request.body), actor: actorFrom(request) }));
   }));
+  router.delete('/:personId', authorize(...managementRoles), asyncHandler(async (request, response) => {
+    let deleted;
+    try {
+      deleted = await repository.delete({ personId: idFrom(request.params.personId), actor: actorFrom(request) });
+    } catch (error) {
+      if (error.code === '23503') {
+        throw new ApiError(409, 'PERSON_IN_USE', 'This person has linked operational records and cannot be deleted. Deactivate the person instead.');
+      }
+      throw error;
+    }
+
+    const fileKeys = [deleted.photo_key, ...deleted.documents.map((document) => document.key)];
+    await Promise.all(fileKeys.filter(isStoredKey).map(async (key) => {
+      try {
+        await unlink(path.join(uploadRoot, key));
+      } catch (error) {
+        if (error.code !== 'ENOENT') request.log?.warn({ err: error, key }, 'Could not remove deleted person file');
+      }
+    }));
+    response.status(204).send();
+  }));
   router.patch('/:personId/access', authorize(...managementRoles), asyncHandler(async (request, response) => {
     const schema = z.object({
       permissionLevelId: z.union([z.coerce.number().int().positive(), z.null()]),

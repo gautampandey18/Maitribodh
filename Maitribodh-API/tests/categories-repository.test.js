@@ -107,3 +107,26 @@ test('category update uses whitelisted columns and audits old/new values atomica
   assert.equal(calls[3].values[6].length, 100);
   assert.equal(calls[5].sql, 'COMMIT');
 });
+
+test('category deletion locks the row and audits the deletion atomically', async () => {
+  const calls = [];
+  const client = {
+    async query(sql, values = []) {
+      calls.push({ sql, values });
+      if (sql.includes('FOR UPDATE')) return { rows: [{ category_id: 8, name: 'Visitor', form_type: 'VISITOR' }] };
+      return { rows: [], rowCount: 1 };
+    },
+    release() {},
+  };
+  const repository = createCategoriesRepository({ async connect() { return client; } });
+
+  const deleted = await repository.deleteCategory({ categoryId: 8, actorUserId: 3, actorRole: 'ADMIN' });
+
+  assert.equal(deleted.category_id, 8);
+  assert.equal(calls[0].sql, 'BEGIN');
+  assert.match(calls[1].sql, /FROM mams\.category WHERE category_id = \$1 FOR UPDATE/);
+  assert.deepEqual(calls[1].values, [8]);
+  assert.match(calls[2].sql, /DELETE FROM mams\.category/);
+  assert.match(calls[3].sql, /CATEGORY_DELETED/);
+  assert.equal(calls[4].sql, 'COMMIT');
+});

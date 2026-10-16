@@ -6,6 +6,8 @@ import {
   CircularProgress,
   MenuItem,
   Paper,
+  Tab,
+  Tabs,
   Table,
   TableBody,
   TableCell,
@@ -20,7 +22,7 @@ import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import { api } from '../api.js';
 
 const reports = [
-  { key: 'visits', title: 'Visit History', path: '/reports/visit-history', dateRange: true, export: true, category: true, location: true },
+  { key: 'visits', title: 'Visit History', path: '/reports/visit-history', dateRange: true, category: true },
   { key: 'registrations', title: 'Person Registrations', path: '/reports/registrations', status: true },
   { key: 'occupancy', title: 'Occupancy', path: '/reports/occupancy', dateRange: true },
   { key: 'staff', title: 'Staff', path: '/reports/staff' },
@@ -35,7 +37,11 @@ export default function ReportsPage() {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [categoryId, setCategoryId] = useState('');
-  const [locationId, setLocationId] = useState('');
+  const [blacklistName, setBlacklistName] = useState('');
+  const [blacklistCategory, setBlacklistCategory] = useState('');
+  const [approvalUser, setApprovalUser] = useState('');
+  const [staffName, setStaffName] = useState('');
+  const [staffJobRole, setStaffJobRole] = useState('');
   const [status, setStatus] = useState('');
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
@@ -65,8 +71,12 @@ export default function ReportsPage() {
       ...(report.dateRange && fromDate ? { fromDate } : {}),
       ...(report.dateRange && toDate ? { toDate } : {}),
       ...(report.category && categoryId ? { categoryId: Number(categoryId) } : {}),
-      ...(report.location && locationId ? { locationId: Number(locationId) } : {}),
       ...(report.status && status ? { status } : {}),
+      ...(report.key === 'blacklist' && blacklistName.trim() ? { name: blacklistName.trim() } : {}),
+      ...(report.key === 'blacklist' && blacklistCategory.trim() ? { category: blacklistCategory.trim() } : {}),
+      ...(report.key === 'approvals' && approvalUser.trim() ? { user: approvalUser.trim() } : {}),
+      ...(report.key === 'staff' && staffName.trim() ? { name: staffName.trim() } : {}),
+      ...(report.key === 'staff' && staffJobRole.trim() ? { jobRole: staffJobRole.trim() } : {}),
     };
   }
 
@@ -82,7 +92,11 @@ export default function ReportsPage() {
       });
       if (requestId !== reportRequestId.current) return;
       setItems(response.data.items);
-      setColumns(response.data.items.length ? Object.keys(response.data.items[0]) : []);
+      setColumns(response.data.items.length
+        ? Object.keys(response.data.items[0]).filter((column) => !(
+          selectedKey === 'visits' && /(?:^|_)location_id$/i.test(column)
+        ))
+        : []);
       setTotal(response.data.total ?? response.data.items.length);
       setPage(response.data.page - 1);
       setRowsPerPage(response.data.pageSize ?? nextRowsPerPage);
@@ -104,22 +118,22 @@ export default function ReportsPage() {
     await loadReport(0, rowsPerPage);
   }
 
-  async function exportVisits() {
+  async function exportReport() {
     setLoading(true);
     setError('');
     try {
-      const response = await api.get('/reports/visit-history/export', {
+      const response = await api.get(`${report.path}/export`, {
         params: getParams(),
         responseType: 'blob',
       });
       const url = URL.createObjectURL(response.data);
       const link = document.createElement('a');
       link.href = url;
-      link.download = 'visit-history.csv';
+      link.download = `${report.key}.xlsx`;
       link.click();
       URL.revokeObjectURL(url);
     } catch (requestError) {
-      setError(requestError.response?.data?.error?.message ?? 'Visit History export failed.');
+      setError(requestError.response?.data?.error?.message ?? `${report.title} export failed.`);
     } finally {
       setLoading(false);
     }
@@ -141,18 +155,16 @@ export default function ReportsPage() {
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       <Box className="reports-layout">
-        <Paper component="nav" className="reports-nav" elevation={0} aria-label="Report types">
-          {reports.map((item) => (
-            <Button
-              key={item.key}
-              className={item.key === selectedKey ? 'report-nav-item selected' : 'report-nav-item'}
-              onClick={() => selectReport(item)}
-              aria-current={item.key === selectedKey ? 'page' : undefined}
-            >
-              {item.title}
-            </Button>
-          ))}
-        </Paper>
+        <Tabs
+          className="reports-tabs"
+          value={selectedKey}
+          onChange={(_event, value) => selectReport(reports.find((item) => item.key === value))}
+          variant="scrollable"
+          scrollButtons="auto"
+          aria-label="Report types"
+        >
+          {reports.map((item) => <Tab key={item.key} value={item.key} label={item.title} />)}
+        </Tabs>
         <Paper className="table-panel report-panel" elevation={0}>
           <Box className="table-panel-heading">
             <Typography variant="h3">{report.title}</Typography>
@@ -176,19 +188,44 @@ export default function ReportsPage() {
             {report.category && (
               <TextField label="Category ID" type="number" value={categoryId} onChange={(event) => setCategoryId(event.target.value)} inputProps={{ min: 1, step: 1 }} />
             )}
-            {report.location && (
-              <TextField label="Location ID" type="number" value={locationId} onChange={(event) => setLocationId(event.target.value)} inputProps={{ min: 1, step: 1 }} />
+            {report.key === 'blacklist' && (
+              <>
+                <TextField label="Name" value={blacklistName} onChange={(event) => setBlacklistName(event.target.value)} inputProps={{ maxLength: 100 }} />
+                <TextField label="Category" value={blacklistCategory} onChange={(event) => setBlacklistCategory(event.target.value)} inputProps={{ maxLength: 100 }} />
+              </>
+            )}
+            {report.key === 'approvals' && (
+              <TextField
+                label="User"
+                value={approvalUser}
+                onChange={(event) => setApprovalUser(event.target.value)}
+                inputProps={{ maxLength: 100 }}
+              />
+            )}
+            {report.key === 'staff' && (
+              <>
+                <TextField
+                  label="Name"
+                  value={staffName}
+                  onChange={(event) => setStaffName(event.target.value)}
+                  inputProps={{ maxLength: 100 }}
+                />
+                <TextField
+                  label="Job Role"
+                  value={staffJobRole}
+                  onChange={(event) => setStaffJobRole(event.target.value)}
+                  inputProps={{ maxLength: 100 }}
+                />
+              </>
             )}
             <Box className="report-filter-actions">
               <Button type="submit" variant="contained" color="secondary" disabled={loading}>
                 {loading && <CircularProgress size={18} sx={{ mr: 1 }} />}
                 Run report
               </Button>
-              {report.export && (
-                <Button type="button" startIcon={<FileDownloadOutlinedIcon />} onClick={exportVisits} disabled={loading || !hasRun}>
-                  Export CSV
-                </Button>
-              )}
+              <Button type="button" startIcon={<FileDownloadOutlinedIcon />} onClick={exportReport} disabled={loading || !hasRun}>
+                Export Excel
+              </Button>
             </Box>
           </Box>
           {loading ? (

@@ -20,16 +20,16 @@ export function createReportsService({ repository }) {
       return paginatedResult(await repository.occupancy({ ...filters, pagination }), pagination);
     },
 
-    async staff(pagination) {
-      return paginatedResult(await repository.staff(pagination), pagination);
+    async staff({ filters, pagination }) {
+      return paginatedResult(await repository.staff({ ...filters, pagination }), pagination);
     },
 
     async approvals({ filters, pagination }) {
       return paginatedResult(await repository.approvals({ ...filters, pagination }), pagination);
     },
 
-    async blacklist(pagination) {
-      return paginatedResult(await repository.blacklist(pagination), pagination);
+    async blacklist({ filters, pagination }) {
+      return paginatedResult(await repository.blacklist({ ...filters, pagination }), pagination);
     },
 
     recordVisitHistoryExport({ filters, rowCount, actor }) {

@@ -49,3 +49,14 @@ test('lookup update returns not found when type and ID do not match', async () =
     (error) => error.statusCode === 404 && error.code === 'LOOKUP_NOT_FOUND',
   );
 });
+
+test('lookup deletion reports when records still reference the value', async () => {
+  const service = createLookupsService({
+    repository: { async deleteValue() { throw { code: '23503' }; } },
+  });
+
+  await assert.rejects(
+    service.deleteValue({ lookupType: 'DEPARTMENT', lookupId: 4, actor: { userId: 1, role: 'ADMIN' } }),
+    (error) => error.statusCode === 409 && error.code === 'MASTER_DATA_IN_USE',
+  );
+});

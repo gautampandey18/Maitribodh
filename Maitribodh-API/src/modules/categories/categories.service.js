@@ -59,5 +59,26 @@ export function createCategoriesService({ repository }) {
         throw error;
       }
     },
+
+    async deleteCategory({ categoryId, actor }) {
+      try {
+        const category = await repository.deleteCategory({
+          categoryId,
+          actorUserId: actor.userId,
+          actorRole: actor.role,
+          ipAddress: actor.ipAddress,
+          device: actor.device,
+        });
+        if (!category) {
+          throw new ApiError(404, 'CATEGORY_NOT_FOUND', 'Category not found');
+        }
+        return category;
+      } catch (error) {
+        if (error.code === '23503') {
+          throw new ApiError(409, 'MASTER_DATA_IN_USE', 'This category is referenced by other records and cannot be deleted. Deactivate it instead.');
+        }
+        throw error;
+      }
+    },
   };
 }

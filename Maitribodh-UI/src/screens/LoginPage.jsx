@@ -50,11 +50,14 @@ export default function LoginPage() {
       navigate(data.mustChangePassword ? '/password' : destination, { replace: true });
     } catch (error) {
       const status = error.response?.status;
-      setServerError(status === 429
-        ? 'Too many attempts. Wait before trying again.'
-        : status === 401
-          ? 'The username or password is incorrect.'
-          : 'Sign-in is temporarily unavailable. Try again.');
+      const code = error.response?.data?.error?.code;
+      setServerError(code === 'ACCOUNT_DEACTIVATED'
+        ? 'Your account is deactivated. Contact the administrator to restore access.'
+        : status === 429
+          ? 'Too many attempts. Wait before trying again.'
+          : status === 401
+            ? 'The username or password is incorrect.'
+            : 'Sign-in is temporarily unavailable. Try again.');
     }
   }
 

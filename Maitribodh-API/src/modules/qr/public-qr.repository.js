@@ -38,7 +38,8 @@ export function createPublicQrRepository(pool) {
           `SELECT p.person_code, p.first_name, p.last_name, p.qr_version, c.name AS category
              FROM mams.person AS p
              JOIN mams.category AS c ON c.category_id = p.category_id
-            WHERE p.mobile = $1
+            WHERE (p.mobile = $1
+               OR ($1 ~ '^[0-9]{10}$' AND p.mobile = '+91' || $1))
               AND p.status = 'ACTIVE'
               AND p.qr_version > 0
               AND NOT EXISTS (
