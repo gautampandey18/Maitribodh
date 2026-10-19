@@ -18,6 +18,15 @@ export function createDashboardRouter({ dashboardService, authenticate }) {
   );
 
   router.get(
+    '/recent-activity',
+    authenticate,
+    authorize(...roles),
+    asyncHandler(async (request, response) => {
+      response.status(200).json(await dashboardService.recentActivity(parsePagination(request.query)));
+    }),
+  );
+
+  router.get(
     '/inside',
     authenticate,
     authorize(...roles),

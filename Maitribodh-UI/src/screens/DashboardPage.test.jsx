@@ -30,7 +30,9 @@ it('loads live summary metrics and the inside list', async () => {
     } }
     : path === '/dashboard/inside'
       ? { data: { items: [{ visit_id: 8, person_code: 'MB-000008', name: 'Asha Patel', category: 'Visitor', gate: 'Main Gate', location: 'Assembly Hall', checkin_at: '2026-10-09T08:30:00Z', accompanying_count: 0, checked_in_by: 'Gotam Pandey', checkin_device: 'Test device' }], total: 1, page: 1, pageSize: 5, byLocation: [{ name: 'Assembly Hall', count: 1 }], byCategory: [{ name: 'Visitor', count: 1 }] } }
-      : { data: { items: [{ person_id: 9, name: 'Ravi Pending', category: 'Staff' }] } }));
+      : path === '/dashboard/recent-activity'
+        ? { data: { items: [{ occurred_at: '2026-10-09T08:30:00Z', actor: 'guard', module: 'GATE', activity: 'CHECK_IN' }], total: 1, page: 1, pageSize: 5 } }
+        : { data: { items: [{ person_id: 9, name: 'Ravi Pending', category: 'Staff' }] } }));
   const post = vi.spyOn(api, 'post').mockResolvedValue({ data: { status: 'CLOSED_BY_ADMIN' } });
   const user = userEvent.setup();
 
@@ -82,7 +84,9 @@ it('centers the empty Occupancy state when there are no open check-ins', async (
         recent_activity: [],
         security_alerts: { total_today: 0, latest_at: null },
       } }
-      : { data: { items: [], total: 0, page: 1, pageSize: 5, byLocation: [], byCategory: [] } },
+      : path === '/dashboard/recent-activity'
+        ? { data: { items: [], total: 0, page: 1, pageSize: 5 } }
+        : { data: { items: [], total: 0, page: 1, pageSize: 5, byLocation: [], byCategory: [] } },
   ));
 
   render(
@@ -95,4 +99,75 @@ it('centers the empty Occupancy state when there are no open check-ins', async (
 
   const emptyState = await screen.findByRole('cell', { name: 'No open check-ins.' });
   expect(emptyState).toHaveClass('empty-table', 'occupancy-empty-state');
+}, 30_000);
+
+it('allows security guards to view the dashboard without management actions', async () => {
+  store.dispatch(sessionStarted({ accessToken: 'test-token', user: { id: 2, role: 'SECURITY_GUARD' } }));
+  const get = vi.spyOn(api, 'get').mockImplementation((path) => Promise.resolve(
+    path === '/dashboard'
+      ? { data: {
+        active_persons: 1,
+        registrations_today: 0,
+        checkins_today: 0,
+        checkouts_today: 0,
+        pending_approvals: 0,
+        blacklist_attempts_today: 0,
+        open_visits: 0,
+        checkin_trend: [],
+        category_mix: [],
+        recent_activity: [],
+        security_alerts: { total_today: 0, latest_at: null },
+      } }
+      : path === '/dashboard/recent-activity'
+        ? { data: { items: [], total: 0, page: 1, pageSize: 5 } }
+        : { data: { items: [], total: 0, page: 1, pageSize: 5, byLocation: [], byCategory: [] } },
+  ));
+  const post = vi.spyOn(api, 'post');
+
+  render(
+    <Provider store={store}>
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>
+    </Provider>,
+  );
+
+  expect(await screen.findByText('Active Members')).toBeInTheDocument();
+  expect(screen.getByRole('table', { name: 'People currently inside' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Manage locations' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Review / Close' })).not.toBeInTheDocument();
+  expect(get).toHaveBeenCalledWith('/dashboard');
+  expect(get).toHaveBeenCalledWith('/dashboard/inside', { params: { page: 1, pageSize: 5 } });
+  expect(get).toHaveBeenCalledWith('/dashboard/recent-activity', { params: { page: 1, pageSize: 5 } });
+  expect(get).not.toHaveBeenCalledWith('/approvals');
+  expect(post).not.toHaveBeenCalled();
+}, 30_000);
+
+it('loads the requested Recent Activity page', async () => {
+  const activity = (actor) => ({ occurred_at: '2026-10-09T08:30:00Z', actor, module: 'GATE', activity: 'CHECK_IN' });
+  const get = vi.spyOn(api, 'get').mockImplementation((path, options) => Promise.resolve(
+    path === '/dashboard'
+      ? { data: { active_persons: 1, checkin_trend: [], category_mix: [], recent_activity: [], security_alerts: { total_today: 0 } } }
+      : path === '/dashboard/recent-activity'
+        ? options.params.page === 1
+          ? { data: { items: [activity('First page')], total: 6, page: 1, pageSize: 5 } }
+          : { data: { items: [activity('Second page')], total: 6, page: 2, pageSize: 5 } }
+        : { data: { items: [], total: 0, page: 1, pageSize: 5, byLocation: [], byCategory: [] } },
+  ));
+  const user = userEvent.setup();
+
+  render(
+    <Provider store={store}>
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>
+    </Provider>,
+  );
+
+  expect(await screen.findByText('First page')).toBeInTheDocument();
+  const nextPageButtons = screen.getAllByTitle('Go to next page');
+  await user.click(nextPageButtons[1]);
+
+  expect(await screen.findByText('Second page')).toBeInTheDocument();
+  expect(get).toHaveBeenCalledWith('/dashboard/recent-activity', { params: { page: 2, pageSize: 5 } });
 }, 30_000);

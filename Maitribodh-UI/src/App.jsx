@@ -33,7 +33,6 @@ import ChevronLeftOutlinedIcon from '@mui/icons-material/ChevronLeftOutlined';
 import ChevronRightOutlinedIcon from '@mui/icons-material/ChevronRightOutlined';
 import { api } from './api.js';
 import { sessionEnded } from './store.js';
-import CategoriesPage from './screens/CategoriesPage.jsx';
 import ApprovalsPage from './screens/ApprovalsPage.jsx';
 import DashboardPage from './screens/DashboardPage.jsx';
 import LoginPage from './screens/LoginPage.jsx';
@@ -63,7 +62,7 @@ export default function App() {
       <Route element={<RequireSession />}>
         <Route element={<AppShell />}>
           <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/categories" element={<AdminOnly><CategoriesPage /></AdminOnly>} />
+          <Route path="/categories" element={<AdminOnly><Navigate to="/master?tab=categories" replace /></AdminOnly>} />
           <Route path="/locations" element={<AdminOnly><LocationsPage /></AdminOnly>} />
           <Route path="/blacklist" element={<AdminOnly><BlacklistPage /></AdminOnly>} />
           <Route path="/reports" element={<ReportAccess><ReportsPage /></ReportAccess>} />
@@ -140,7 +139,7 @@ function AppShell() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const visibleNavigation = NAVIGATION.filter((item) => canAccessPath(auth.user?.role, item.path));
   const userRole = auth.user?.role?.replaceAll('_', ' ') ?? 'Unknown';
-  const icons = { '/dashboard': <DashboardOutlinedIcon />, '/persons': <SearchOutlinedIcon />, '/register': <PeopleAltOutlinedIcon />, '/approvals': <FactCheckOutlinedIcon />, '/qr': <KeyOutlinedIcon />, '/gate': <PlaceOutlinedIcon />, '/blacklist': <GppBadOutlinedIcon />, '/reports': <AssessmentOutlinedIcon />, '/users': <PeopleAltOutlinedIcon />, '/master': <TuneOutlinedIcon />, '/categories': <TuneOutlinedIcon />, '/locations': <PlaceOutlinedIcon />, '/audit': <FactCheckOutlinedIcon /> };
+  const icons = { '/dashboard': <DashboardOutlinedIcon />, '/persons': <SearchOutlinedIcon />, '/register': <PeopleAltOutlinedIcon />, '/approvals': <FactCheckOutlinedIcon />, '/qr': <KeyOutlinedIcon />, '/gate': <PlaceOutlinedIcon />, '/blacklist': <GppBadOutlinedIcon />, '/reports': <AssessmentOutlinedIcon />, '/users': <PeopleAltOutlinedIcon />, '/master': <TuneOutlinedIcon />, '/locations': <PlaceOutlinedIcon />, '/audit': <FactCheckOutlinedIcon /> };
   const navigationWidth = sidebarCollapsed ? collapsedDrawerWidth : drawerWidth;
 
   async function handleLogout() {

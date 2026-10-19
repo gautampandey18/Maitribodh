@@ -6,6 +6,9 @@ import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
 import KeyOutlinedIcon from '@mui/icons-material/KeyOutlined';
 import BlockOutlinedIcon from '@mui/icons-material/BlockOutlined';
 import ToggleOnOutlinedIcon from '@mui/icons-material/ToggleOnOutlined';
+import MoreVertOutlinedIcon from '@mui/icons-material/MoreVertOutlined';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import {
   Alert,
   Box,
@@ -18,6 +21,7 @@ import {
   DialogTitle,
   FormControlLabel,
   IconButton,
+  Menu,
   MenuItem,
   Paper,
   Snackbar,
@@ -77,6 +81,11 @@ export default function UsersPage() {
   const [saving, setSaving] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [deactivateTarget, setDeactivateTarget] = useState(null);
+  const [activateTarget, setActivateTarget] = useState(null);
+  const [passwordResetTarget, setPasswordResetTarget] = useState(null);
+  const [actionAnchor, setActionAnchor] = useState(null);
+  const [actionUser, setActionUser] = useState(null);
+  const [editTarget, setEditTarget] = useState(null);
   const [credential, setCredential] = useState(null);
   const requestId = useRef(0);
 
@@ -193,6 +202,74 @@ export default function UsersPage() {
     }
   }
 
+  function openUserActions(event, user) {
+    setActionAnchor(event.currentTarget);
+    setActionUser(user);
+  }
+
+  function closeUserActions() {
+    setActionAnchor(null);
+    setActionUser(null);
+  }
+
+  function openEditUser(user) {
+    setEditTarget(user);
+    setUserForm({
+      firstName: user.first_name,
+      lastName: user.last_name,
+      mobile: user.mobile,
+      email: user.email ?? '',
+      username: user.username,
+      role: user.role,
+      isSecurityHead: user.is_security_head,
+      canBulkUpload: user.can_bulk_upload,
+    });
+    setFormError('');
+    setCreateOpen(true);
+    closeUserActions();
+  }
+
+  async function saveUser(event) {
+    event.preventDefault();
+    const parsed = userSchema.safeParse(userForm);
+    if (!parsed.success) {
+      setFormError(parsed.error.issues[0].message);
+      return;
+    }
+    setSaving(true);
+    setFormError('');
+    setError('');
+    try {
+      await api.patch(`/users/${editTarget.user_id}`, parsed.data);
+      setCreateOpen(false);
+      setEditTarget(null);
+      setUserForm(emptyUser);
+      await loadUsers();
+      setNotice(`${parsed.data.username} updated`);
+    } catch (requestError) {
+      setFormError(requestError.response?.data?.error?.message ?? 'User could not be updated.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteUser() {
+    if (!actionUser) return;
+    setSaving(true);
+    setError('');
+    try {
+      await api.delete(`/users/${actionUser.user_id}`);
+      setUsers((current) => current.filter((item) => item.user_id !== actionUser.user_id));
+      setTotalUsers((current) => Math.max(0, current - 1));
+      setNotice(`${actionUser.username} deleted`);
+      closeUserActions();
+    } catch (requestError) {
+      setError(requestError.response?.data?.error?.message ?? 'User could not be deleted.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function deactivateUser() {
     if (!deactivateTarget) return;
     setSaving(true);
@@ -204,6 +281,22 @@ export default function UsersPage() {
       setDeactivateTarget(null);
     } catch (requestError) {
       setError(requestError.response?.data?.error?.message ?? 'User could not be deactivated.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function activateUser() {
+    if (!activateTarget) return;
+    setSaving(true);
+    setError('');
+    try {
+      const response = await api.patch(`/users/${activateTarget.user_id}`, { activate: true });
+      setUsers((current) => current.map((item) => item.user_id === activateTarget.user_id ? response.data : item));
+      setNotice(`${activateTarget.username} activated`);
+      setActivateTarget(null);
+    } catch (requestError) {
+      setError(requestError.response?.data?.error?.message ?? 'User could not be activated.');
     } finally {
       setSaving(false);
     }
@@ -228,7 +321,7 @@ export default function UsersPage() {
           <Typography component="h1" variant="h1">Users</Typography>
           <Typography color="text.secondary" sx={{ mt: 0.75 }}>Manage accounts, permissions, and access status.</Typography>
         </Box>
-        <Button variant="contained" color="secondary" startIcon={<AddIcon />} onClick={() => { setFormError(''); setUserForm(emptyUser); setCreateOpen(true); }}>
+        <Button variant="contained" color="secondary" startIcon={<AddIcon />} onClick={() => { setFormError(''); setEditTarget(null); setUserForm(emptyUser); setCreateOpen(true); }}>
           Add user
         </Button>
       </Box>
@@ -277,22 +370,31 @@ export default function UsersPage() {
                     <TableCell align="right" className="user-actions">
                       <Tooltip title="Issue temporary password">
                         <span>
-                          <IconButton aria-label={`Reset password for ${user.username}`} disabled={saving || user.status !== 'ACTIVE'} onClick={() => resetPassword(user)}>
+                          <IconButton
+                            aria-label={`Issue temporary password for ${user.username}`}
+                            onClick={() => setPasswordResetTarget(user)}
+                            disabled={user.status !== 'ACTIVE' || saving}
+                          >
                             <KeyOutlinedIcon />
                           </IconButton>
                         </span>
                       </Tooltip>
                       <Tooltip title={user.can_bulk_upload ? 'Disable bulk upload' : 'Enable bulk upload'}>
-                        <IconButton aria-label={`${user.can_bulk_upload ? 'Disable' : 'Enable'} bulk upload for ${user.username}`} disabled={user.status !== 'ACTIVE'} onClick={() => toggleBulkPermission(user)}>
-                          <ToggleOnOutlinedIcon color={user.can_bulk_upload ? 'success' : 'disabled'} />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Deactivate user">
                         <span>
-                          <IconButton aria-label={`Deactivate ${user.username}`} color="error" disabled={user.status !== 'ACTIVE'} onClick={() => setDeactivateTarget(user)}>
-                            <BlockOutlinedIcon />
+                          <IconButton
+                            aria-label={`${user.can_bulk_upload ? 'Disable' : 'Enable'} bulk upload for ${user.username}`}
+                            color={user.can_bulk_upload ? 'success' : 'default'}
+                            onClick={() => toggleBulkPermission(user)}
+                            disabled={user.status !== 'ACTIVE'}
+                          >
+                            <ToggleOnOutlinedIcon />
                           </IconButton>
                         </span>
+                      </Tooltip>
+                      <Tooltip title="Actions">
+                        <IconButton aria-label={`Actions for ${user.username}`} onClick={(event) => openUserActions(event, user)}>
+                          <MoreVertOutlinedIcon />
+                        </IconButton>
                       </Tooltip>
                     </TableCell>
                   </TableRow>
@@ -315,9 +417,17 @@ export default function UsersPage() {
         />
       </Paper>
 
+      <Menu anchorEl={actionAnchor} open={Boolean(actionAnchor)} onClose={closeUserActions}>
+        <MenuItem onClick={() => openEditUser(actionUser)} disabled={!actionUser}><EditOutlinedIcon fontSize="small" />Update</MenuItem>
+        {actionUser?.status === 'ACTIVE'
+          ? <MenuItem onClick={() => { setDeactivateTarget(actionUser); closeUserActions(); }}><BlockOutlinedIcon fontSize="small" />Deactivate</MenuItem>
+          : <MenuItem onClick={() => { setActivateTarget(actionUser); closeUserActions(); }} disabled={!actionUser}><ToggleOnOutlinedIcon fontSize="small" />Activate</MenuItem>}
+        <MenuItem onClick={deleteUser} disabled={!actionUser}><DeleteOutlineOutlinedIcon fontSize="small" />Delete</MenuItem>
+      </Menu>
+
       <Dialog open={createOpen} onClose={() => !saving && setCreateOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle>Add user</DialogTitle>
-        <Box component="form" onSubmit={createUser} noValidate>
+        <DialogTitle>{editTarget ? 'Update user' : 'Add user'}</DialogTitle>
+        <Box component="form" onSubmit={editTarget ? saveUser : createUser} noValidate>
           <DialogContent className="category-form-grid">
             {formError && <Alert severity="error" sx={{ gridColumn: '1 / -1' }}>{formError}</Alert>}
             <TextField name="firstName" label="First name" value={userForm.firstName} onChange={updateForm} required fullWidth />
@@ -334,7 +444,7 @@ export default function UsersPage() {
           <DialogActions className="dialog-actions">
             <Button onClick={() => setCreateOpen(false)} disabled={saving}>Cancel</Button>
             <Button type="submit" variant="contained" color="secondary" disabled={saving}>
-              {saving ? <CircularProgress size={18} /> : 'Create and issue credential'}
+              {saving ? <CircularProgress size={18} /> : editTarget ? 'Save changes' : 'Create and issue credential'}
             </Button>
           </DialogActions>
         </Box>
@@ -349,6 +459,41 @@ export default function UsersPage() {
           <Button onClick={() => setDeactivateTarget(null)} disabled={saving}>Cancel</Button>
           <Button onClick={deactivateUser} variant="contained" color="error" disabled={saving}>
             {saving ? <CircularProgress size={18} /> : 'Deactivate'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={Boolean(activateTarget)} onClose={() => !saving && setActivateTarget(null)} fullWidth maxWidth="xs">
+        <DialogTitle>Activate user</DialogTitle>
+        <DialogContent>
+          <Typography>Activate {activateTarget?.username}? They will be able to log in again.</Typography>
+        </DialogContent>
+        <DialogActions className="dialog-actions">
+          <Button onClick={() => setActivateTarget(null)} disabled={saving}>Cancel</Button>
+          <Button onClick={activateUser} variant="contained" color="secondary" disabled={saving}>
+            {saving ? <CircularProgress size={18} /> : 'Activate'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={Boolean(passwordResetTarget)} onClose={() => !saving && setPasswordResetTarget(null)} fullWidth maxWidth="xs">
+        <DialogTitle>Issue temporary password?</DialogTitle>
+        <DialogContent>
+          <Typography>Issue a new temporary password for {passwordResetTarget?.username}? Any existing temporary password will no longer work.</Typography>
+        </DialogContent>
+        <DialogActions className="dialog-actions">
+          <Button onClick={() => setPasswordResetTarget(null)} disabled={saving}>Cancel</Button>
+          <Button
+            onClick={() => {
+              const target = passwordResetTarget;
+              setPasswordResetTarget(null);
+              resetPassword(target);
+            }}
+            variant="contained"
+            color="secondary"
+            disabled={saving}
+          >
+            Issue temporary password
           </Button>
         </DialogActions>
       </Dialog>

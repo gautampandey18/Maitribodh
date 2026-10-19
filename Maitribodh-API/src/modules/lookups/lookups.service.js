@@ -62,5 +62,27 @@ export function createLookupsService({ repository }) {
         throw error;
       }
     },
+
+    async deleteValue({ lookupType, lookupId, actor }) {
+      try {
+        const value = await repository.deleteValue({
+          lookupType,
+          lookupId,
+          actorUserId: actor.userId,
+          actorRole: actor.role,
+          ipAddress: actor.ipAddress,
+          device: actor.device,
+        });
+        if (!value) {
+          throw new ApiError(404, 'LOOKUP_NOT_FOUND', 'Lookup value not found');
+        }
+        return value;
+      } catch (error) {
+        if (error.code === '23503') {
+          throw new ApiError(409, 'MASTER_DATA_IN_USE', 'This master value is referenced by other records and cannot be deleted. Deactivate it instead.');
+        }
+        throw error;
+      }
+    },
   };
 }

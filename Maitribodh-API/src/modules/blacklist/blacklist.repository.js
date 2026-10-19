@@ -2,7 +2,7 @@ import { ApiError } from '../../errors/ApiError.js';
 
 export function createBlacklistRepository(pool) {
   return {
-    async listEntries({ pageSize, offset }) {
+    async listEntries({ pageSize, offset, name = '', category = '' }) {
       const result = await pool.query(
         `SELECT b.blacklist_id, b.person_id, p.person_code,
                 p.first_name || ' ' || p.last_name AS name,
@@ -21,9 +21,11 @@ export function createBlacklistRepository(pool) {
            JOIN mams.person AS p ON p.person_id = b.person_id
            JOIN mams.category AS c ON c.category_id = p.category_id
            JOIN mams.lookup_value AS r ON r.lookup_id = b.reason_id
-          ORDER BY b.added_at DESC, b.blacklist_id DESC
-          LIMIT $1 OFFSET $2`,
-        [pageSize, offset],
+           WHERE ($1 = '' OR p.first_name || ' ' || p.last_name ILIKE '%' || $1 || '%')
+             AND ($2 = '' OR c.name ILIKE '%' || $2 || '%')
+           ORDER BY b.added_at DESC, b.blacklist_id DESC
+           LIMIT $3 OFFSET $4`,
+        [name, category, pageSize, offset],
       );
       return result.rows;
     },

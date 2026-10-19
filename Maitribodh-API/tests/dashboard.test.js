@@ -38,6 +38,42 @@ test('dashboard inside masks mobile for non-Admin roles', async () => {
   assert.equal(viewerItems.total, 1);
 });
 
+test('dashboard recent activity returns a stable paginated result', async () => {
+  const queries = [];
+  const repository = createDashboardRepository({
+    async query(query, values) {
+      queries.push({ query, values });
+      if (query.includes('count(*)')) return { rows: [{ total: 7 }] };
+      return { rows: [{ activity: 'CHECK_IN' }] };
+    },
+  });
+
+  const result = await repository.recentActivity({ pageSize: 5, offset: 5 });
+
+  assert.deepEqual(result, { items: [{ activity: 'CHECK_IN' }], total: 7 });
+  const rowsQuery = queries.find(({ query }) => query.includes('ORDER BY a.occurred_at'));
+  assert.match(rowsQuery.query, /ORDER BY a\.occurred_at DESC, a\.audit_id DESC/);
+  assert.match(rowsQuery.query, /LIMIT \$1 OFFSET \$2/);
+  assert.deepEqual(rowsQuery.values, [5, 5]);
+});
+
+test('dashboard service includes recent activity pagination metadata', async () => {
+  let receivedPagination;
+  const service = createDashboardService({
+    repository: {
+      async recentActivity(pagination) {
+        receivedPagination = pagination;
+        return { items: [{ activity: 'CHECK_IN' }], total: 6 };
+      },
+    },
+  });
+
+  const result = await service.recentActivity({ page: 2, pageSize: 5, offset: 5 });
+
+  assert.deepEqual(receivedPagination, { pageSize: 5, offset: 5 });
+  assert.deepEqual(result, { items: [{ activity: 'CHECK_IN' }], total: 6, page: 2, pageSize: 5 });
+});
+
 test('dashboard routes allow Viewer reads and forward role to inside projection', async () => {
   let receivedRole;
   const router = createDashboardRouter({
@@ -48,6 +84,7 @@ test('dashboard routes allow Viewer reads and forward role to inside projection'
     dashboardService: {
       async summary() { return { active_persons: 3, open_visits: 0 }; },
       async inside(input) { receivedRole = input.actorRole; return { items: [], total: 0, page: input.page, pageSize: input.pageSize, byLocation: [], byCategory: [] }; },
+      async recentActivity(input) { return { items: [{ activity: 'CHECK_IN' }], total: 6, page: input.page, pageSize: input.pageSize }; },
     },
   });
   const app = express();
@@ -56,10 +93,12 @@ test('dashboard routes allow Viewer reads and forward role to inside projection'
 
   const summary = await request(app).get('/api/v1/dashboard');
   const inside = await request(app).get('/api/v1/dashboard/inside?page=2&pageSize=50');
+  const recentActivity = await request(app).get('/api/v1/dashboard/recent-activity?page=2&pageSize=5');
 
   assert.equal(summary.status, 200);
   assert.equal(summary.body.active_persons, 3);
   assert.equal(inside.status, 200);
   assert.deepEqual(inside.body, { items: [], total: 0, page: 2, pageSize: 50, byLocation: [], byCategory: [] });
+  assert.deepEqual(recentActivity.body, { items: [{ activity: 'CHECK_IN' }], total: 6, page: 2, pageSize: 5 });
   assert.equal(receivedRole, 'VIEWER');
 });

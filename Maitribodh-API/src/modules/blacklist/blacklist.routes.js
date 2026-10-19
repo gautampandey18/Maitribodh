@@ -24,7 +24,15 @@ export function createBlacklistRouter({ blacklistService, authenticate }) {
     authenticate,
     authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN),
     asyncHandler(async (request, response) => {
-      response.status(200).json(await blacklistService.listEntries(parsePagination(request.query)));
+      const filters = z.object({
+        name: z.string().trim().max(100).default(''),
+        category: z.string().trim().max(100).default(''),
+      }).safeParse(request.query);
+      if (!filters.success) throw new ApiError(400, 'VALIDATION_ERROR', 'Invalid blacklist filters');
+      response.status(200).json(await blacklistService.listEntries({
+        ...parsePagination(request.query),
+        ...filters.data,
+      }));
     }),
   );
 

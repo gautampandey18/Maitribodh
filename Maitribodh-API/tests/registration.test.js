@@ -3,15 +3,28 @@ import assert from 'node:assert/strict';
 import { registrationInputSchema, validateCategoryDetails } from '../src/modules/persons/registration.validation.js';
 import { categoryFormSchema } from '../src/constants/category-schema.js';
 
-const input = { categoryId: 1, firstName: 'Asha', lastName: 'Patel', mobile: '9820000000', gender: 'OTHER', consent: true, categoryDetails: { purpose: 'Meeting', visit_date: '2026-10-09' } };
+const rawInput = { categoryId: 1, firstName: 'Asha', lastName: 'Patel', mobile: '9820000000', gender: 'OTHER', consent: true, categoryDetails: { purpose: 'Meeting', visit_date: '2026-10-09' } };
+const input = registrationInputSchema.parse(rawInput);
 const category = { form_type: 'VISITOR', status: 'ACTIVE', approval_required: false };
 test('registration validates names, consent and mobile', () => {
   assert.equal(registrationInputSchema.safeParse(input).success, true);
-  for (const change of [{ mobile: '123' }, { firstName: 'Asha1' }, { consent: false }, { dateOfBirth: 'invalid' }]) assert.equal(registrationInputSchema.safeParse({ ...input, ...change }).success, false);
+  assert.equal(registrationInputSchema.parse({ ...rawInput, mobile: '+14155552671' }).mobile, '+14155552671');
+  assert.equal(input.mobile, '+919820000000');
+  assert.equal(registrationInputSchema.safeParse({ ...input, mobile: '+123' }).success, false);
+  for (const change of [{ mobile: '123' }, { firstName: 'Asha1' }, { consent: false }, { dateOfBirth: 'invalid' }]) assert.equal(registrationInputSchema.safeParse({ ...rawInput, ...change }).success, false);
 });
 test('required dynamic fields and unconfirmed approval block registration', () => {
   assert.throws(() => validateCategoryDetails({ ...input, categoryDetails: {} }, category, 'ADMIN'), /Purpose of Visit is required/);
   assert.throws(() => validateCategoryDetails(input, { ...category, approval_required: null }, 'ADMIN'), /paused/);
+});
+test('visitor driver details are optional but validated when supplied', () => {
+  const visitorDetails = { purpose: 'Meeting', visit_date: '2026-10-09' };
+  assert.doesNotThrow(() => validateCategoryDetails({ ...input, categoryDetails: visitorDetails }, category, 'ADMIN'));
+  assert.doesNotThrow(() => validateCategoryDetails({ ...input, categoryDetails: { ...visitorDetails, driver_available: 'NO' } }, category, 'ADMIN'));
+  assert.doesNotThrow(() => validateCategoryDetails({ ...input, categoryDetails: { ...visitorDetails, driver_available: 'YES', driver_name: 'Ravi', driver_mobile: '9876543210' } }, category, 'ADMIN'));
+  assert.throws(() => validateCategoryDetails({ ...input, categoryDetails: { ...visitorDetails, driver_available: 'MAYBE' } }, category, 'ADMIN'), /Yes or No/);
+  assert.throws(() => validateCategoryDetails({ ...input, categoryDetails: { ...visitorDetails, driver_available: 'YES', driver_mobile: '123' } }, category, 'ADMIN'), /valid 10-digit mobile/);
+  assert.throws(() => validateCategoryDetails({ ...input, categoryDetails: { ...visitorDetails, driver_available: 'NO', driver_name: 'Ravi' } }, category, 'ADMIN'), /only be provided when a driver is available/);
 });
 test('guards can register visitors only', () => {
   assert.doesNotThrow(() => validateCategoryDetails(input, category, 'SECURITY_GUARD'));

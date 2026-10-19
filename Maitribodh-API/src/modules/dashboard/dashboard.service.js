@@ -9,10 +9,10 @@ export function createDashboardService({ repository }) {
         repository.summary(),
         repository.checkinTrend(),
         repository.categoryMix(),
-        repository.recentActivity(),
+        repository.recentActivity({ pageSize: 5, offset: 0 }),
         repository.securityAlerts(),
       ]);
-      return { ...counts, checkin_trend: checkinTrend, category_mix: categoryMix, recent_activity: recentActivity, security_alerts: securityAlerts };
+      return { ...counts, checkin_trend: checkinTrend, category_mix: categoryMix, recent_activity: recentActivity.items, security_alerts: securityAlerts };
     },
 
     async inside({ actorRole, page, pageSize, offset }) {
@@ -22,6 +22,11 @@ export function createDashboardService({ repository }) {
         mobile: row.mobile ? `${'*'.repeat(Math.max(0, row.mobile.length - 4))}${row.mobile.slice(-4)}` : null,
       }));
       return { ...result, items, page, pageSize };
+    },
+
+    async recentActivity({ page, pageSize, offset }) {
+      const result = await repository.recentActivity({ pageSize, offset });
+      return { ...result, page, pageSize };
     },
   };
 }

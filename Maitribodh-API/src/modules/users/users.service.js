@@ -41,7 +41,9 @@ export function createUsersService({ repository }) {
       try {
         const user = await repository.updateUser({
           targetUserId,
+          ...input,
           deactivate: input.deactivate === true,
+          activate: input.activate === true,
           canBulkUpload: input.canBulkUpload,
           actorUserId: actor.userId,
           actorRole: actor.role,
@@ -59,6 +61,18 @@ export function createUsersService({ repository }) {
         }
         throw error;
       }
+    },
+
+    async deleteUser({ targetUserId, actor }) {
+      const deleted = await repository.deleteUser({
+        targetUserId,
+        actorUserId: actor.userId,
+        actorRole: actor.role,
+        ipAddress: actor.ipAddress,
+        device: actor.device,
+      });
+      if (!deleted) throw new ApiError(404, 'USER_NOT_FOUND', 'User not found');
+      return deleted;
     },
   };
 }

@@ -5,7 +5,13 @@ import {
   Button,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  IconButton,
   MenuItem,
+  Menu,
   Paper,
   Table,
   TableBody,
@@ -15,10 +21,14 @@ import {
   TablePagination,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined';
-import { Link } from 'react-router-dom';
+import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import MoreVertOutlinedIcon from '@mui/icons-material/MoreVertOutlined';
+import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 
 const statuses = ['PENDING', 'ACTIVE', 'REJECTED', 'DEACTIVATED'];
@@ -37,6 +47,13 @@ export default function PersonsPage() {
   const [rowsPerPage, setRowsPerPage] = useState(5);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [actionAnchor, setActionAnchor] = useState(null);
+  const [actionPerson, setActionPerson] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteError, setDeleteError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const navigate = useNavigate();
   const requestId = useRef(0);
 
   async function searchRecords(nextQuery, nextStatus, nextCategoryId, nextPage, nextRowsPerPage) {
@@ -101,6 +118,43 @@ export default function PersonsPage() {
     searchRecords(activeQuery, activeStatus, activeCategoryId, 0, Number(event.target.value));
   }
 
+  function openPersonActions(event, person) {
+    setActionAnchor(event.currentTarget);
+    setActionPerson(person);
+  }
+
+  function closePersonActions() {
+    setActionAnchor(null);
+    setActionPerson(null);
+  }
+
+  function updatePerson(person) {
+    closePersonActions();
+    navigate(`/persons/${person.person_id}?edit=1`);
+  }
+
+  async function deletePerson() {
+    if (!deleteTarget) return;
+    setSaving(true);
+    setError('');
+    setDeleteError('');
+    try {
+      await api.delete(`/persons/${deleteTarget.person_id}`);
+      setNotice(`${deleteTarget.name} deleted`);
+      setDeleteTarget(null);
+      if (items.length === 1 && page > 0) {
+        searchRecords(activeQuery, activeStatus, activeCategoryId, page - 1, rowsPerPage);
+      } else {
+        setItems((current) => current.filter((item) => item.person_id !== deleteTarget.person_id));
+        setTotal((current) => Math.max(0, current - 1));
+      }
+    } catch (requestError) {
+      setDeleteError(requestError.response?.data?.error?.message ?? 'Person could not be deleted.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <Box className="persons-page">
       <Box className="page-heading">
@@ -113,6 +167,7 @@ export default function PersonsPage() {
       </Box>
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {notice && <Alert severity="success" sx={{ mb: 2 }}>{notice}</Alert>}
       <Paper className="table-panel" elevation={0}>
         <Box component="form" className="person-search-form" onSubmit={submitSearch}>
           <TextField
@@ -159,6 +214,7 @@ export default function PersonsPage() {
                   <TableCell>Mobile</TableCell>
                   <TableCell>Status</TableCell>
                   <TableCell>Created</TableCell>
+                  <TableCell align="right">Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -171,10 +227,17 @@ export default function PersonsPage() {
                     <TableCell>{item.mobile ?? '—'}</TableCell>
                     <TableCell><Chip size="small" label={statusLabel(item.status)} color={statusColor(item.status)} /></TableCell>
                     <TableCell>{formatDate(item.created_at)}</TableCell>
+                    <TableCell align="right">
+                      <Tooltip title="Actions">
+                        <IconButton aria-label={`Actions for ${item.name}`} onClick={(event) => openPersonActions(event, item)}>
+                          <MoreVertOutlinedIcon />
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
                   </TableRow>
                 ))}
                 {!items.length && !loading && (
-                  <TableRow><TableCell colSpan={5} className="empty-table">No registrations found.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={6} className="empty-table">No registrations found.</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
@@ -190,6 +253,39 @@ export default function PersonsPage() {
           onRowsPerPageChange={changeRowsPerPage}
         />
       </Paper>
+
+      <Menu anchorEl={actionAnchor} open={Boolean(actionAnchor)} onClose={closePersonActions}>
+        <MenuItem onClick={() => actionPerson && updatePerson(actionPerson)} disabled={!actionPerson}>
+          <EditOutlinedIcon fontSize="small" />Update
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            setDeleteError('');
+            setDeleteTarget(actionPerson);
+            closePersonActions();
+          }}
+          disabled={!actionPerson}
+        >
+          <DeleteOutlineOutlinedIcon fontSize="small" />Delete
+        </MenuItem>
+      </Menu>
+
+      <Dialog open={Boolean(deleteTarget)} onClose={() => !saving && setDeleteTarget(null)} fullWidth maxWidth="xs">
+        <DialogTitle>Delete person?</DialogTitle>
+        <DialogContent>
+          {deleteError && <Alert severity="error" sx={{ mb: 2 }}>{deleteError}</Alert>}
+          <Typography>
+            Delete {deleteTarget?.name}? This permanently removes the person and their uploaded files.
+            People with linked operational records cannot be deleted.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setDeleteTarget(null); setDeleteError(''); }} disabled={saving}>Cancel</Button>
+          <Button onClick={deletePerson} variant="contained" color="error" disabled={saving}>
+            {saving ? <CircularProgress size={18} /> : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
     </Box>
   );

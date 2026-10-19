@@ -6,6 +6,7 @@ import { unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { createApp } from '../src/app.js';
 import { createRegistrationRouter } from '../src/modules/persons/registration.routes.js';
+import { createPersonsRouter } from '../src/modules/persons/persons.routes.js';
 
 const input = { categoryId: 1, firstName: 'Asha', lastName: 'Patel', mobile: '9820000000', gender: 'OTHER', consent: true, categoryDetails: { purpose: 'Meeting', visit_date: '2026-10-09' } };
 function appFor(role, repository) {
@@ -42,6 +43,7 @@ test('valid photograph is resized and international passport encrypted before pe
       .field('metadata', JSON.stringify({ ...input, residentStatus: 'NON_RESIDENT', passportNumber: 'A1234567' }))
       .attach('photo', image, { filename: 'photo.png', contentType: 'image/png' }).expect(201);
     assert.equal(response.body.status, 'ACTIVE');
+    assert.equal(saved.input.mobile, '+919820000000');
     assert.equal(saved.passportEncrypted.includes('A1234567'), false);
     assert.equal(saved.passportEncrypted.split('.').length, 3);
     const metadata = await sharp(path.resolve('./private-uploads', saved.photoKey)).metadata();
@@ -108,6 +110,47 @@ test('person access updates forward validated assignments and expiry', async () 
   assert.deepEqual(saved.changes, { permissionLevelId: 2, locationIds: [4], expiresOn: '2026-12-31' });
   assert.equal(saved.actor.userId, 9);
   assert.equal(response.body.expires_on, '2026-12-31');
+});
+test('management roles can delete a person and the route supplies audit actor details', async () => {
+  let deleted;
+  const repository = {
+    async delete(value) {
+      deleted = value;
+      return { photo_key: null, documents: [] };
+    },
+  };
+  await request(appFor('ADMIN', repository)).delete('/api/v1/persons/8').expect(204);
+  assert.equal(deleted.personId, 8);
+  assert.equal(deleted.actor.userId, 9);
+  assert.equal(deleted.actor.role, 'ADMIN');
+});
+test('person DELETE is available through the production nested persons router mount', async () => {
+  let deletedId;
+  const registrationRouter = createRegistrationRouter({
+    authenticate: (req, _res, next) => { req.auth = { role: 'ADMIN', userId: 9 }; next(); },
+    encryptionSecret: 'test-secret-not-for-production',
+    repository: {
+      async delete({ personId }) {
+        deletedId = personId;
+        return { photo_key: null, documents: [] };
+      },
+    },
+  });
+  const personsRouter = createPersonsRouter({
+    authenticate: (req, _res, next) => { req.auth = { role: 'ADMIN', userId: 9 }; next(); },
+    personsService: {},
+    approvalsService: {},
+    qrService: {},
+    registrationRouter,
+  });
+
+  await request(createApp({ personsRouter })).delete('/api/v1/persons/5').expect(204);
+  assert.equal(deletedId, 5);
+});
+test('person deletion maps linked operational records to a conflict', async () => {
+  const repository = { async delete() { throw { code: '23503' }; } };
+  const response = await request(appFor('ADMIN', repository)).delete('/api/v1/persons/8').expect(409);
+  assert.equal(response.body.error.code, 'PERSON_IN_USE');
 });
 test('profile update rejects email values longer than the database column', async () => {
   let saved = false;

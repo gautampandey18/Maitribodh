@@ -35,6 +35,9 @@ export default function ApprovalsPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(5);
+  const [nameFilter, setNameFilter] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [activeFilters, setActiveFilters] = useState({ name: '', category: '' });
   const [selected, setSelected] = useState(null);
   const [reason, setReason] = useState('');
   const [loading, setLoading] = useState(true);
@@ -43,14 +46,20 @@ export default function ApprovalsPage() {
   const [notice, setNotice] = useState('');
   const requestId = useRef(0);
 
-  async function loadQueue(nextTab = tab, nextPage = page, nextRowsPerPage = rowsPerPage) {
+  async function loadQueue(nextTab = tab, nextPage = page, nextRowsPerPage = rowsPerPage, nextFilters = activeFilters) {
     const currentRequestId = ++requestId.current;
     setPage(nextPage);
     setRowsPerPage(nextRowsPerPage);
     setLoading(true);
     setError('');
     try {
-      const response = await api.get('/approvals', { params: { status: nextTab, page: nextPage + 1, pageSize: nextRowsPerPage } });
+      const response = await api.get('/approvals', { params: {
+        status: nextTab,
+        page: nextPage + 1,
+        pageSize: nextRowsPerPage,
+        ...(nextFilters.name ? { name: nextFilters.name } : {}),
+        ...(nextFilters.category ? { category: nextFilters.category } : {}),
+      } });
       if (currentRequestId !== requestId.current) return;
       setItems(response.data.items);
       setTotal(response.data.total ?? response.data.items.length);
@@ -69,6 +78,20 @@ export default function ApprovalsPage() {
   function changeTab(_event, nextTab) {
     setTab(nextTab);
     loadQueue(nextTab, 0, rowsPerPage);
+  }
+
+  function searchRegistrations(event) {
+    event.preventDefault();
+    const nextFilters = { name: nameFilter.trim(), category: categoryFilter.trim() };
+    setActiveFilters(nextFilters);
+    loadQueue(tab, 0, rowsPerPage, nextFilters);
+  }
+
+  function clearFilters() {
+    setNameFilter('');
+    setCategoryFilter('');
+    setActiveFilters({ name: '', category: '' });
+    loadQueue(tab, 0, rowsPerPage, { name: '', category: '' });
   }
 
   function openDecision(item, decision) {
@@ -144,6 +167,22 @@ export default function ApprovalsPage() {
         <Box className="table-panel-heading">
           <Typography variant="h3">{tabLabel(tab)}</Typography>
           <Typography variant="body2" color="text.secondary">{loading ? 'Loading' : `${total} ${tabLabel(tab).toLowerCase()}`}</Typography>
+        </Box>
+        <Box component="form" className="filter-toolbar" onSubmit={searchRegistrations} sx={{ p: 1.25 }}>
+          <TextField
+            label="Name"
+            value={nameFilter}
+            onChange={(event) => setNameFilter(event.target.value)}
+            inputProps={{ maxLength: 100 }}
+          />
+          <TextField
+            label="Category"
+            value={categoryFilter}
+            onChange={(event) => setCategoryFilter(event.target.value)}
+            inputProps={{ maxLength: 100 }}
+          />
+          <Button type="submit" variant="contained" disabled={loading}>Search</Button>
+          <Button type="button" onClick={clearFilters} disabled={loading || (!nameFilter && !categoryFilter && !activeFilters.name && !activeFilters.category)}>Clear</Button>
         </Box>
         {loading ? (
           <Box className="loading-state"><CircularProgress size={28} /></Box>

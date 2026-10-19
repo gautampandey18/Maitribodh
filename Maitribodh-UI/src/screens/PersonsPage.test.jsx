@@ -58,7 +58,7 @@ it('loads all registrations, filters by category, and requests the next page', a
   expect(await screen.findByText('Initial Active')).toBeInTheDocument();
   expect(screen.getByText('Initial Inactive')).toBeInTheDocument();
   expect(screen.getByText('Inactive')).toBeInTheDocument();
-  expect(screen.queryByRole('columnheader', { name: 'Action' })).not.toBeInTheDocument();
+  expect(screen.getByRole('columnheader', { name: 'Actions' })).toBeInTheDocument();
   expect(get).toHaveBeenNthCalledWith(2, '/persons', { params: { page: 1, pageSize: 5 } });
 
   await user.click(screen.getByRole('combobox', { name: 'Category' }));
@@ -72,6 +72,41 @@ it('loads all registrations, filters by category, and requests the next page', a
   await user.click(screen.getByRole('button', { name: 'Go to next page' }));
   expect(await screen.findByText('Asha Singh')).toBeInTheDocument();
   expect(get).toHaveBeenNthCalledWith(4, '/persons', { params: { q: '9876543210', categoryId: 2, page: 2, pageSize: 5 } });
+}, 30_000);
+
+it('deletes a person from the Actions column after confirmation', async () => {
+  vi.spyOn(api, 'get')
+    .mockResolvedValueOnce({ data: { categories: [] } })
+    .mockResolvedValueOnce({
+      data: {
+        items: [{ person_id: 12, name: 'Mina Shah', category: 'Visitor', mobile: '******4321', status: 'ACTIVE', created_at: '2026-10-10T09:30:00Z' }],
+        total: 1,
+        page: 1,
+        pageSize: 5,
+      },
+    });
+  const remove = vi.spyOn(api, 'delete').mockResolvedValue({ status: 204 });
+  const user = userEvent.setup();
+
+  render(
+    <Provider store={store}>
+      <MemoryRouter>
+        <PersonsPage />
+      </MemoryRouter>
+    </Provider>,
+  );
+
+  expect(await screen.findByText('Mina Shah')).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Actions for Mina Shah' }));
+  expect(screen.getByRole('menuitem', { name: 'Update' })).toBeInTheDocument();
+  expect(screen.getAllByRole('menuitem')).toHaveLength(2);
+  await user.click(screen.getByRole('menuitem', { name: 'Delete' }));
+  expect(screen.getByRole('dialog')).toHaveTextContent('permanently removes the person');
+  await user.click(screen.getByRole('button', { name: 'Delete', exact: true }));
+
+  expect(remove).toHaveBeenCalledWith('/persons/12');
+  expect(await screen.findByText('Mina Shah deleted')).toBeInTheDocument();
+  expect(screen.getByText('No registrations found.')).toBeInTheDocument();
 }, 30_000);
 
 it('keeps the selected status and applies it only after Search is clicked', async () => {

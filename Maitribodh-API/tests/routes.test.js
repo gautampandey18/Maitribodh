@@ -44,6 +44,102 @@ test('user creation route requires an authorized role', async () => {
   assert.equal(created, false);
 });
 
+test('admin can delete another user through the user route', async () => {
+  let deletedInput;
+  const app = createRouteApp(
+    '/api/v1/users',
+    createUsersRouter({
+      authService: {},
+      usersService: {
+        async deleteUser(input) {
+          deletedInput = input;
+        },
+      },
+      authenticate: authenticateAs('ADMIN'),
+    }),
+  );
+
+  const response = await request(app).delete('/api/v1/users/25');
+
+  assert.equal(response.status, 204);
+  assert.deepEqual(deletedInput, {
+    targetUserId: 25,
+    actor: { userId: 7, role: 'ADMIN', ipAddress: '::ffff:127.0.0.1', device: undefined },
+  });
+});
+
+test('admin can activate an inactive user through the user route', async () => {
+  let updateInput;
+  const app = createRouteApp(
+    '/api/v1/users',
+    createUsersRouter({
+      authenticate: authenticateAs('ADMIN'),
+      usersService: {
+        async updateUser(input) {
+          updateInput = input;
+          return { user_id: input.targetUserId, status: 'ACTIVE' };
+        },
+      },
+      authService: {},
+    }),
+  );
+
+  const response = await request(app).patch('/api/v1/users/25').send({ activate: true });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.status, 'ACTIVE');
+  assert.equal(updateInput.input.activate, true);
+});
+
+test('user status actions reject simultaneous activation and deactivation', async () => {
+  let updated = false;
+  const app = createRouteApp(
+    '/api/v1/users',
+    createUsersRouter({
+      authenticate: authenticateAs('ADMIN'),
+      usersService: {
+        async updateUser() {
+          updated = true;
+        },
+      },
+      authService: {},
+    }),
+  );
+
+  const response = await request(app).patch('/api/v1/users/25').send({ activate: true, deactivate: true });
+
+  assert.equal(response.status, 400);
+  assert.equal(updated, false);
+});
+
+test('admin temporary password route preserves issuer identity separately from reset target', async () => {
+  let resetInput;
+  const app = createRouteApp(
+    '/api/v1/users',
+    createUsersRouter({
+      authenticate: authenticateAs('ADMIN'),
+      authService: {
+        async issueTemporaryPassword(input) {
+          resetInput = input;
+          return { temporaryPassword: 'one-time-secret' };
+        },
+      },
+      usersService: {},
+    }),
+  );
+
+  const response = await request(app).post('/api/v1/users/25/password-reset');
+
+  assert.equal(response.status, 201);
+  assert.deepEqual(resetInput, {
+    targetUserId: 25,
+    adminUserId: 7,
+    adminRole: 'ADMIN',
+    ipAddress: '::ffff:127.0.0.1',
+    device: undefined,
+  });
+});
+
 test('admin list routes validate and forward user, master, category, and location filters', async () => {
   const requests = [];
   const app = express();
@@ -99,6 +195,45 @@ test('category create route validates and forwards normalized fields', async () 
   assert.equal(response.body.category_id, 4);
   assert.equal(receivedInput.formType, 'GENERIC');
   assert.equal(receivedInput.overstayCutoff, null);
+});
+
+test('category delete route forwards actor and returns no content', async () => {
+  let received;
+  const app = createRouteApp(
+    '/api/v1/categories',
+    createCategoriesRouter({
+      authenticate: authenticateAs('ADMIN'),
+      categoriesService: { async deleteCategory(input) { received = input; } },
+    }),
+  );
+
+  const response = await request(app).delete('/api/v1/categories/4');
+
+  assert.equal(response.status, 204);
+  assert.deepEqual(received, {
+    categoryId: 4,
+    actor: { userId: 7, role: 'ADMIN', ipAddress: '::ffff:127.0.0.1', device: undefined },
+  });
+});
+
+test('lookup delete route normalizes type and forwards actor', async () => {
+  let received;
+  const app = createRouteApp(
+    '/api/v1/lookups',
+    createLookupsRouter({
+      authenticate: authenticateAs('SUPER_ADMIN'),
+      lookupsService: { async deleteValue(input) { received = input; } },
+    }),
+  );
+
+  const response = await request(app).delete('/api/v1/lookups/subcategory/12');
+
+  assert.equal(response.status, 204);
+  assert.deepEqual(received, {
+    lookupType: 'SUBCATEGORY',
+    lookupId: 12,
+    actor: { userId: 7, role: 'SUPER_ADMIN', ipAddress: '::ffff:127.0.0.1', device: undefined },
+  });
 });
 
 test('lookup route normalizes lookup type and parses parent ID', async () => {
@@ -300,14 +435,16 @@ test('approval queue route forwards approved and rejected status filters', async
     }),
   );
 
-  const approved = await request(app).get('/api/v1/approvals?status=ACTIVE&page=2&pageSize=10');
+  const approved = await request(app).get('/api/v1/approvals?status=ACTIVE&page=2&pageSize=10&name=Asha&category=Staff');
   const rejected = await request(app).get('/api/v1/approvals?status=REJECTED');
+  const invalidFilter = await request(app).get(`/api/v1/approvals?name=${'x'.repeat(101)}`);
 
   assert.equal(approved.status, 200);
   assert.equal(rejected.status, 200);
+  assert.equal(invalidFilter.status, 400);
   assert.deepEqual(requests, [
-    { status: 'ACTIVE', page: 2, pageSize: 10, offset: 10 },
-    { status: 'REJECTED', page: 1, pageSize: 5, offset: 0 },
+    { status: 'ACTIVE', page: 2, pageSize: 10, offset: 10, name: 'Asha', category: 'Staff' },
+    { status: 'REJECTED', page: 1, pageSize: 5, offset: 0, name: '', category: '' },
   ]);
 });
 
@@ -399,11 +536,12 @@ test('person QR route denies Viewer access', async () => {
 });
 
 test('public QR lookup is unauthenticated and returns a uniform empty result', async () => {
+  let lookup;
   const app = createRouteApp(
     '/api/v1/public',
     createPublicQrRouter({
       qrService: {
-        async generatePublicLookup() { return { limited: false, items: [] }; },
+        async generatePublicLookup(input) { lookup = input; return { limited: false, items: [] }; },
       },
     }),
   );
@@ -412,6 +550,10 @@ test('public QR lookup is unauthenticated and returns a uniform empty result', a
 
   assert.equal(response.status, 200);
   assert.deepEqual(response.body, { items: [] });
+  assert.equal(lookup.mobile, '+919876543210');
+
+  await request(app).post('/api/v1/public/qr-lookups').send({ mobile: '+14155552671' }).expect(200);
+  assert.equal(lookup.mobile, '+14155552671');
 });
 
 test('public QR lookup returns 429 and Retry-After when limited', async () => {

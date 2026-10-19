@@ -4,6 +4,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import AddIcon from '@mui/icons-material/Add';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
+import BlockOutlinedIcon from '@mui/icons-material/BlockOutlined';
+import ToggleOnOutlinedIcon from '@mui/icons-material/ToggleOnOutlined';
 import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined';
 import {
   Alert,
@@ -73,6 +76,7 @@ export default function CategoriesPage() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [statusTarget, setStatusTarget] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const requestId = useRef(0);
   const { control, handleSubmit, reset, formState: { errors } } = useForm({
     resolver: zodResolver(categoryFormSchema),
@@ -139,6 +143,23 @@ export default function CategoriesPage() {
     finally { setSaving(false); }
   }
 
+  async function deleteCategory() {
+    if (!deleteTarget) return;
+    setSaving(true);
+    setError('');
+    try {
+      await api.delete(`/categories/${deleteTarget.category_id}`);
+      setDeleteTarget(null);
+      const nextPage = page > 0 && categories.length === 1 ? page - 1 : page;
+      await loadData(nextPage, rowsPerPage);
+      setNotice('Category deleted');
+    } catch (failure) {
+      setError(failure.response?.data?.error?.message ?? 'Category could not be deleted.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function openEdit(category) {
     setEditing(category);
     reset({
@@ -183,9 +204,7 @@ export default function CategoriesPage() {
     <Box className="categories-page">
       <Box className="page-heading">
         <Box>
-          <Typography className="eyebrow">MASTER DATA</Typography>
           <Typography component="h1" variant="h1">Categories</Typography>
-          <Typography color="text.secondary" sx={{ mt: 0.75 }}>Configure registration and access categories.</Typography>
         </Box>
         <Button variant="contained" color="secondary" startIcon={<AddIcon />} onClick={openCreate}>
           Add category
@@ -237,12 +256,24 @@ export default function CategoriesPage() {
                     <TableCell align="center">{category.overstay_cutoff?.slice(0, 5) ?? '—'}</TableCell>
                     <TableCell align="right">
                       <Tooltip title="Edit category">
-                        <IconButton aria-label={`Edit ${category.name}`} onClick={() => openEdit(category)}>
+                        <IconButton aria-label={`Edit ${category.name}`} color="warning" onClick={() => openEdit(category)}>
                           <EditOutlinedIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
+                      <Tooltip title="Delete category">
+                        <IconButton aria-label={`Delete ${category.name}`} color="error" onClick={() => setDeleteTarget(category)}>
+                          <DeleteOutlineOutlinedIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
                       <CategorySchemaEditor category={category} onSaved={loadData} />
-                      <Button onClick={() => setStatusTarget(category)}>{category.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}</Button>
+                      <Tooltip title={category.status === 'ACTIVE' ? 'Deactivate category' : 'Activate category'}>
+                        <IconButton
+                          aria-label={`${category.status === 'ACTIVE' ? 'Deactivate' : 'Activate'} ${category.name}`}
+                          onClick={() => setStatusTarget(category)}
+                        >
+                          {category.status === 'ACTIVE' ? <BlockOutlinedIcon fontSize="small" /> : <ToggleOnOutlinedIcon fontSize="small" />}
+                        </IconButton>
+                      </Tooltip>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -307,6 +338,20 @@ export default function CategoriesPage() {
             </Button>
           </DialogActions>
         </Box>
+      </Dialog>
+
+      <Dialog open={Boolean(deleteTarget)} onClose={() => !saving && setDeleteTarget(null)}>
+        <DialogTitle>Delete {deleteTarget?.name}?</DialogTitle>
+        <DialogContent>
+          <Typography>This will permanently delete this category. If it is referenced by people, subcategories, or other records, deletion will be blocked.</Typography>
+          {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteTarget(null)} disabled={saving}>Cancel</Button>
+          <Button color="error" onClick={deleteCategory} disabled={saving}>
+            {saving ? <CircularProgress size={18} /> : 'Delete'}
+          </Button>
+        </DialogActions>
       </Dialog>
       <Dialog open={Boolean(statusTarget)} onClose={() => !saving && setStatusTarget(null)}><DialogTitle>{statusTarget?.status === 'ACTIVE' ? 'Deactivate' : 'Activate'} {statusTarget?.name}?</DialogTitle><DialogActions><Button onClick={() => setStatusTarget(null)} disabled={saving}>Cancel</Button><Button onClick={changeStatus} disabled={saving}>Confirm</Button></DialogActions></Dialog>
       <Snackbar open={Boolean(notice)} autoHideDuration={3000} onClose={() => setNotice('')} message={notice} />
