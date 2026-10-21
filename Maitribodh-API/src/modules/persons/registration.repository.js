@@ -27,7 +27,14 @@ export function createRegistrationRepository(pool) {
       const categories = await pool.query("SELECT * FROM mams.category WHERE status = 'ACTIVE' ORDER BY category_id");
       const lookups = await pool.query("SELECT * FROM mams.lookup_value WHERE status = 'ACTIVE' ORDER BY name");
       const locations = await pool.query("SELECT * FROM mams.location WHERE status = 'ACTIVE' ORDER BY name");
-      return { categories: categories.rows.map((category) => ({ ...category, schema: schemaForCategory(category) })), lookups: lookups.rows, locations: locations.rows };
+      return {
+        categories: categories.rows.map((category) => ({
+          ...Object.fromEntries(Object.entries(category).filter(([key]) => key !== 'is_broad' && key !== 'broad_category_id')),
+          schema: schemaForCategory(category),
+        })),
+        lookups: lookups.rows,
+        locations: locations.rows,
+      };
     },
     async category(categoryId) {
       return (await pool.query('SELECT * FROM mams.category WHERE category_id = $1', [categoryId])).rows[0];
@@ -68,7 +75,7 @@ export function createRegistrationRepository(pool) {
         const schema = schemaForCategory(currentCategory);
         for (const field of schema.fields ?? []) {
           const value = input.categoryDetails[field.key];
-          if (!field.source || value === undefined || value === '') continue;
+          if (field.type !== 'select' || !field.source || value === undefined || value === '') continue;
           const selected = field.source === 'AREA'
             ? await client.query("SELECT location_id FROM mams.location WHERE location_id = $1 AND location_type = 'AREA' AND status = 'ACTIVE'", [value])
             : await client.query("SELECT lookup_id, parent_id, category_id FROM mams.lookup_value WHERE lookup_id = $1 AND lookup_type = $2 AND status = 'ACTIVE'", [value, field.source]);
@@ -199,7 +206,12 @@ export function createRegistrationRepository(pool) {
       });
     },
     async drafts(userId) {
-      return (await pool.query("SELECT person_id, draft_data, updated_at FROM mams.person WHERE registered_by = $1 AND status = 'DRAFT' AND updated_at > now() - interval '7 days' ORDER BY updated_at DESC", [userId])).rows;
+      return (await pool.query(`SELECT p.person_id, p.draft_data, p.updated_at
+        FROM mams.person p
+        JOIN mams.category c ON c.category_id = p.category_id AND c.status = 'ACTIVE'
+        WHERE p.registered_by = $1 AND p.status = 'DRAFT'
+          AND p.updated_at > now() - interval '7 days'
+        ORDER BY p.updated_at DESC`, [userId])).rows;
     },
     async activity(personId) {
       return (await pool.query('SELECT v.*, l.name AS location FROM mams.visit v JOIN mams.location l ON l.location_id = v.checkin_location_id WHERE person_id = $1 ORDER BY checkin_at DESC LIMIT 100', [personId])).rows;

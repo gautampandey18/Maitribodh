@@ -46,3 +46,45 @@ it('deletes an unreferenced category after confirmation', async () => {
   await waitFor(() => expect(remove).toHaveBeenCalledWith('/categories/1'));
   expect(get).toHaveBeenCalled();
 }, 30_000);
+
+it('explains that an in-use category cannot be deleted', async () => {
+  vi.spyOn(api, 'get').mockImplementation((path) => Promise.resolve({
+    data: path === '/categories'
+      ? { items: [{ category_id: 1, name: 'Visitor', form_type: 'VISITOR', approval_required: false, status: 'ACTIVE' }], total: 1, page: 1, pageSize: 5 }
+      : { items: [] },
+  }));
+  vi.spyOn(api, 'delete').mockRejectedValue({
+    response: { data: { error: { message: 'This category is in use and cannot be deleted. Deactivate it instead.' } } },
+  });
+  const user = userEvent.setup();
+  render(<CategoriesPage />);
+
+  await screen.findByText('Visitor');
+  await user.click(screen.getByRole('button', { name: 'Delete Visitor' }));
+  await user.click(screen.getByRole('button', { name: 'Delete', exact: true }));
+
+  expect((await screen.findAllByText('This category is in use and cannot be deleted. Deactivate it instead.')).length).toBeGreaterThan(0);
+}, 30_000);
+
+it('creates categories without broad-category fields', async () => {
+  vi.spyOn(api, 'get').mockImplementation((path) => Promise.resolve({
+    data: path === '/categories'
+      ? { items: [], total: 0, page: 1, pageSize: 5 }
+      : { items: [] },
+  }));
+  const post = vi.spyOn(api, 'post').mockResolvedValue({ data: { category_id: 2 } });
+  const user = userEvent.setup();
+  render(<CategoriesPage />);
+
+  await user.click(await screen.findByRole('button', { name: 'Add category' }));
+
+  expect(screen.queryByLabelText('Broad category')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Base category mapping')).not.toBeInTheDocument();
+  await user.type(screen.getByRole('textbox', { name: 'Category name' }), 'Helper');
+  await user.click(screen.getByRole('button', { name: 'Create category' }));
+
+  await waitFor(() => expect(post).toHaveBeenCalledWith('/categories', expect.not.objectContaining({
+    isBroad: expect.anything(),
+    broadCategoryId: expect.anything(),
+  })));
+}, 30_000);

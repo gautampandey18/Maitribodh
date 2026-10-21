@@ -135,13 +135,14 @@ test('Visit History export audit records actor, filters, and row count', async (
     actorUserId: 4,
     actorRole: 'REG_OFFICER',
     ipAddress: '127.0.0.1',
-    device: 'test-client',
+    device: 'test-client'.padEnd(140, 'x'),
   });
 
   assert.match(auditCall.sql, /VISIT_HISTORY_EXPORT/);
   assert.equal(auditCall.values[0], 4);
   assert.match(auditCall.values[2], /"row_count":3/);
   assert.equal(auditCall.values[3], '127.0.0.1');
+  assert.equal(auditCall.values[4].length, 100);
 });
 
 test('report service masks mobile numbers for non-Admin roles', async () => {
@@ -162,6 +163,42 @@ test('report service masks mobile numbers for non-Admin roles', async () => {
 
   assert.equal(registrationOfficerRows[0].mobile, '******3210');
   assert.equal(adminRows[0].mobile, '9876543210');
+});
+
+test('report service returns unpaginated rows for exports and paginates table requests', async () => {
+  const row = { person_code: 'MB-000001', mobile: '9876543210', total: 1 };
+  const repository = Object.fromEntries([
+    'visitHistory',
+    'registrations',
+    'occupancy',
+    'staff',
+    'approvals',
+    'blacklist',
+  ].map((method) => [method, async () => [row]]));
+  const service = createReportsService({ repository });
+  const filters = { fromDate: undefined, toDate: undefined };
+
+  const unpaginated = await Promise.all([
+    service.visitHistory({ filters, actorRole: 'VIEWER' }),
+    service.registrations({ filters, actorRole: 'VIEWER' }),
+    service.occupancy({ filters }),
+    service.staff({ filters }),
+    service.approvals({ filters }),
+    service.blacklist({ filters }),
+  ]);
+
+  assert.deepEqual(unpaginated[0], [{ ...row, mobile: '******3210' }]);
+  assert.deepEqual(unpaginated[1], [{ ...row, mobile: '******3210' }]);
+  for (const result of unpaginated.slice(2)) assert.deepEqual(result, [row]);
+
+  const pagination = { page: 1, pageSize: 5, offset: 0 };
+  const paginated = await service.registrations({ filters, actorRole: 'ADMIN', pagination });
+  assert.deepEqual(paginated, {
+    items: [{ person_code: 'MB-000001', mobile: '9876543210' }],
+    total: 1,
+    page: 1,
+    pageSize: 5,
+  });
 });
 
 test('report routes load without date filters, validate supplied ranges, and export Visit History to Excel', async () => {

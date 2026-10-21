@@ -20,7 +20,17 @@ export default function CategorySchemaEditor({ category, onSaved }) {
     } catch (failure) { setError(requestMessage(failure)); }
   }
   function change(index, key, value) {
-    setSchema((previous) => ({ ...previous, fields: previous.fields.map((field, position) => position === index ? { ...field, [key]: value } : field) }));
+    setSchema((previous) => ({
+      ...previous,
+      fields: previous.fields.map((field, position) => {
+        if (position !== index) return field;
+        if (key === 'type') {
+          const rest = Object.fromEntries(Object.entries(field).filter(([fieldKey]) => !['source', 'options', 'optionsText'].includes(fieldKey)));
+          return { ...rest, type: value, ...(value === 'select' ? { source: null, options: [] } : {}) };
+        }
+        return { ...field, [key]: value };
+      }),
+    }));
   }
   function move(index, offset) {
     const fields = [...schema.fields];

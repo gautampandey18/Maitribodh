@@ -29,7 +29,7 @@ export function createCategoriesService({ repository }) {
           throw new ApiError(409, 'CATEGORY_ALREADY_EXISTS', 'A category with this name already exists');
         }
         if (error.code === '23503') {
-          throw new ApiError(400, 'INVALID_MASTER_REFERENCE', 'The selected permission or broad category is invalid');
+          throw new ApiError(400, 'INVALID_MASTER_REFERENCE', 'The selected permission level is invalid');
         }
         throw error;
       }
@@ -54,7 +54,7 @@ export function createCategoriesService({ repository }) {
           throw new ApiError(409, 'CATEGORY_ALREADY_EXISTS', 'A category with this name already exists');
         }
         if (error.code === '23503') {
-          throw new ApiError(400, 'INVALID_MASTER_REFERENCE', 'The selected permission or broad category is invalid');
+          throw new ApiError(400, 'INVALID_MASTER_REFERENCE', 'The selected permission level is invalid');
         }
         throw error;
       }
@@ -75,7 +75,7 @@ export function createCategoriesService({ repository }) {
         return category;
       } catch (error) {
         if (error.code === '23503') {
-          throw new ApiError(409, 'MASTER_DATA_IN_USE', 'This category is referenced by other records and cannot be deleted. Deactivate it instead.');
+          throw new ApiError(409, 'MASTER_DATA_IN_USE', 'This category is in use and cannot be deleted. Deactivate it instead.');
         }
         throw error;
       }

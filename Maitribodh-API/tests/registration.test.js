@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { registrationInputSchema, validateCategoryDetails } from '../src/modules/persons/registration.validation.js';
-import { categoryFormSchema } from '../src/constants/category-schema.js';
+import { categoryFieldSchema, categoryFormSchema } from '../src/constants/category-schema.js';
 
 const rawInput = { categoryId: 1, firstName: 'Asha', lastName: 'Patel', mobile: '9820000000', gender: 'OTHER', consent: true, categoryDetails: { purpose: 'Meeting', visit_date: '2026-10-09' } };
 const input = registrationInputSchema.parse(rawInput);
@@ -45,6 +45,13 @@ test('category schemas reject duplicate keys and unknown master sources', () => 
   assert.equal(categoryFormSchema.safeParse({ fields: [field] }).success, true);
   assert.equal(categoryFormSchema.safeParse({ fields: [field, field] }).success, false);
   assert.equal(categoryFormSchema.safeParse({ fields: [{ ...field, type: 'select', source: 'UNKNOWN' }] }).success, false);
+});
+
+test('only select category fields can have dropdown sources or options', () => {
+  const textField = { key: 'approval_note', label: 'Approval note', type: 'text', required: true };
+  assert.equal(categoryFieldSchema.safeParse({ ...textField, source: 'DEPARTMENT' }).success, false);
+  assert.equal(categoryFieldSchema.safeParse({ ...textField, options: ['approved'] }).success, false);
+  assert.equal(categoryFieldSchema.safeParse({ ...textField, type: 'select', source: 'DEPARTMENT' }).success, true);
 });
 
 test('ID-proof values need a selected proof type', () => {

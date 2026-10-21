@@ -49,7 +49,7 @@ export function validateCategoryDetails(input, category, role, today = new Date(
     if (value !== undefined && String(value) !== '') {
       if (field.type === 'date' && !z.iso.date().safeParse(value).success) throw new ApiError(400, 'VALIDATION_ERROR', `${field.label} must be a valid date`);
       if (field.type === 'number' && (!Number.isInteger(Number(value)) || Number(value) < 1)) throw new ApiError(400, 'VALIDATION_ERROR', `${field.label} must be a positive whole number`);
-      if (field.options?.length && !field.options.includes(value)) throw new ApiError(400, 'VALIDATION_ERROR', `Select a valid ${field.label}`);
+      if (field.type === 'select' && field.options?.length && !field.options.includes(value)) throw new ApiError(400, 'VALIDATION_ERROR', `Select a valid ${field.label}`);
     }
   }
   const details = input.categoryDetails;

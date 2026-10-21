@@ -7,11 +7,15 @@ export function createCategoriesRepository(pool) {
     approvalRequired: 'approval_required',
     overstayCutoff: 'overstay_cutoff',
     permissionLevelId: 'permission_level_id',
-    isBroad: 'is_broad',
-    broadCategoryId: 'broad_category_id',
     status: 'status',
     formSchema: 'form_schema',
   };
+  function withoutBroadCategoryFields(row) {
+    const category = { ...row };
+    delete category.is_broad;
+    delete category.broad_category_id;
+    return category;
+  }
 
   return {
     async listCategories({ pageSize, offset, query = '', formType, status }) {
@@ -26,7 +30,7 @@ export function createCategoriesRepository(pool) {
           LIMIT $4 OFFSET $5`,
         [query, formType ?? null, status ?? null, pageSize, offset],
       );
-      return result.rows;
+      return result.rows.map(withoutBroadCategoryFields);
     },
 
     async getCategory(categoryId) {
@@ -37,7 +41,7 @@ export function createCategoriesRepository(pool) {
           WHERE c.category_id = $1`,
         [categoryId],
       );
-      return result.rows[0] ?? null;
+      return result.rows[0] ? withoutBroadCategoryFields(result.rows[0]) : null;
     },
 
     async createCategory({
@@ -48,8 +52,6 @@ export function createCategoriesRepository(pool) {
       approvalRequired,
       overstayCutoff,
       permissionLevelId,
-      isBroad,
-      broadCategoryId,
       actorUserId,
       actorRole,
       ipAddress,
@@ -61,19 +63,16 @@ export function createCategoriesRepository(pool) {
         const result = await client.query(
           `INSERT INTO mams.category
              (name, form_type, approval_required, overstay_cutoff,
-              permission_level_id, is_broad, broad_category_id, icon, description)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+              permission_level_id, icon, description)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING category_id, name, form_type, approval_required,
-                     overstay_cutoff, permission_level_id, is_broad,
-                  broad_category_id, icon, description, status, created_at`,
+                     overstay_cutoff, permission_level_id, icon, description, status, created_at`,
           [
             name,
             formType,
             approvalRequired,
             overstayCutoff,
             permissionLevelId,
-            isBroad,
-            broadCategoryId,
             icon,
             description,
           ],
@@ -93,8 +92,6 @@ export function createCategoriesRepository(pool) {
               form_type: category.form_type,
               approval_required: category.approval_required,
               permission_level_id: category.permission_level_id,
-              is_broad: category.is_broad,
-              broad_category_id: category.broad_category_id,
               icon: category.icon,
               description: category.description,
             }),
@@ -177,7 +174,7 @@ export function createCategoriesRepository(pool) {
           [categoryId],
         );
         await client.query('COMMIT');
-        return detailedResult.rows[0];
+        return withoutBroadCategoryFields(detailedResult.rows[0]);
       } catch (error) {
         await client.query('ROLLBACK').catch(() => {});
         throw error;
