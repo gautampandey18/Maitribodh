@@ -13,23 +13,28 @@ export function createReportsService({ repository }) {
 
     async registrations({ filters, actorRole, pagination }) {
       const rows = await repository.registrations({ ...filters, pagination });
-      return paginatedResult(maskMobiles(rows, actorRole), pagination);
+      const visibleRows = maskMobiles(rows, actorRole);
+      return pagination ? paginatedResult(visibleRows, pagination) : visibleRows;
     },
 
     async occupancy({ filters, pagination }) {
-      return paginatedResult(await repository.occupancy({ ...filters, pagination }), pagination);
+      const rows = await repository.occupancy({ ...filters, pagination });
+      return pagination ? paginatedResult(rows, pagination) : rows;
     },
 
     async staff({ filters, pagination }) {
-      return paginatedResult(await repository.staff({ ...filters, pagination }), pagination);
+      const rows = await repository.staff({ ...filters, pagination });
+      return pagination ? paginatedResult(rows, pagination) : rows;
     },
 
     async approvals({ filters, pagination }) {
-      return paginatedResult(await repository.approvals({ ...filters, pagination }), pagination);
+      const rows = await repository.approvals({ ...filters, pagination });
+      return pagination ? paginatedResult(rows, pagination) : rows;
     },
 
     async blacklist({ filters, pagination }) {
-      return paginatedResult(await repository.blacklist({ ...filters, pagination }), pagination);
+      const rows = await repository.blacklist({ ...filters, pagination });
+      return pagination ? paginatedResult(rows, pagination) : rows;
     },
 
     recordVisitHistoryExport({ filters, rowCount, actor }) {

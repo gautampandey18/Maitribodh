@@ -25,6 +25,54 @@ test('registration creates a versioned active profile, audit and notifications i
   assert.ok(calls.some((call) => call.sql.includes('INSERT INTO mams.notification')));
   assert.equal(calls.at(-1).sql, 'COMMIT');
 });
+test('text category fields are not treated as integer master-data references', async () => {
+  const calls = [];
+  const categoryWithTextField = {
+    ...category,
+    form_schema: { fields: [{ key: 'approval_note', label: 'Approval note', type: 'text', required: true, source: 'DEPARTMENT' }] },
+  };
+  const client = {
+    async query(sql, values) {
+      calls.push({ sql, values });
+      if (sql.includes('FOR SHARE')) return { rows: [categoryWithTextField] };
+      if (sql.includes('INSERT INTO mams.person')) return { rows: [{ person_id: 8, person_code: 'MB-000008', status: 'ACTIVE', qr_version: 1 }] };
+      return { rows: [], rowCount: 1 };
+    }, release() {},
+  };
+  const repository = createRegistrationRepository({ async connect() { return client; } });
+  const inputWithTextValue = registrationInputSchema.parse({
+    ...input,
+    categoryDetails: { approval_note: 'approved' },
+  });
+
+  await repository.create({
+    input: inputWithTextValue,
+    category: categoryWithTextField,
+    photoKey: 'private-photo.jpg',
+    documents: [],
+    passportEncrypted: null,
+    actor: { userId: 9, role: 'ADMIN' },
+  });
+
+  assert.equal(calls.some(({ sql }) => sql.includes('FROM mams.lookup_value WHERE lookup_id')), false);
+  const insertCall = calls.find(({ sql }) => sql.includes('INSERT INTO mams.person'));
+  assert.deepEqual(JSON.parse(insertCall.values[16]), { approval_note: 'approved' });
+});
+test('draft list excludes drafts whose categories are inactive or deleted', async () => {
+  let call;
+  const repository = createRegistrationRepository({
+    async query(sql, values) {
+      call = { sql, values };
+      return { rows: [{ person_id: 12, draft_data: { categoryId: 1 }, updated_at: '2026-10-20T10:00:00Z' }] };
+    },
+  });
+
+  const drafts = await repository.drafts(9);
+
+  assert.deepEqual(drafts, [{ person_id: 12, draft_data: { categoryId: 1 }, updated_at: '2026-10-20T10:00:00Z' }]);
+  assert.match(call.sql, /JOIN mams\.category c ON c\.category_id = p\.category_id AND c\.status = 'ACTIVE'/);
+  assert.deepEqual(call.values, [9]);
+});
 test('profile updates commit the edited fields and audit the change', async () => {
   const calls = [];
   const client = {

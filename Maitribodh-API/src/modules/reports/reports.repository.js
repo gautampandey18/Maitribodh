@@ -135,7 +135,7 @@ export function createReportsRepository(pool) {
           actorRole,
           JSON.stringify({ report: 'VISIT_HISTORY', filters, row_count: rowCount }),
           ipAddress ?? null,
-          device ?? null,
+          device?.slice(0, 100) ?? null,
         ],
       );
     },

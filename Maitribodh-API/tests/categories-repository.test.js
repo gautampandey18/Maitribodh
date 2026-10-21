@@ -24,7 +24,7 @@ test('category creation persists approved fields and audit atomically', async ()
       calls.push({ sql, values });
       if (sql.includes('RETURNING category_id')) {
         return {
-          rows: [{ category_id: 8, name: 'Helper', form_type: 'GENERIC', is_broad: false }],
+          rows: [{ category_id: 8, name: 'Helper', form_type: 'GENERIC' }],
           rowCount: 1,
         };
       }
@@ -43,8 +43,6 @@ test('category creation persists approved fields and audit atomically', async ()
     approvalRequired: false,
     overstayCutoff: null,
     permissionLevelId: null,
-    isBroad: false,
-    broadCategoryId: null,
     actorUserId: 3,
     actorRole: 'ADMIN',
     device: 'Browser '.padEnd(140, 'x'),
@@ -53,6 +51,7 @@ test('category creation persists approved fields and audit atomically', async ()
   assert.equal(category.category_id, 8);
   assert.equal(calls[0].sql, 'BEGIN');
   assert.match(calls[1].sql, /INSERT INTO mams\.category/);
+  assert.doesNotMatch(calls[1].sql, /is_broad|broad_category_id/);
   assert.match(calls[2].sql, /INSERT INTO mams\.audit_log/);
   assert.equal(calls[2].values[5].length, 100);
   assert.equal(calls[3].sql, 'COMMIT');
@@ -106,6 +105,8 @@ test('category update uses whitelisted columns and audits old/new values atomica
   assert.deepEqual(JSON.parse(calls[3].values[4]), { name: 'Helper Updated' });
   assert.equal(calls[3].values[6].length, 100);
   assert.equal(calls[5].sql, 'COMMIT');
+  assert.equal('is_broad' in updated, false);
+  assert.equal('broad_category_id' in updated, false);
 });
 
 test('category deletion locks the row and audits the deletion atomically', async () => {

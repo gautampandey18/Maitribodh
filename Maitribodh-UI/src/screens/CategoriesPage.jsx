@@ -45,8 +45,6 @@ const categoryFormSchema = z.object({
   approvalRequired: z.boolean(),
   overstayCutoff: z.string(),
   permissionLevelId: z.string(),
-  isBroad: z.boolean(),
-  broadCategoryId: z.string(),
 });
 
 const emptyValues = {
@@ -55,8 +53,6 @@ const emptyValues = {
   approvalRequired: false,
   overstayCutoff: '',
   permissionLevelId: '',
-  isBroad: false,
-  broadCategoryId: '',
 };
 
 export default function CategoriesPage() {
@@ -168,8 +164,6 @@ export default function CategoriesPage() {
       approvalRequired: category.approval_required,
       overstayCutoff: category.overstay_cutoff?.slice(0, 5) ?? '',
       permissionLevelId: category.permission_level_id?.toString() ?? '',
-      isBroad: category.is_broad,
-      broadCategoryId: category.broad_category_id?.toString() ?? '',
     });
     setDialogOpen(true);
   }
@@ -181,7 +175,6 @@ export default function CategoriesPage() {
       ...values,
       overstayCutoff: values.overstayCutoff || null,
       permissionLevelId: values.permissionLevelId ? Number(values.permissionLevelId) : null,
-      broadCategoryId: values.broadCategoryId ? Number(values.broadCategoryId) : null,
     };
     try {
       if (editing) {
@@ -248,7 +241,6 @@ export default function CategoriesPage() {
                   <TableRow key={category.category_id} hover>
                     <TableCell align="center">
                       <Typography fontWeight={600}>{category.name}</Typography>
-                      {category.is_broad && <Typography variant="caption" color="text.secondary">Broad category</Typography>}
                     </TableCell>
                     <TableCell align="center">{category.form_type}</TableCell>
                     <TableCell align="center">{category.permission_level ?? '—'}</TableCell>
@@ -319,17 +311,6 @@ export default function CategoriesPage() {
             <Controller name="approvalRequired" control={control} render={({ field }) => (
               <FormControlLabel control={<Checkbox {...field} checked={field.value} />} label="Requires approval" />
             )} />
-            <Controller name="isBroad" control={control} render={({ field }) => (
-              <FormControlLabel control={<Checkbox {...field} checked={field.value} />} label="Broad category" />
-            )} />
-            <Controller name="broadCategoryId" control={control} render={({ field }) => (
-              <TextField {...field} select label="Base category mapping" fullWidth>
-                <MenuItem value="">Unmapped</MenuItem>
-                {categories.filter((item) => item.category_id !== editing?.category_id).map((item) => (
-                  <MenuItem key={item.category_id} value={String(item.category_id)}>{item.name}</MenuItem>
-                ))}
-              </TextField>
-            )} />
           </DialogContent>
           <DialogActions className="dialog-actions">
             <Button onClick={() => setDialogOpen(false)} disabled={saving}>Cancel</Button>
@@ -343,7 +324,7 @@ export default function CategoriesPage() {
       <Dialog open={Boolean(deleteTarget)} onClose={() => !saving && setDeleteTarget(null)}>
         <DialogTitle>Delete {deleteTarget?.name}?</DialogTitle>
         <DialogContent>
-          <Typography>This will permanently delete this category. If it is referenced by people, subcategories, or other records, deletion will be blocked.</Typography>
+          <Typography>This will permanently delete this category. If people or other records are associated with it, deletion will be blocked.</Typography>
           {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
         </DialogContent>
         <DialogActions>

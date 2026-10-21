@@ -50,6 +50,8 @@ test('category deletion reports when records still reference the category', asyn
 
   await assert.rejects(
     service.deleteCategory({ categoryId: 4, actor: { userId: 1, role: 'ADMIN' } }),
-    (error) => error.statusCode === 409 && error.code === 'MASTER_DATA_IN_USE',
+    (error) => error.statusCode === 409
+      && error.code === 'MASTER_DATA_IN_USE'
+      && error.message === 'This category is in use and cannot be deleted. Deactivate it instead.',
   );
 });
