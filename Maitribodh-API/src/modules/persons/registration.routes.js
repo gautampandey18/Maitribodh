@@ -186,7 +186,7 @@ export function createRegistrationRouter({ repository, authenticate, encryptionS
       deleted = await repository.delete({ personId: idFrom(request.params.personId), actor: actorFrom(request) });
     } catch (error) {
       if (error.code === '23503') {
-        throw new ApiError(409, 'PERSON_IN_USE', 'This person has linked operational records and cannot be deleted. Deactivate the person instead.');
+        throw new ApiError(409, 'PERSON_IN_USE', 'The person still has linked records that could not be safely removed.');
       }
       throw error;
     }

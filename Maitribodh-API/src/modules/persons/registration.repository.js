@@ -3,6 +3,13 @@ import { CONSENT_NOTICE_VERSION, ID_PROOF_PATTERNS, REGISTRATION_LIMITS, schemaF
 import { validateCategoryDetails } from './registration.validation.js';
 
 export function createRegistrationRepository(pool) {
+  function withoutCategoryPermission(category) {
+    if (!category) return category;
+    const result = { ...category };
+    delete result.permission_level_id;
+    return result;
+  }
+
   async function transaction(operation) {
     const client = await pool.connect();
     try {
@@ -29,7 +36,7 @@ export function createRegistrationRepository(pool) {
       const locations = await pool.query("SELECT * FROM mams.location WHERE status = 'ACTIVE' ORDER BY name");
       return {
         categories: categories.rows.map((category) => ({
-          ...Object.fromEntries(Object.entries(category).filter(([key]) => key !== 'is_broad' && key !== 'broad_category_id')),
+          ...Object.fromEntries(Object.entries(category).filter(([key]) => !['is_broad', 'broad_category_id', 'permission_level_id'].includes(key))),
           schema: schemaForCategory(category),
         })),
         lookups: lookups.rows,
@@ -37,7 +44,7 @@ export function createRegistrationRepository(pool) {
       };
     },
     async category(categoryId) {
-      return (await pool.query('SELECT * FROM mams.category WHERE category_id = $1', [categoryId])).rows[0];
+      return withoutCategoryPermission((await pool.query('SELECT * FROM mams.category WHERE category_id = $1', [categoryId])).rows[0]);
     },
     async get(personId) {
       const person = (await pool.query(`SELECT p.*, c.name AS category, c.form_type,
@@ -83,7 +90,7 @@ export function createRegistrationRepository(pool) {
           if (field.source === 'JOB_ROLE' && String(selected.rows[0].parent_id) !== String(input.categoryDetails.department_id)) throw new ApiError(400, 'VALIDATION_ERROR', 'Job Role must belong to the selected Department.');
           if (field.source === 'SUBCATEGORY' && selected.rows[0].category_id && Number(selected.rows[0].category_id) !== input.categoryId) throw new ApiError(400, 'VALIDATION_ERROR', 'Select a subcategory for this category');
         }
-        const permissionId = input.permissionLevelId ?? category.permission_level_id;
+        const permissionId = input.permissionLevelId;
         if (permissionId && !(await client.query("SELECT lookup_id FROM mams.lookup_value WHERE lookup_id = $1 AND lookup_type = 'PERMISSION_LEVEL' AND status = 'ACTIVE'", [permissionId])).rowCount) throw new ApiError(400, 'VALIDATION_ERROR', 'Select an active permission level');
         const status = category.approval_required ? 'PENDING' : 'ACTIVE';
         const result = await client.query(`INSERT INTO mams.person
@@ -139,6 +146,8 @@ export function createRegistrationRepository(pool) {
         )).rows[0];
         if (!current) throw new ApiError(404, 'PERSON_NOT_FOUND', 'Person not found');
 
+        await client.query('DELETE FROM mams.visit WHERE person_id = $1', [personId]);
+        await client.query('DELETE FROM mams.blacklist WHERE person_id = $1', [personId]);
         await client.query('DELETE FROM mams.person WHERE person_id = $1', [personId]);
         await audit(
           client,

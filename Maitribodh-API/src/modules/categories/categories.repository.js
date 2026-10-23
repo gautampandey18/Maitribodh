@@ -6,23 +6,23 @@ export function createCategoriesRepository(pool) {
     formType: 'form_type',
     approvalRequired: 'approval_required',
     overstayCutoff: 'overstay_cutoff',
-    permissionLevelId: 'permission_level_id',
     status: 'status',
     formSchema: 'form_schema',
   };
-  function withoutBroadCategoryFields(row) {
+  function withoutRemovedCategoryFields(row) {
     const category = { ...row };
     delete category.is_broad;
     delete category.broad_category_id;
+    delete category.permission_level_id;
+    delete category.permission_level;
     return category;
   }
 
   return {
     async listCategories({ pageSize, offset, query = '', formType, status }) {
       const result = await pool.query(
-        `SELECT c.*, p.name AS permission_level, count(*) OVER()::int AS total
+        `SELECT c.*, count(*) OVER()::int AS total
            FROM mams.category AS c
-           LEFT JOIN mams.lookup_value AS p ON p.lookup_id = c.permission_level_id
           WHERE ($1 = '' OR c.name ILIKE '%' || $1 || '%' OR c.description ILIKE '%' || $1 || '%')
             AND ($2::varchar IS NULL OR c.form_type = $2)
             AND ($3::varchar IS NULL OR c.status = $3)
@@ -30,18 +30,15 @@ export function createCategoriesRepository(pool) {
           LIMIT $4 OFFSET $5`,
         [query, formType ?? null, status ?? null, pageSize, offset],
       );
-      return result.rows.map(withoutBroadCategoryFields);
+      return result.rows.map(withoutRemovedCategoryFields);
     },
 
     async getCategory(categoryId) {
       const result = await pool.query(
-        `SELECT c.*, p.name AS permission_level
-           FROM mams.category AS c
-           LEFT JOIN mams.lookup_value AS p ON p.lookup_id = c.permission_level_id
-          WHERE c.category_id = $1`,
+        'SELECT * FROM mams.category WHERE category_id = $1',
         [categoryId],
       );
-      return result.rows[0] ? withoutBroadCategoryFields(result.rows[0]) : null;
+      return result.rows[0] ? withoutRemovedCategoryFields(result.rows[0]) : null;
     },
 
     async createCategory({
@@ -51,7 +48,6 @@ export function createCategoriesRepository(pool) {
       formType,
       approvalRequired,
       overstayCutoff,
-      permissionLevelId,
       actorUserId,
       actorRole,
       ipAddress,
@@ -62,17 +58,15 @@ export function createCategoriesRepository(pool) {
         await client.query('BEGIN');
         const result = await client.query(
           `INSERT INTO mams.category
-             (name, form_type, approval_required, overstay_cutoff,
-              permission_level_id, icon, description)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+             (name, form_type, approval_required, overstay_cutoff, icon, description)
+            VALUES ($1, $2, $3, $4, $5, $6)
             RETURNING category_id, name, form_type, approval_required,
-                     overstay_cutoff, permission_level_id, icon, description, status, created_at`,
+                     overstay_cutoff, icon, description, status, created_at`,
           [
             name,
             formType,
             approvalRequired,
             overstayCutoff,
-            permissionLevelId,
             icon,
             description,
           ],
@@ -91,7 +85,6 @@ export function createCategoriesRepository(pool) {
               name: category.name,
               form_type: category.form_type,
               approval_required: category.approval_required,
-              permission_level_id: category.permission_level_id,
               icon: category.icon,
               description: category.description,
             }),
@@ -166,15 +159,9 @@ export function createCategoriesRepository(pool) {
             device?.slice(0, 100) ?? null,
           ],
         );
-        const detailedResult = await client.query(
-          `SELECT c.*, p.name AS permission_level
-             FROM mams.category AS c
-             LEFT JOIN mams.lookup_value AS p ON p.lookup_id = c.permission_level_id
-            WHERE c.category_id = $1`,
-          [categoryId],
-        );
+        const detailedResult = await client.query('SELECT * FROM mams.category WHERE category_id = $1', [categoryId]);
         await client.query('COMMIT');
-        return withoutBroadCategoryFields(detailedResult.rows[0]);
+        return withoutRemovedCategoryFields(detailedResult.rows[0]);
       } catch (error) {
         await client.query('ROLLBACK').catch(() => {});
         throw error;

@@ -102,6 +102,8 @@ it('deletes a person from the Actions column after confirmation', async () => {
   expect(screen.getAllByRole('menuitem')).toHaveLength(2);
   await user.click(screen.getByRole('menuitem', { name: 'Delete' }));
   expect(screen.getByRole('dialog')).toHaveTextContent('permanently removes the person');
+  expect(screen.getByRole('dialog')).toHaveTextContent('visit, blacklist, and approval history');
+  expect(screen.getByRole('dialog')).toHaveTextContent('Their category will not be deleted');
   await user.click(screen.getByRole('button', { name: 'Delete', exact: true }));
 
   expect(remove).toHaveBeenCalledWith('/persons/12');

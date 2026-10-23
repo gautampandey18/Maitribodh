@@ -156,7 +156,7 @@ it('uses a desktop-compatible camera preference and looks up each scan only once
   await waitFor(() => expect(screen.getByRole('button', { name: 'Start camera scan' })).toBeEnabled());
   await user.click(screen.getByRole('button', { name: 'Start camera scan' }));
   await waitFor(() => expect(screen.getByRole('button', { name: 'Stop camera scan' })).toBeEnabled());
-  expect(scannerMocks.start).toHaveBeenCalledWith({ facingMode: { ideal: 'environment' } }, { fps: 10 }, expect.any(Function), expect.any(Function));
+  expect(scannerMocks.start).toHaveBeenCalledWith({ facingMode: 'environment' }, { fps: 10 }, expect.any(Function), expect.any(Function));
   const onScan = scannerMocks.start.mock.calls[0][2];
   await act(async () => { await Promise.all([onScan('signed-qr-payload'), onScan('signed-qr-payload')]); });
   expect(await screen.findByText('Asha Patel')).toBeInTheDocument();

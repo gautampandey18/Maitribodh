@@ -75,12 +75,12 @@ it('searches for a person and creates an audited blacklist entry', async () => {
   expect(await screen.findByText('Asha Patel')).toBeInTheDocument();
 }, 30_000);
 
-it('allows an expired unlifted entry to be closed with a reason', async () => {
+it('lifts an active entry and removes it from the active blacklist list', async () => {
   let lifted = false;
-  vi.spyOn(api, 'get').mockImplementation((path) => Promise.resolve({
-    data: {
-      items: path === '/blacklist'
-        ? [{
+  const get = vi.spyOn(api, 'get').mockImplementation((path) => Promise.resolve({
+    data: path === '/blacklist'
+      ? {
+        items: lifted ? [] : [{
           blacklist_id: 8,
           person_id: 7,
           person_code: 'MB-000007',
@@ -88,12 +88,13 @@ it('allows an expired unlifted entry to be closed with a reason', async () => {
           category: 'Staff',
           reason: 'Repeated policy violation',
           remarks: 'Repeated policy violation',
-          start_date: '2026-10-09',
+          start_date: '2026-10-20',
           end_date: null,
-          status: lifted ? 'LIFTED' : 'EXPIRED',
-        }]
-        : [],
-    },
+          status: 'ACTIVE',
+        }],
+        total: lifted ? 0 : 1,
+      }
+      : { items: [] },
   }));
   const post = vi.spyOn(api, 'post').mockImplementation(async (path) => {
     if (path.endsWith('/lifts')) lifted = true;
@@ -115,7 +116,8 @@ it('allows an expired unlifted entry to be closed with a reason', async () => {
   await user.click(screen.getByRole('button', { name: 'Confirm lift' }));
 
   await waitFor(() => expect(post).toHaveBeenCalledWith('/blacklist/8/lifts', { liftNote: 'Reviewed by Security' }));
-  expect(await screen.findByText('LIFTED')).toBeInTheDocument();
+  await waitFor(() => expect(get.mock.calls.filter(([path]) => path === '/blacklist')).toHaveLength(2));
+  expect(screen.getByText('No active blacklist entries.')).toBeInTheDocument();
 }, 30_000);
 
 it('filters blacklist entries by name and category on the server', async () => {

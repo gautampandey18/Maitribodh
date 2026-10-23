@@ -161,7 +161,6 @@ export default function PersonsPage() {
         <Box>
           <Typography className="eyebrow">REGISTRATION</Typography>
           <Typography component="h1" variant="h1">Person Management</Typography>
-          <Typography color="text.secondary" sx={{ mt: 0.75 }}>Browse and filter person registrations.</Typography>
         </Box>
         <Button component={Link} to="/register" variant="contained">Register Person</Button>
       </Box>
@@ -275,8 +274,7 @@ export default function PersonsPage() {
         <DialogContent>
           {deleteError && <Alert severity="error" sx={{ mb: 2 }}>{deleteError}</Alert>}
           <Typography>
-            Delete {deleteTarget?.name}? This permanently removes the person and their uploaded files.
-            People with linked operational records cannot be deleted.
+            Delete {deleteTarget?.name}? This permanently removes the person, their uploaded files, and their visit, blacklist, and approval history. Their category will not be deleted.
           </Typography>
         </DialogContent>
         <DialogActions>

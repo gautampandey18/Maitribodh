@@ -80,11 +80,13 @@ it('creates categories without broad-category fields', async () => {
 
   expect(screen.queryByLabelText('Broad category')).not.toBeInTheDocument();
   expect(screen.queryByLabelText('Base category mapping')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Permission level')).not.toBeInTheDocument();
   await user.type(screen.getByRole('textbox', { name: 'Category name' }), 'Helper');
   await user.click(screen.getByRole('button', { name: 'Create category' }));
 
   await waitFor(() => expect(post).toHaveBeenCalledWith('/categories', expect.not.objectContaining({
     isBroad: expect.anything(),
     broadCategoryId: expect.anything(),
+    permissionLevelId: expect.anything(),
   })));
 }, 30_000);

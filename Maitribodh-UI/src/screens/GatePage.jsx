@@ -205,7 +205,7 @@ export default function GatePage() {
       const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import('html5-qrcode');
       if (session !== scannerSession.current) return;
       current = new Html5Qrcode('gate-camera', { formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE] }); scanner.current = current;
-      await current.start({ facingMode: { ideal: 'environment' } }, { fps: 10 }, async (value) => {
+      await current.start({ facingMode: 'environment' }, { fps: 10 }, async (value) => {
         if (session !== scannerSession.current) return;
         if (scanned.current) return;
         scanned.current = true;

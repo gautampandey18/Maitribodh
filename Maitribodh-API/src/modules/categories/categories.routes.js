@@ -14,7 +14,6 @@ const categorySchema = z.object({
   formType: z.enum(['STAFF', 'PARIVAR', 'VISITOR', 'VENDOR', 'CONTRACTOR', 'PARTICIPANT', 'GENERIC']).optional().default('GENERIC'),
   approvalRequired: z.boolean().nullable().optional().default(false),
   overstayCutoff: z.union([z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/), z.null()]).optional().default(null),
-  permissionLevelId: z.number().int().positive().nullable().optional().default(null),
 });
 const categoryIdSchema = z.coerce.number().int().positive();
 const categoryPatchSchema = z.object({
@@ -26,7 +25,6 @@ const categoryPatchSchema = z.object({
   status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
   formSchema: categoryFormSchema.optional(),
   overstayCutoff: z.union([z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/), z.null()]).optional(),
-  permissionLevelId: z.number().int().positive().nullable().optional(),
 }).refine((changes) => Object.keys(changes).length > 0);
 
 export function createCategoriesRouter({ categoriesService, authenticate }) {

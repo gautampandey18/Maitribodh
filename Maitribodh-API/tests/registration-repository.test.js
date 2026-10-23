@@ -25,6 +25,44 @@ test('registration creates a versioned active profile, audit and notifications i
   assert.ok(calls.some((call) => call.sql.includes('INSERT INTO mams.notification')));
   assert.equal(calls.at(-1).sql, 'COMMIT');
 });
+test('registration does not apply a legacy category permission as a default', async () => {
+  const calls = [];
+  const client = {
+    async query(sql, values) {
+      calls.push({ sql, values });
+      if (sql.includes('FOR SHARE')) return { rows: [{ ...category, permission_level_id: 22 }] };
+      if (sql.includes('INSERT INTO mams.person')) return { rows: [{ person_id: 8, person_code: 'MB-000008', status: 'ACTIVE', qr_version: 1 }] };
+      return { rows: [], rowCount: 1 };
+    },
+    release() {},
+  };
+  const repository = createRegistrationRepository({ async connect() { return client; } });
+
+  await repository.create({
+    input,
+    category: { ...category, permission_level_id: 22 },
+    photoKey: 'private-photo.jpg',
+    documents: [],
+    actor: { userId: 9, role: 'ADMIN' },
+  });
+
+  const insertCall = calls.find((call) => call.sql.includes('INSERT INTO mams.person'));
+  assert.equal(insertCall.values[15], null);
+});
+test('registration category options omit legacy category permission defaults', async () => {
+  const repository = createRegistrationRepository({
+    async query(sql) {
+      if (sql.includes('mams.category')) return { rows: [{ ...category, permission_level_id: 22, is_broad: false, broad_category_id: null }] };
+      return { rows: [] };
+    },
+  });
+
+  const options = await repository.options();
+
+  assert.equal('permission_level_id' in options.categories[0], false);
+  assert.equal('is_broad' in options.categories[0], false);
+  assert.equal('broad_category_id' in options.categories[0], false);
+});
 test('text category fields are not treated as integer master-data references', async () => {
   const calls = [];
   const categoryWithTextField = {
@@ -111,7 +149,7 @@ test('non-visitor profiles cannot be updated with an international mobile number
     actor: { userId: 9, role: 'ADMIN' },
   }), /Only Visitor profiles can use a non-Indian mobile number/);
 });
-test('person deletion removes the profile and records an audit entry transactionally', async () => {
+test('person deletion removes linked visits and blacklist history and audits the deletion transactionally', async () => {
   const calls = [];
   const client = {
     async query(sql, values) {
@@ -127,7 +165,12 @@ test('person deletion removes the profile and records an audit entry transaction
   const result = await repository.delete({ personId: 8, actor: { userId: 9, role: 'ADMIN' } });
 
   assert.deepEqual(result, { photo_key: 'photo.jpg', documents: [{ key: 'id.pdf' }] });
-  assert.ok(calls.some((call) => call.sql.includes('DELETE FROM mams.person')));
+  const visitDelete = calls.findIndex((call) => call.sql.includes('DELETE FROM mams.visit'));
+  const blacklistDelete = calls.findIndex((call) => call.sql.includes('DELETE FROM mams.blacklist'));
+  const personDelete = calls.findIndex((call) => call.sql.includes('DELETE FROM mams.person'));
+  assert.ok(visitDelete > 0);
+  assert.ok(blacklistDelete > visitDelete);
+  assert.ok(personDelete > blacklistDelete);
   const auditCall = calls.find((call) => call.sql.includes('INSERT INTO mams.audit_log'));
   assert.equal(auditCall.values[2], 'DELETE');
   assert.equal(auditCall.values[3], 8);

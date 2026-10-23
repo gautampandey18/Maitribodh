@@ -147,10 +147,11 @@ test('person DELETE is available through the production nested persons router mo
   await request(createApp({ personsRouter })).delete('/api/v1/persons/5').expect(204);
   assert.equal(deletedId, 5);
 });
-test('person deletion maps linked operational records to a conflict', async () => {
+test('person deletion reports a conflict when an unhandled database reference prevents deletion', async () => {
   const repository = { async delete() { throw { code: '23503' }; } };
   const response = await request(appFor('ADMIN', repository)).delete('/api/v1/persons/8').expect(409);
   assert.equal(response.body.error.code, 'PERSON_IN_USE');
+  assert.equal(response.body.error.message, 'The person still has linked records that could not be safely removed.');
 });
 test('profile update rejects email values longer than the database column', async () => {
   let saved = false;

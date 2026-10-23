@@ -146,7 +146,6 @@ export default function ApprovalsPage() {
         <Box>
           <Typography className="eyebrow">REGISTRATION</Typography>
           <Typography component="h1" variant="h1">Approval Center</Typography>
-          <Typography color="text.secondary" sx={{ mt: 0.75 }}>Review pending registrations and record a decision.</Typography>
         </Box>
         <Tooltip title={`Refresh ${tabLabel(tab).toLowerCase()}`}>
           <span>
