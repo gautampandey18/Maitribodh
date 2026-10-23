@@ -20,6 +20,9 @@ test('blacklist list applies name and category filters before pagination', async
 
   assert.match(query.sql, /p\.first_name \|\| ' ' \|\| p\.last_name ILIKE/);
   assert.match(query.sql, /c\.name ILIKE/);
+  assert.match(query.sql, /b\.lifted_at IS NULL/);
+  assert.match(query.sql, /b\.start_date <= \(now\(\) AT TIME ZONE 'Asia\/Kolkata'\)::date/);
+  assert.match(query.sql, /b\.end_date IS NULL OR b\.end_date >= \(now\(\) AT TIME ZONE 'Asia\/Kolkata'\)::date/);
   assert.match(query.sql, /LIMIT \$3 OFFSET \$4/);
   assert.deepEqual(query.values, ['Asha', 'Staff', 10, 10]);
 });
@@ -82,12 +85,15 @@ test('blacklist lift can close an expired unlifted entry and records audit atomi
     liftNote: 'Reviewed',
     actorUserId: 2,
     actorRole: 'ADMIN',
+    ipAddress: '127.0.0.1',
+    device: 'Browser '.padEnd(140, 'x'),
   });
 
   assert.equal(entry.lift_note, 'Reviewed');
   assert.match(calls[1].sql, /lifted_at IS NULL/);
   assert.match(calls[2].sql, /lift_note = \$3/);
   assert.match(calls[3].sql, /INSERT INTO mams.audit_log/);
+  assert.equal(calls[3].values[6].length, 100);
   assert.equal(calls[4].sql, 'COMMIT');
 });
 

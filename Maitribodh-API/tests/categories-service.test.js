@@ -3,13 +3,13 @@ import test from 'node:test';
 import { createCategoriesService } from '../src/modules/categories/categories.service.js';
 
 test('category list returns repository rows with pagination metadata', async () => {
-  const categories = [{ category_id: 1, name: 'Visitor', permission_level: 'OPEN', total: 1 }];
+  const categories = [{ category_id: 1, name: 'Visitor', total: 1 }];
   const service = createCategoriesService({
     repository: { async listCategories() { return categories; } },
   });
 
   assert.deepEqual(await service.listCategories({ page: 1, pageSize: 25 }), {
-    items: [{ category_id: 1, name: 'Visitor', permission_level: 'OPEN' }], total: 1, page: 1, pageSize: 25,
+    items: [{ category_id: 1, name: 'Visitor' }], total: 1, page: 1, pageSize: 25,
   });
 });
 

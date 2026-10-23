@@ -63,7 +63,7 @@ export default function RegisterPage() {
 
   function chooseCategory(next) {
     setCategoryId(next.category_id);
-    setValues({ ...initialValues, permissionLevelId: next.permission_level_id ?? '', categoryDetails: {} });
+    setValues({ ...initialValues, categoryDetails: {} });
     setStep(1); setNotice(''); setError('');
   }
   function pickFiles(files, isPhoto) {
@@ -182,7 +182,7 @@ export default function RegisterPage() {
         <TextField label="Emergency Contact Mobile" value={values.emergencyMobile} onChange={(event) => change('emergencyMobile', event.target.value)} required={schema.emergencyRequired} inputProps={{ pattern: '[6-9][0-9]{9}', maxLength: 10 }} />
       </Box>}
       {step === 2 && <Box className="form-grid">
-        <TextField label="Assigned Permission Level" select value={values.permissionLevelId} onChange={(event) => change('permissionLevelId', event.target.value)}><MenuItem value="">Category default</MenuItem>{selectedOptions('PERMISSION_LEVEL').map((item) => <MenuItem key={item.id} value={item.id}>{item.name}</MenuItem>)}</TextField>
+        <TextField label="Assigned Permission Level" select value={values.permissionLevelId} onChange={(event) => change('permissionLevelId', event.target.value)}><MenuItem value="">None</MenuItem>{selectedOptions('PERMISSION_LEVEL').map((item) => <MenuItem key={item.id} value={item.id}>{item.name}</MenuItem>)}</TextField>
         <TextField label="Assigned Areas" select SelectProps={{ multiple: true }} value={values.locationIds} onChange={(event) => change('locationIds', event.target.value)}>{selectedOptions('AREA').map((item) => <MenuItem key={item.id} value={Number(item.id)}>{item.name}</MenuItem>)}</TextField>
         <TextField label="Additional people accompanying" type="number" inputProps={{ min: 0, max: 32767, step: 1 }} value={values.accompanyingCount} onChange={(event) => change('accompanyingCount', event.target.value)} />
         <TextField label="Remarks" multiline value={values.remarks} onChange={(event) => change('remarks', event.target.value)} inputProps={{ maxLength: 500 }} />

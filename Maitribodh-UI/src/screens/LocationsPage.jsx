@@ -173,7 +173,6 @@ export default function LocationsPage() {
         <Box>
           <Typography className="eyebrow">MASTER DATA</Typography>
           <Typography component="h1" variant="h1">Locations</Typography>
-          <Typography color="text.secondary" sx={{ mt: 0.75 }}>Configure gates and areas used by access operations.</Typography>
         </Box>
         <Button variant="contained" color="secondary" startIcon={<AddIcon />} onClick={openCreate}>
           Add location

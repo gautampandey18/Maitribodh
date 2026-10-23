@@ -23,6 +23,9 @@ export function createBlacklistRepository(pool) {
            JOIN mams.lookup_value AS r ON r.lookup_id = b.reason_id
            WHERE ($1 = '' OR p.first_name || ' ' || p.last_name ILIKE '%' || $1 || '%')
              AND ($2 = '' OR c.name ILIKE '%' || $2 || '%')
+             AND b.lifted_at IS NULL
+             AND b.start_date <= (now() AT TIME ZONE 'Asia/Kolkata')::date
+             AND (b.end_date IS NULL OR b.end_date >= (now() AT TIME ZONE 'Asia/Kolkata')::date)
            ORDER BY b.added_at DESC, b.blacklist_id DESC
            LIMIT $3 OFFSET $4`,
         [name, category, pageSize, offset],
@@ -135,7 +138,7 @@ export function createBlacklistRepository(pool) {
             JSON.stringify({ lifted_at: null, lift_note: null }),
             JSON.stringify({ lifted_at: entry.lifted_at, lift_note: entry.lift_note }),
             ipAddress ?? null,
-            device ?? null,
+            device?.slice(0, 100) ?? null,
           ],
         );
         await client.query('COMMIT');

@@ -15,6 +15,8 @@
  .gate-result-panel, .gate-person-panel { padding: 20px 0; min-width: 0; }
  .gate-person-panel { overflow-wrap: anywhere; }
 .filter-toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 0px; align-items: center; }
+.master-data-filter-toolbar .master-data-add-action,
+.categories-page .table-panel > .filter-toolbar .master-data-add-action { margin-left: auto; }
 .users-page .table-panel > .filter-toolbar { align-items: center; margin-bottom: 0; padding: 8px 12px; border-bottom: 1px solid var(--mams-line); }
 .categories-page .table-panel > .filter-toolbar,
 .locations-page .table-panel > .filter-toolbar { align-items: center; margin-bottom: 0; padding: 8px 12px; border-bottom: 1px solid var(--mams-line); }

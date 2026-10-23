@@ -17,13 +17,28 @@ it('searches master values within the selected lookup type', async () => {
   render(<MemoryRouter><MasterDataPage /></MemoryRouter>);
 
   await user.click(screen.getByRole('tab', { name: 'Departments' }));
+  expect(screen.getByRole('button', { name: 'Add Departments' }).closest('form')).toHaveClass('master-data-filter-toolbar');
   expect(await screen.findByText('Operations')).toBeInTheDocument();
+  expect(screen.queryByRole('columnheader', { name: 'Parent / Category' })).not.toBeInTheDocument();
   await user.type(screen.getByRole('textbox', { name: 'Search departments' }), 'Finance');
   await user.click(screen.getByRole('button', { name: 'Search' }));
 
   await waitFor(() => expect(get.mock.calls.some(([path]) => path.includes('query=Finance'))).toBe(true));
   expect(get.mock.calls.at(-1)[0]).toContain('/lookups/DEPARTMENT?');
 }, 30_000);
+
+it('hides Parent / Category for ID Proof Types', async () => {
+  vi.spyOn(api, 'get').mockResolvedValue({
+    data: { items: [], total: 0, page: 1, pageSize: 5 },
+  });
+  const user = userEvent.setup();
+  render(<MemoryRouter><MasterDataPage /></MemoryRouter>);
+
+  await user.click(screen.getByRole('tab', { name: 'ID Proof Types' }));
+
+  expect(await screen.findByRole('table', { name: 'Master data values' })).toBeInTheDocument();
+  expect(screen.queryByRole('columnheader', { name: 'Parent / Category' })).not.toBeInTheDocument();
+});
 
 it('opens category management from the Master Data Categories tab', async () => {
   vi.spyOn(api, 'get').mockImplementation((path) => Promise.resolve({
@@ -36,7 +51,9 @@ it('opens category management from the Master Data Categories tab', async () => 
   render(<MemoryRouter><MasterDataPage /></MemoryRouter>);
 
   expect(await screen.findByRole('table', { name: 'Registration categories' })).toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: 'Categories', exact: true })).not.toBeInTheDocument();
   expect(await screen.findByText('Visitor')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Add category' }).closest('form')).toBeInTheDocument();
 });
 
 it('deletes an unreferenced master lookup value after confirmation', async () => {

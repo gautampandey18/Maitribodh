@@ -190,7 +190,6 @@ export default function BlacklistPage() {
         <Box>
           <Typography className="eyebrow">ACCESS CONTROL</Typography>
           <Typography component="h1" variant="h1">Blacklist Management</Typography>
-          <Typography color="text.secondary" sx={{ mt: 0.75 }}>Manage active restrictions and their audit history.</Typography>
         </Box>
         <Button variant="contained" color="error" startIcon={<AddIcon />} onClick={openAdd}>
           Add to blacklist
@@ -200,7 +199,7 @@ export default function BlacklistPage() {
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       <Paper className="table-panel" elevation={0}>
         <Box className="table-panel-heading">
-          <Typography variant="h3">Blacklist entries</Typography>
+          <Typography variant="h3">Active blacklist entries</Typography>
           <Typography variant="body2" color="text.secondary">{loading ? 'Loading' : `${totalEntries} entries`}</Typography>
         </Box>
         <Box component="form" className="filter-toolbar" onSubmit={searchEntries} sx={{ p: 1.25 }}>
@@ -257,7 +256,7 @@ export default function BlacklistPage() {
                   </TableRow>
                 ))}
                 {!entries.length && (
-                  <TableRow><TableCell colSpan={7} className="empty-table">No blacklist entries.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={7} className="empty-table">No active blacklist entries.</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>

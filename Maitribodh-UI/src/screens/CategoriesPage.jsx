@@ -44,7 +44,6 @@ const categoryFormSchema = z.object({
   formType: z.enum(formTypes),
   approvalRequired: z.boolean(),
   overstayCutoff: z.string(),
-  permissionLevelId: z.string(),
 });
 
 const emptyValues = {
@@ -52,7 +51,6 @@ const emptyValues = {
   formType: 'GENERIC',
   approvalRequired: false,
   overstayCutoff: '',
-  permissionLevelId: '',
 };
 
 export default function CategoriesPage() {
@@ -64,7 +62,6 @@ export default function CategoriesPage() {
   const [formTypeFilter, setFormTypeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [activeFilters, setActiveFilters] = useState({ query: '', formType: '', status: '' });
-  const [permissionLevels, setPermissionLevels] = useState([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -87,20 +84,16 @@ export default function CategoriesPage() {
     setLoading(true);
     setError('');
     try {
-      const [categoryResponse, permissionResponse] = await Promise.all([
-        api.get('/categories', { params: {
-          ...(filters.query ? { query: filters.query } : {}),
-          ...(filters.formType ? { formType: filters.formType } : {}),
-          ...(filters.status ? { status: filters.status } : {}),
-          page: nextPage + 1,
-          pageSize: nextRowsPerPage,
-        } }),
-        api.get('/lookups/PERMISSION_LEVEL'),
-      ]);
+      const categoryResponse = await api.get('/categories', { params: {
+        ...(filters.query ? { query: filters.query } : {}),
+        ...(filters.formType ? { formType: filters.formType } : {}),
+        ...(filters.status ? { status: filters.status } : {}),
+        page: nextPage + 1,
+        pageSize: nextRowsPerPage,
+      } });
       if (currentRequestId !== requestId.current) return;
       setCategories(categoryResponse.data.items);
       setTotalCategories(categoryResponse.data.total ?? categoryResponse.data.items.length);
-      setPermissionLevels(permissionResponse.data.items);
     } catch {
       if (currentRequestId !== requestId.current) return;
       setError('Category data could not be loaded. Check the API connection and try again.');
@@ -163,7 +156,6 @@ export default function CategoriesPage() {
       formType: category.form_type,
       approvalRequired: category.approval_required,
       overstayCutoff: category.overstay_cutoff?.slice(0, 5) ?? '',
-      permissionLevelId: category.permission_level_id?.toString() ?? '',
     });
     setDialogOpen(true);
   }
@@ -174,7 +166,6 @@ export default function CategoriesPage() {
     const payload = {
       ...values,
       overstayCutoff: values.overstayCutoff || null,
-      permissionLevelId: values.permissionLevelId ? Number(values.permissionLevelId) : null,
     };
     try {
       if (editing) {
@@ -195,15 +186,6 @@ export default function CategoriesPage() {
 
   return (
     <Box className="categories-page">
-      <Box className="page-heading">
-        <Box>
-          <Typography component="h1" variant="h1">Categories</Typography>
-        </Box>
-        <Button variant="contained" color="secondary" startIcon={<AddIcon />} onClick={openCreate}>
-          Add category
-        </Button>
-      </Box>
-
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       <Paper className="table-panel" elevation={0}>
         <Box className="table-panel-heading">
@@ -220,6 +202,9 @@ export default function CategoriesPage() {
           </TextField>
           <Button type="submit" variant="contained" color="secondary" startIcon={<SearchOutlinedIcon />} disabled={loading}>Apply</Button>
           <Button type="button" onClick={clearFilters} disabled={loading || (!activeFilters.query && !activeFilters.formType && !activeFilters.status && !query && !formTypeFilter && !statusFilter)}>Clear</Button>
+          <Button className="master-data-add-action" type="button" variant="contained" color="secondary" startIcon={<AddIcon />} onClick={openCreate}>
+            Add category
+          </Button>
         </Box>
         {loading ? (
           <Box className="loading-state"><CircularProgress size={28} /></Box>
@@ -230,7 +215,6 @@ export default function CategoriesPage() {
                 <TableRow>
                   <TableCell align="center">Category</TableCell>
                   <TableCell align="center">Form</TableCell>
-                  <TableCell align="center">Permission</TableCell>
                   <TableCell align="center">Approval</TableCell>
                   <TableCell align="center">Overstay cutoff</TableCell>
                   <TableCell align="right">Actions</TableCell>
@@ -243,7 +227,6 @@ export default function CategoriesPage() {
                       <Typography fontWeight={600}>{category.name}</Typography>
                     </TableCell>
                     <TableCell align="center">{category.form_type}</TableCell>
-                    <TableCell align="center">{category.permission_level ?? '—'}</TableCell>
                     <TableCell align="center">{category.approval_required === null ? 'Decision pending' : category.approval_required ? 'Required' : 'Not required'}</TableCell>
                     <TableCell align="center">{category.overstay_cutoff?.slice(0, 5) ?? '—'}</TableCell>
                     <TableCell align="right">
@@ -297,12 +280,6 @@ export default function CategoriesPage() {
             <Controller name="formType" control={control} render={({ field }) => (
               <TextField {...field} select label="Form type" fullWidth>
                 {formTypes.map((type) => <MenuItem key={type} value={type}>{type}</MenuItem>)}
-              </TextField>
-            )} />
-            <Controller name="permissionLevelId" control={control} render={({ field }) => (
-              <TextField {...field} select label="Permission level" fullWidth>
-                <MenuItem value="">None</MenuItem>
-                {permissionLevels.map((level) => <MenuItem key={level.lookup_id} value={String(level.lookup_id)}>{level.name}</MenuItem>)}
               </TextField>
             )} />
             <Controller name="overstayCutoff" control={control} render={({ field }) => (
