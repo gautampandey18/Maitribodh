@@ -43,14 +43,12 @@ const categoryFormSchema = z.object({
   name: z.string().trim().min(1, 'Enter a category name').max(50),
   formType: z.enum(formTypes),
   approvalRequired: z.boolean(),
-  overstayCutoff: z.string(),
 });
 
 const emptyValues = {
   name: '',
   formType: 'GENERIC',
   approvalRequired: false,
-  overstayCutoff: '',
 };
 
 export default function CategoriesPage() {
@@ -155,7 +153,6 @@ export default function CategoriesPage() {
       name: category.name,
       formType: category.form_type,
       approvalRequired: category.approval_required,
-      overstayCutoff: category.overstay_cutoff?.slice(0, 5) ?? '',
     });
     setDialogOpen(true);
   }
@@ -163,10 +160,7 @@ export default function CategoriesPage() {
   async function saveCategory(values) {
     setSaving(true);
     setError('');
-    const payload = {
-      ...values,
-      overstayCutoff: values.overstayCutoff || null,
-    };
+    const payload = { ...values };
     try {
       if (editing) {
         await api.patch(`/categories/${editing.category_id}`, payload);
@@ -216,7 +210,6 @@ export default function CategoriesPage() {
                   <TableCell align="center">Category</TableCell>
                   <TableCell align="center">Form</TableCell>
                   <TableCell align="center">Approval</TableCell>
-                  <TableCell align="center">Overstay cutoff</TableCell>
                   <TableCell align="right">Actions</TableCell>
                 </TableRow>
               </TableHead>
@@ -228,7 +221,6 @@ export default function CategoriesPage() {
                     </TableCell>
                     <TableCell align="center">{category.form_type}</TableCell>
                     <TableCell align="center">{category.approval_required === null ? 'Decision pending' : category.approval_required ? 'Required' : 'Not required'}</TableCell>
-                    <TableCell align="center">{category.overstay_cutoff?.slice(0, 5) ?? '—'}</TableCell>
                     <TableCell align="right">
                       <Tooltip title="Edit category">
                         <IconButton aria-label={`Edit ${category.name}`} color="warning" onClick={() => openEdit(category)}>
@@ -253,7 +245,7 @@ export default function CategoriesPage() {
                   </TableRow>
                 ))}
                 {!categories.length && (
-                  <TableRow><TableCell colSpan={6} className="empty-table">No categories configured.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={5} className="empty-table">No categories configured.</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
@@ -281,9 +273,6 @@ export default function CategoriesPage() {
               <TextField {...field} select label="Form type" fullWidth>
                 {formTypes.map((type) => <MenuItem key={type} value={type}>{type}</MenuItem>)}
               </TextField>
-            )} />
-            <Controller name="overstayCutoff" control={control} render={({ field }) => (
-              <TextField {...field} type="time" label="Overstay cutoff" fullWidth InputLabelProps={{ shrink: true }} />
             )} />
             <Controller name="approvalRequired" control={control} render={({ field }) => (
               <FormControlLabel control={<Checkbox {...field} checked={field.value} />} label="Requires approval" />

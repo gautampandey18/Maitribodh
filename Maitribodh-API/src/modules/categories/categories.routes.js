@@ -13,7 +13,6 @@ const categorySchema = z.object({
   description: z.string().trim().max(300).optional().default(''),
   formType: z.enum(['STAFF', 'PARIVAR', 'VISITOR', 'VENDOR', 'CONTRACTOR', 'PARTICIPANT', 'GENERIC']).optional().default('GENERIC'),
   approvalRequired: z.boolean().nullable().optional().default(false),
-  overstayCutoff: z.union([z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/), z.null()]).optional().default(null),
 });
 const categoryIdSchema = z.coerce.number().int().positive();
 const categoryPatchSchema = z.object({
@@ -24,7 +23,6 @@ const categoryPatchSchema = z.object({
   approvalRequired: z.boolean().nullable().optional(),
   status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
   formSchema: categoryFormSchema.optional(),
-  overstayCutoff: z.union([z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/), z.null()]).optional(),
 }).refine((changes) => Object.keys(changes).length > 0);
 
 export function createCategoriesRouter({ categoriesService, authenticate }) {
@@ -56,12 +54,7 @@ export function createCategoriesRouter({ categoriesService, authenticate }) {
       }
 
       const category = await categoriesService.createCategory({
-        input: {
-          ...parsed.data,
-          overstayCutoff: parsed.data.overstayCutoff?.length === 5
-            ? `${parsed.data.overstayCutoff}:00`
-            : parsed.data.overstayCutoff,
-        },
+        input: parsed.data,
         actor: {
           userId: request.auth.userId,
           role: request.auth.role,
@@ -102,9 +95,6 @@ export function createCategoriesRouter({ categoriesService, authenticate }) {
       }
 
       const changes = { ...parsedChanges.data };
-      if (changes.overstayCutoff?.length === 5) {
-        changes.overstayCutoff = `${changes.overstayCutoff}:00`;
-      }
       const category = await categoriesService.updateCategory({
         categoryId: parsedId.data,
         changes,
