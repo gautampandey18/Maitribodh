@@ -41,13 +41,13 @@ async function createLookup(client, lookupType, name, { parentId = null, categor
   return result.rows[0].lookup_id;
 }
 
-async function createCategory(client, { name, formType, requiresApproval, permissionLevelId, overstayCutoff = null }) {
+async function createCategory(client, { name, formType, requiresApproval, overstayCutoff = null }) {
   const result = await client.query(
-    `INSERT INTO mams.category (name, form_type, approval_required, permission_level_id, overstay_cutoff)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO mams.category (name, form_type, approval_required, overstay_cutoff)
+     VALUES ($1, $2, $3, $4)
      ON CONFLICT DO NOTHING
      RETURNING category_id`,
-    [name, formType, requiresApproval, permissionLevelId, overstayCutoff],
+    [name, formType, requiresApproval, overstayCutoff],
   );
   if (result.rows[0]) return result.rows[0].category_id;
   const existing = await client.query('SELECT category_id FROM mams.category WHERE lower(name) = lower($1)', [name]);
@@ -71,7 +71,6 @@ async function createPerson(client, {
   mobile,
   status,
   source = 'MANUAL',
-  permissionLevelId,
   registeredBy,
   requiresApproval = false,
   categoryDetails = {},
@@ -80,11 +79,11 @@ async function createPerson(client, {
   const result = await client.query(
     `INSERT INTO mams.person
        (category_id, first_name, last_name, mobile, gender, resident_status,
-        photo_key, permission_level_id, category_details, status, source, qr_version,
+      photo_key, category_details, status, source, qr_version,
         consent_at, consent_notice_version, consent_captured_by, registered_by,
         approved_by, approved_at, remarks)
-     VALUES ($1, $2, $3, $4, 'OTHER', 'RESIDENT', $5, $6, $7::jsonb, $8, $9, $10,
-             now(), 'DEV-TEST-ONLY', $11, $11, $12, $13,
+         VALUES ($1, $2, $3, $4, 'OTHER', 'RESIDENT', $5, $6::jsonb, $7, $8, $9,
+           now(), 'DEV-TEST-ONLY', $10, $10, $11, $12,
              'Synthetic dev fixture; photo object is not provisioned')
      RETURNING person_id`,
     [
@@ -93,7 +92,6 @@ async function createPerson(client, {
       lastName,
       mobile,
       `dev-seed/no-object-${firstName.toLowerCase()}.jpg`,
-      permissionLevelId,
       JSON.stringify(categoryDetails),
       status,
       source,
@@ -142,7 +140,6 @@ async function runSeed() {
              (lookup_type = 'DEPARTMENT' AND name IN ('Gurukul','Goushala','Accounts','Housekeeping','Security')) OR
              (lookup_type = 'JOB_ROLE' AND name IN ('Teacher','Admin','Helper','Guard','Driver','Supervisor','Worker','Housekeeper','Gardener','Head of Security')) OR
              (lookup_type = 'SUBCATEGORY' AND name IN ('Sevak','Matri')) OR
-             (lookup_type = 'PERMISSION_LEVEL' AND name = 'Access level to confirm') OR
              (lookup_type = 'ID_PROOF_TYPE' AND name IN ('Aadhaar Card','PAN Card','Driving Licence','Voter ID','Passport')) OR
              (lookup_type = 'BLACKLIST_REASON' AND name = 'Repeated policy violation')
            )) AS custom_lookups,
@@ -177,7 +174,6 @@ async function runSeed() {
     const departmentId = await createLookup(client, 'DEPARTMENT', 'Test Operations');
     const jobRoleId = await createLookup(client, 'JOB_ROLE', 'Test Coordinator', { parentId: departmentId });
     const reasonId = await createLookup(client, 'BLACKLIST_REASON', 'Test policy violation');
-    const permissionLevelId = await createLookup(client, 'PERMISSION_LEVEL', 'Test Standard Access');
     await createLookup(client, 'ID_PROOF_TYPE', 'Test Identity Document');
 
     const categoryIds = {};
@@ -189,7 +185,7 @@ async function runSeed() {
       { name: 'Contractor', formType: 'CONTRACTOR', requiresApproval: false, overstayCutoff: '22:00' },
       { name: 'Participant', formType: 'PARTICIPANT', requiresApproval: false },
     ]) {
-      categoryIds[category.name] = await createCategory(client, { ...category, permissionLevelId });
+      categoryIds[category.name] = await createCategory(client, category);
     }
     const parivarSubcategoryId = await createLookup(client, 'SUBCATEGORY', 'Test Sevak', {
       categoryId: categoryIds['Parivar Member'],
@@ -219,7 +215,6 @@ async function runSeed() {
       lastName: 'Demo',
       mobile: '9410000001',
       status: 'ACTIVE',
-      permissionLevelId,
       registeredBy: superAdminId,
       requiresApproval: true,
       categoryDetails: { department_id: departmentId, job_role_id: jobRoleId, joining_date: '2024-01-01' },
@@ -230,7 +225,6 @@ async function runSeed() {
       lastName: 'Demo',
       mobile: '9410000000',
       status: 'ACTIVE',
-      permissionLevelId,
       registeredBy: superAdminId,
       categoryDetails: { purpose: 'Development smoke test' },
     });
@@ -240,7 +234,6 @@ async function runSeed() {
       lastName: 'Demo',
       mobile: '9410000000',
       status: 'ACTIVE',
-      permissionLevelId,
       registeredBy: superAdminId,
       categoryDetails: { purpose: 'Duplicate mobile fixture' },
     });
@@ -250,7 +243,6 @@ async function runSeed() {
       lastName: 'Pending',
       mobile: '9410000002',
       status: 'PENDING',
-      permissionLevelId,
       registeredBy: superAdminId,
       requiresApproval: true,
       categoryDetails: { department_id: departmentId, job_role_id: jobRoleId, joining_date: '2025-01-01' },
@@ -261,7 +253,6 @@ async function runSeed() {
       lastName: 'Rejected',
       mobile: '9410000003',
       status: 'REJECTED',
-      permissionLevelId,
       registeredBy: superAdminId,
       requiresApproval: true,
       categoryDetails: { department_id: departmentId, job_role_id: jobRoleId, joining_date: '2025-02-01' },
@@ -272,7 +263,6 @@ async function runSeed() {
       lastName: 'Blacklisted',
       mobile: '9410000004',
       status: 'ACTIVE',
-      permissionLevelId,
       registeredBy: superAdminId,
       categoryDetails: { firm_name: 'Synthetic Test Vendor' },
     });
@@ -282,7 +272,6 @@ async function runSeed() {
       lastName: 'Parivar',
       mobile: '9410000005',
       status: 'ACTIVE',
-      permissionLevelId,
       registeredBy: superAdminId,
       requiresApproval: true,
       categoryDetails: { subcategory_id: parivarSubcategoryId },

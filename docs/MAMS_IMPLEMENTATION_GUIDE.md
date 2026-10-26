@@ -49,7 +49,7 @@ The schema starts from a core set of entities in migration `0001_initial_schema.
 | Entity | Purpose |
 |---|---|
 | `app_user` | Portal accounts, built-in role, active status, password hash, login lock/version state |
-| `lookup_value` | Configurable lookup/master values such as departments, job roles, proof types, and permission levels |
+| `lookup_value` | Configurable lookup/master values such as departments, job roles, and proof types |
 | `category` | Person categories, form type, approval setting, and related category metadata |
 | `location` | Gate and area records; gates and areas are distinct location types |
 | `person` | Identity/profile fields, encrypted identity values, registration/access status, QR version, and workflow metadata |
@@ -363,12 +363,12 @@ The list above is the default schema in `Maitribodh-API/src/constants/registrati
 
 1. Admin opens **Categories** and chooses the field editor action for a category.
 2. UI loads registration options and edits the category schema: up to 50 fields, unique lowercase keys matching `[a-z][a-z0-9_]{0,49}`, labels, field type (`text`, `date`, `number`, `select`), required flag, and address/emergency-required flags.
-3. Select fields can use a supported data source (`DEPARTMENT`, `JOB_ROLE`, `SUBCATEGORY`, `PROGRAM_BATCH`, `ID_PROOF_TYPE`, `BLACKLIST_REASON`, `PERMISSION_LEVEL`, `AREA`) or custom options.
+3. Select fields can use a supported data source (`DEPARTMENT`, `JOB_ROLE`, `SUBCATEGORY`, `PROGRAM_BATCH`, `ID_PROOF_TYPE`, `BLACKLIST_REASON`, `AREA`) or custom options.
 4. Field order can be changed; fields can be added or removed. Custom options are comma-separated in the editor and normalized to trimmed, unique values when saved.
 5. UI patches `formSchema` to the category API. API validates structure and duplicate keys; the repository saves it and writes an audit change record.
 6. Future registration options return this schema and the form renders it dynamically. API revalidates required values, dates, positive integers, and allowed option values; client input constraints are not the authority.
 
-The API also supports category `approvalRequired` as true, false, or null. Null means the business approval rule is unconfirmed; registration is deliberately paused for that category. At least one category must remain active. Duplicate category names and invalid permission/broad-category references are rejected.
+The API also supports category `approvalRequired` as true, false, or null. Null means the business approval rule is unconfirmed; registration is deliberately paused for that category. At least one category must remain active. Duplicate category names and invalid broad-category references are rejected.
 
 ### 9.3 Person registration: full screen-to-database journey
 
@@ -377,7 +377,7 @@ The Register Person workflow has five screen steps: **Category → Profile → A
 **Step 1 — choose category**
 
 - The UI displays active categories with type-based icon and description.
-- Choosing a category resets the form values, applies the category's default permission level, and advances to profile details.
+- Choosing a category resets the form values and advances to profile details.
 - When opening registration from Gate, or when the current user is Security Guard, only Visitor-form categories are displayed. The API independently enforces that a guard can submit Visitor only.
 - Non-Gate users can resume their own available saved drafts; the draft list is not exposed as a cross-user list.
 
@@ -403,10 +403,9 @@ The UI requests JPG/PNG photos only, up to 2 MB. The API verifies the image can 
 
 **Step 3 — access**
 
-- User selects optional permission level and one or more active areas, plus accompanying-person count and remarks.
-- The category permission level is preselected where configured; the form labels it as category default.
+- User assigns one or more active areas, plus accompanying-person count and remarks.
 - `locationIds` is an array of positive integer IDs, maximum 100; accompanying count is a non-negative integer.
-- For Security Guard-created walk-ins, API overrides permission level to null and locations to an empty array, and sets source to `WALK_IN`. This is a server-side restriction, not just a disabled UI field.
+- For Security Guard-created walk-ins, API overrides locations to an empty array and sets source to `WALK_IN`. This is a server-side restriction, not just a disabled UI field.
 - Assignment of gates is not part of this form: gates and areas remain separate concepts.
 
 **Step 4 — documents**
@@ -442,7 +441,7 @@ The Person Management list supports paginated person retrieval and currently inc
 An authorized person-detail page can show identity/profile, category fields, documents, assigned access, expiry, recent visits/activity, and QR. Available operations are:
 
 - **Edit contact/profile basics:** first/last name, mobile, alternate mobile, email, address, and emergency contact fields are validated. The full category-specific registration form is not yet an edit workflow.
-- **Update access:** set permission level, area IDs, and expiry date. This is a dedicated access update rather than a full profile resubmission.
+- **Update access:** set area IDs and expiry date. This is a dedicated access update rather than a full profile resubmission.
 - **Photo repair/change:** upload a JPG/PNG photo (2 MB max); decode and resize it with the same 600-pixel policy. When replacement succeeds, the previous photo file can be removed.
 - **Add documents:** management roles can add up to 12 PDF/image documents, each up to 5 MB; database/file failure triggers cleanup of newly written files.
 - **Activity:** person activity and visits can be viewed through the detail/activity routes; administrator audit access is separately role-gated.
@@ -524,7 +523,7 @@ An authorized person-detail page can show identity/profile, category fields, doc
 
 **Lookup/master data**
 
-- Lookup types currently include Department, Job Role, Subcategory, Program/Batch, ID Proof Type, Blacklist Reason, and Permission Level. Category schema fields can also refer to Area as a selection source.
+- Lookup types currently include Department, Job Role, Subcategory, Program/Batch, ID Proof Type, and Blacklist Reason. Category schema fields can also refer to Area as a selection source.
 - Authenticated users can read active lookup values; parent IDs support dependent values such as Job Role → Department. Admins can search, paginate where requested, include inactive values, create new values, and update name/extra/status.
 - Inactive values are restricted to Admin/Super Admin. No hard-delete API is provided; deactivation preserves references/history.
 - Duplicate and invalid parent/category/master references are rejected by service/database constraints.

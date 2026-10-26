@@ -14,7 +14,7 @@ export function createPersonsRepository(pool) {
       const result = await pool.query(
         `SELECT p.person_id, p.person_code,
                 p.first_name || ' ' || p.last_name AS name,
-                c.name AS category, p.mobile, p.status, p.created_at,
+          c.name AS category, p.mobile, p.status, p.created_at, p.expires_on, p.qr_version,
                 count(*) OVER () AS total
            FROM mams.person AS p
            JOIN mams.category AS c ON c.category_id = p.category_id

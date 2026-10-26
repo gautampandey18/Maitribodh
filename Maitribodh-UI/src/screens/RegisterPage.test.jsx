@@ -18,8 +18,10 @@ it('renders fields from the API schema and saves a partial draft', async () => {
   const post = vi.spyOn(api, 'post').mockResolvedValue({ data: { person_id: 8 } });
   const user = userEvent.setup();
   renderPage('ADMIN');
-  expect(await screen.findByText('General visitors and devotees')).toBeInTheDocument();
-  await user.click(await screen.findByRole('button', { name: /^Visitor/ }));
+  const visitorTile = await screen.findByRole('button', { name: /^Visitor/ });
+  expect(visitorTile).toHaveStyle({ '--registration-accent': '#0E8C99', '--registration-background': '#EDF8F9' });
+  expect(screen.getByText('General visitors and devotees')).toBeInTheDocument();
+  await user.click(visitorTile);
   expect(screen.getByRole('textbox', { name: /Purpose of Visit/ })).toBeRequired();
   await user.type(screen.getByRole('textbox', { name: /First Name/ }), 'Asha');
   await user.click(screen.getByRole('button', { name: 'Save Draft' }));
@@ -99,6 +101,11 @@ it('requires and submits a photograph with a valid registration', async () => {
   await user.click(screen.getByRole('button', { name: 'Continue' }));
   await user.click(screen.getByRole('button', { name: 'Continue' }));
   await user.click(screen.getByRole('button', { name: 'Continue' }));
+  const review = screen.getByRole('region', { name: 'Registration review' });
+  expect(review).toHaveTextContent('Asha Patel');
+  expect(review).toHaveTextContent('Visitor');
+  expect(review).toHaveTextContent('asha.png');
+  expect(review).toHaveTextContent('0 document(s)');
   await user.click(screen.getByRole('checkbox', { name: /I confirm consent/ }));
   await user.click(screen.getByRole('button', { name: 'Submit Registration' }));
 

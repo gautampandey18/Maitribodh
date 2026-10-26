@@ -104,10 +104,10 @@ test('registration options expose active categories, schemas and master data', a
 });
 test('person access updates forward validated assignments and expiry', async () => {
   let saved;
-  const repository = { async updateAccess(value) { saved = value; return { permission_level_id: 2, location_ids: [4], expires_on: '2026-12-31' }; } };
+  const repository = { async updateAccess(value) { saved = value; return { location_ids: [4], expires_on: '2026-12-31' }; } };
   const response = await request(appFor('ADMIN', repository)).patch('/api/v1/persons/8/access')
     .send({ permissionLevelId: 2, locationIds: [4], expiresOn: '2026-12-31' }).expect(200);
-  assert.deepEqual(saved.changes, { permissionLevelId: 2, locationIds: [4], expiresOn: '2026-12-31' });
+  assert.deepEqual(saved.changes, { locationIds: [4], expiresOn: '2026-12-31' });
   assert.equal(saved.actor.userId, 9);
   assert.equal(response.body.expires_on, '2026-12-31');
 });

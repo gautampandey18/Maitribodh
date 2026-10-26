@@ -1,10 +1,37 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import { api } from '../api.js';
-import ActivityPage from './ActivityPage.jsx';
+import ActivityPage, { NotificationsBell } from './ActivityPage.jsx';
 
 afterEach(() => vi.restoreAllMocks());
+
+it('opens notifications from the top and toggles closed from the bell', async () => {
+  vi.spyOn(api, 'get').mockResolvedValue({ data: {
+    unreadCount: 1,
+    items: [{ notification_id: 4, title: 'Visitor registered', body: 'A new visitor is waiting for review.', created_at: '2026-10-26T10:00:00.000Z', is_read: false }],
+  } });
+  const user = userEvent.setup();
+  render(<NotificationsBell />);
+
+  const bell = screen.getByRole('button', { name: 'Open notifications' });
+  await user.click(bell);
+  const panel = await screen.findByRole('dialog', { name: 'Notification' });
+  expect(panel).toHaveAttribute('aria-modal', 'true');
+  expect(document.body).toHaveClass('notifications-panel-open');
+  expect(await screen.findByText('Visitor registered')).toBeInTheDocument();
+  expect(screen.getByLabelText('Unread')).toBeInTheDocument();
+  expect(document.querySelector('.notification-panel')).toHaveStyle({ width: 'min(420px, calc(100vw - 24px))' });
+  expect(screen.getByRole('button', { name: 'View all notifications' })).toBeInTheDocument();
+  expect(document.querySelector('.notification-drawer')).toHaveClass('MuiDrawer-anchorTop');
+
+  const toggleBell = document.querySelector('[aria-controls="notification-panel"]');
+  expect(toggleBell).toHaveAttribute('aria-expanded', 'true');
+  fireEvent.click(toggleBell);
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Notification' })).not.toBeInTheDocument());
+  expect(toggleBell).toHaveAttribute('aria-expanded', 'false');
+  expect(document.body).not.toHaveClass('notifications-panel-open');
+});
 
 it('summarizes audit values in the table and preserves full values in the detail drawer', async () => {
   vi.spyOn(api, 'get').mockResolvedValue({

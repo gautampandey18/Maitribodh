@@ -342,9 +342,20 @@ export default function GatePage() {
         <Box sx={{ display: 'flex', gap: 2 }}><Button variant="contained" startIcon={busy ? <CircularProgress size={18} /> : <LoginOutlinedIcon />} onClick={() => movement(true)} disabled={busy || !online || !['ELIGIBLE', 'LOCATION_WARNING'].includes(selected?.outcome) || !verified || !photoUrl || (selected?.locationWarning && !locationAcknowledged) || !selectedGate}>Check-In</Button><Button variant="outlined" startIcon={<LogoutOutlinedIcon />} onClick={() => movement(false)} disabled={busy || !online || !selected?.openVisitId || !selectedGate}>Check-Out</Button></Box>
         {items?.length === 0 && <Button sx={{ mt: 3 }} component={Link} to={`/register?from=gate&gate=${selectedGate}&area=${selectedArea}`} disabled={!online}>Register Visitor</Button>}
       </Box>
-      {selected && <Box className="gate-person-panel">
-        <Avatar src={photoUrl} sx={{ width: 100, height: 100, mb: 2 }}>{selected.name?.split(' ').map((part) => part[0]).join('').slice(0, 2)}</Avatar>
-        <Typography variant="h3">{selected.name}</Typography><Typography>{selected.category}</Typography><Typography>{selected.personCode}</Typography><Typography>{selected.mobileMasked}</Typography><Typography>{selected.status}</Typography><Typography>Additional people: {selected.accompanyingCount ?? 0}</Typography>
+      {selected && <Box component="section" className="gate-person-panel" aria-label="Selected person details">
+        <Box className="gate-person-header">
+          <Avatar src={photoUrl} className="gate-person-avatar">{selected.name?.split(' ').map((part) => part[0]).join('').slice(0, 2)}</Avatar>
+          <Box className="gate-person-summary">
+            <Typography variant="h3" className="gate-person-name">{selected.name}</Typography>
+            <Typography className="gate-person-category">{selected.category}</Typography>
+            <Typography className="gate-person-code">{selected.personCode}</Typography>
+          </Box>
+        </Box>
+        <Box className="gate-person-details">
+          <Box className="gate-person-detail"><Typography variant="caption">Mobile</Typography><Typography>{selected.mobileMasked || '—'}</Typography></Box>
+          <Box className="gate-person-detail"><Typography variant="caption">Status</Typography><Typography>{selected.status || '—'}</Typography></Box>
+          <Box className="gate-person-detail"><Typography variant="caption">Additional people</Typography><Typography>{selected.accompanyingCount ?? 0}</Typography></Box>
+        </Box>
         {photoLoading && <Typography role="status">Loading profile photo...</Typography>}
         {photoError && <Alert severity="error" sx={{ my: 1 }}>{photoError}{!photoMissing && <Button onClick={() => setPhotoRevision((value) => value + 1)} disabled={!online || photoLoading}>Retry profile photo</Button>}</Alert>}
         {(!selected.photoKey || photoMissing) && <Box sx={{ my: 1 }}>

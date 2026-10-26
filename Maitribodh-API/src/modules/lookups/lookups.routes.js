@@ -13,7 +13,6 @@ const lookupTypes = [
   'PROGRAM_BATCH',
   'ID_PROOF_TYPE',
   'BLACKLIST_REASON',
-  'PERMISSION_LEVEL',
 ];
 const createLookupSchema = z.object({
   name: z.string().trim().min(1).max(100),

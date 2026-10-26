@@ -22,7 +22,7 @@ Migration `0004_registration_workflows.sql` adds persisted category field schema
 
 Set a stable `DATA_ENCRYPTION_SECRET` for encrypted passport and ID-proof storage. If omitted, the configured QR HMAC secret is used as the input to a separate encryption-key derivation. Do not rotate that source secret without a data-key migration. Drafts intentionally omit passport and ID-proof numbers and file bytes; enter those again when resuming.
 
-Registration writes the profile, area assignments, approval history, audit and notification rows in one transaction. Failed writes remove newly uploaded files. Guards can register visitors only and cannot assign restricted areas or custom permission levels. Mobile changes advance QR versions to invalidate earlier signed codes. Duplicate person mobiles remain allowed, matching the attached mockup and existing fixtures.
+Registration writes the profile, area assignments, approval history, audit and notification rows in one transaction. Failed writes remove newly uploaded files. Guards can register visitors only and cannot assign areas at registration. Mobile changes advance QR versions to invalidate earlier signed codes. Duplicate person mobiles remain allowed, matching the attached mockup and existing fixtures.
 
 New read routes include person detail/activity, per-user notifications, and administrator audit browsing. Notification read updates always use the authenticated user ID. Audit records have no update/delete routes and the new database trigger rejects modifications.
 

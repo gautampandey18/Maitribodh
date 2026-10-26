@@ -9,7 +9,6 @@ export const NAVIGATION = [
   { path: '/reports', label: 'Reports & Analytics', group: 'Analytics', roles: ['SUPER_ADMIN', 'ADMIN', 'REG_OFFICER', 'APPROVER', 'VIEWER'] },
   { path: '/users', label: 'User Management', group: 'Administration', roles: ['SUPER_ADMIN', 'ADMIN'] },
   { path: '/master', label: 'Master Data', group: 'Administration', roles: ['SUPER_ADMIN', 'ADMIN'] },
-  { path: '/locations', label: 'Areas & Gates', group: 'Administration', roles: ['SUPER_ADMIN', 'ADMIN'] },
   { path: '/audit', label: 'Audit & Compliance', group: 'Administration', roles: ['SUPER_ADMIN', 'ADMIN'] },
 ];
 
@@ -19,6 +18,7 @@ export function landingPath(role) {
 
 export function canAccessPath(role, path) {
   if (path === '/password') return Boolean(role);
+  if (path === '/locations' || path.startsWith('/locations/')) return role === 'SUPER_ADMIN' || role === 'ADMIN';
   if (path === '/categories' || path.startsWith('/categories/')) {
     return role === 'SUPER_ADMIN' || role === 'ADMIN';
   }

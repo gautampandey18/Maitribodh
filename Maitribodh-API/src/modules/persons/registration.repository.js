@@ -3,13 +3,6 @@ import { CONSENT_NOTICE_VERSION, ID_PROOF_PATTERNS, REGISTRATION_LIMITS, schemaF
 import { validateCategoryDetails } from './registration.validation.js';
 
 export function createRegistrationRepository(pool) {
-  function withoutCategoryPermission(category) {
-    if (!category) return category;
-    const result = { ...category };
-    delete result.permission_level_id;
-    return result;
-  }
-
   async function transaction(operation) {
     const client = await pool.connect();
     try {
@@ -36,7 +29,7 @@ export function createRegistrationRepository(pool) {
       const locations = await pool.query("SELECT * FROM mams.location WHERE status = 'ACTIVE' ORDER BY name");
       return {
         categories: categories.rows.map((category) => ({
-          ...Object.fromEntries(Object.entries(category).filter(([key]) => !['is_broad', 'broad_category_id', 'permission_level_id'].includes(key))),
+          ...Object.fromEntries(Object.entries(category).filter(([key]) => !['is_broad', 'broad_category_id'].includes(key))),
           schema: schemaForCategory(category),
         })),
         lookups: lookups.rows,
@@ -44,7 +37,7 @@ export function createRegistrationRepository(pool) {
       };
     },
     async category(categoryId) {
-      return withoutCategoryPermission((await pool.query('SELECT * FROM mams.category WHERE category_id = $1', [categoryId])).rows[0]);
+      return (await pool.query('SELECT * FROM mams.category WHERE category_id = $1', [categoryId])).rows[0];
     },
     async get(personId) {
       const person = (await pool.query(`SELECT p.*, c.name AS category, c.form_type,
@@ -90,19 +83,17 @@ export function createRegistrationRepository(pool) {
           if (field.source === 'JOB_ROLE' && String(selected.rows[0].parent_id) !== String(input.categoryDetails.department_id)) throw new ApiError(400, 'VALIDATION_ERROR', 'Job Role must belong to the selected Department.');
           if (field.source === 'SUBCATEGORY' && selected.rows[0].category_id && Number(selected.rows[0].category_id) !== input.categoryId) throw new ApiError(400, 'VALIDATION_ERROR', 'Select a subcategory for this category');
         }
-        const permissionId = input.permissionLevelId;
-        if (permissionId && !(await client.query("SELECT lookup_id FROM mams.lookup_value WHERE lookup_id = $1 AND lookup_type = 'PERMISSION_LEVEL' AND status = 'ACTIVE'", [permissionId])).rowCount) throw new ApiError(400, 'VALIDATION_ERROR', 'Select an active permission level');
         const status = category.approval_required ? 'PENDING' : 'ACTIVE';
         const result = await client.query(`INSERT INTO mams.person
           (category_id, first_name, last_name, mobile, alternate_mobile, gender, resident_status, passport_number_enc, passport_last4, date_of_birth,
-           address, email, photo_key, emergency_contact_name, emergency_contact_mobile, permission_level_id, category_details, accompanying_count,
+           address, email, photo_key, emergency_contact_name, emergency_contact_mobile, category_details, accompanying_count,
            documents, remarks, status, source, qr_version, registered_by, consent_at, consent_notice_version, consent_captured_by, expires_on,
            id_proof_type_id, id_proof_number_enc, id_proof_last4)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::jsonb,$18,$19::jsonb,$20,$21,$22,$23,$24,now(),$25,$24,$26,$27,$28,$29)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb,$17,$18::jsonb,$19,$20,$21,$22,$23,now(),$24,$23,$25,$26,$27,$28)
           RETURNING person_id, person_code, status, qr_version`,
         [input.categoryId, input.firstName, input.lastName, input.mobile, input.alternateMobile || null, input.gender, input.residentStatus,
           passportEncrypted, input.residentStatus === 'NON_RESIDENT' ? input.passportNumber.slice(-4) : null, input.dateOfBirth || null,
-          input.address || null, input.email || null, photoKey, input.emergencyName || null, input.emergencyMobile || null, permissionId,
+          input.address || null, input.email || null, photoKey, input.emergencyName || null, input.emergencyMobile || null,
           JSON.stringify(input.categoryDetails), input.accompanyingCount, JSON.stringify(documents), input.remarks || null, status, input.source,
           status === 'ACTIVE' ? 1 : 0, actor.userId, CONSENT_NOTICE_VERSION, input.categoryDetails.end_date || null,
           input.idProofTypeId ?? null, idProofEncrypted ?? null, input.idProofNumber ? input.idProofNumber.slice(-4) : null]);
@@ -175,19 +166,18 @@ export function createRegistrationRepository(pool) {
     },
     async updateAccess({ personId, changes, actor }) {
       return transaction(async (client) => {
-        const current = (await client.query('SELECT p.permission_level_id, p.expires_on, c.form_type FROM mams.person p JOIN mams.category c USING(category_id) WHERE p.person_id = $1 FOR UPDATE OF p', [personId])).rows[0];
+        const current = (await client.query('SELECT p.expires_on, c.form_type FROM mams.person p JOIN mams.category c USING(category_id) WHERE p.person_id = $1 FOR UPDATE OF p', [personId])).rows[0];
         if (!current) throw new ApiError(404, 'PERSON_NOT_FOUND', 'Person not found');
         if (current.form_type === 'STAFF' && !['ADMIN', 'SUPER_ADMIN'].includes(actor.role)) throw new ApiError(403, 'FORBIDDEN', 'Only an administrator can edit Staff profiles');
-        if (changes.permissionLevelId && !(await client.query("SELECT lookup_id FROM mams.lookup_value WHERE lookup_id = $1 AND lookup_type = 'PERMISSION_LEVEL' AND status = 'ACTIVE'", [changes.permissionLevelId])).rowCount) throw new ApiError(400, 'VALIDATION_ERROR', 'Select an active permission level');
         const locationIds = [...new Set(changes.locationIds)];
         if (locationIds.length) {
           const areas = await client.query("SELECT location_id FROM mams.location WHERE location_id = ANY($1::integer[]) AND location_type = 'AREA' AND status = 'ACTIVE'", [locationIds]);
           if (areas.rowCount !== locationIds.length) throw new ApiError(400, 'VALIDATION_ERROR', 'Select active assigned areas');
         }
-        await client.query('UPDATE mams.person SET permission_level_id = $2, expires_on = $3, updated_by = $4, updated_at = now() WHERE person_id = $1', [personId, changes.permissionLevelId, changes.expiresOn || null, actor.userId]);
+        await client.query('UPDATE mams.person SET expires_on = $2, updated_by = $3, updated_at = now() WHERE person_id = $1', [personId, changes.expiresOn || null, actor.userId]);
         await client.query('DELETE FROM mams.person_location WHERE person_id = $1', [personId]);
         for (const locationId of locationIds) await client.query('INSERT INTO mams.person_location (person_id, location_id, assigned_by) VALUES ($1, $2, $3)', [personId, locationId, actor.userId]);
-        const updated = { permission_level_id: changes.permissionLevelId, location_ids: locationIds, expires_on: changes.expiresOn || null };
+        const updated = { location_ids: locationIds, expires_on: changes.expiresOn || null };
         await audit(client, actor, 'ACCESS_UPDATED', personId, current, updated);
         return updated;
       });
@@ -206,6 +196,7 @@ export function createRegistrationRepository(pool) {
     async saveDraft({ draftId, input, actor }) {
       return transaction(async (client) => {
         const data = { ...input, passportNumber: '', idProofNumber: '' };
+        delete data.permissionLevelId;
         const result = draftId
           ? await client.query("UPDATE mams.person SET draft_data = $1::jsonb, updated_at = now() WHERE person_id = $2 AND registered_by = $3 AND status = 'DRAFT' RETURNING person_id", [JSON.stringify(data), draftId, actor.userId])
           : await client.query("INSERT INTO mams.person (category_id, registered_by, status, draft_data) VALUES ($1, $2, 'DRAFT', $3::jsonb) RETURNING person_id", [input.categoryId, actor.userId, JSON.stringify(data)]);

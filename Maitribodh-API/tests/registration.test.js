@@ -45,6 +45,7 @@ test('category schemas reject duplicate keys and unknown master sources', () => 
   assert.equal(categoryFormSchema.safeParse({ fields: [field] }).success, true);
   assert.equal(categoryFormSchema.safeParse({ fields: [field, field] }).success, false);
   assert.equal(categoryFormSchema.safeParse({ fields: [{ ...field, type: 'select', source: 'UNKNOWN' }] }).success, false);
+  assert.equal(categoryFormSchema.safeParse({ fields: [{ ...field, type: 'select', source: 'PERMISSION_LEVEL' }] }).success, false);
 });
 
 test('only select category fields can have dropdown sources or options', () => {
@@ -58,7 +59,7 @@ test('ID-proof values need a selected proof type', () => {
   assert.throws(() => validateCategoryDetails({ ...input, idProofNumber: 'ABC' }, category, 'ADMIN'), /ID Proof Type/);
 });
 
-test('registration accepts null optional permission and ID-proof master IDs', () => {
-  const parsed = registrationInputSchema.safeParse({ ...input, permissionLevelId: null, idProofTypeId: null });
+test('registration accepts null optional ID-proof master IDs', () => {
+  const parsed = registrationInputSchema.safeParse({ ...input, idProofTypeId: null });
   assert.equal(parsed.success, true);
 });

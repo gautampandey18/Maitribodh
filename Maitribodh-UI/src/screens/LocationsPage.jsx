@@ -171,7 +171,6 @@ export default function LocationsPage() {
     <Box className="locations-page">
       <Box className="page-heading">
         <Box>
-          <Typography className="eyebrow">MASTER DATA</Typography>
           <Typography component="h1" variant="h1">Locations</Typography>
         </Box>
         <Button variant="contained" color="secondary" startIcon={<AddIcon />} onClick={openCreate}>

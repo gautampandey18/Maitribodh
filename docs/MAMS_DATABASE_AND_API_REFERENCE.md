@@ -200,7 +200,7 @@ person ---------< blacklist
 person ---------< visit >------------------ location
 ```
 
-`notification.entity_type/entity_id` and `audit_log.entity_type/entity_id` are generic references without database foreign keys. Semantic rules, such as a lookup being a permission level or a location being a gate, also require application validation; their foreign keys alone do not enforce those classifications.
+`notification.entity_type/entity_id` and `audit_log.entity_type/entity_id` are generic references without database foreign keys. Semantic rules, such as a lookup being a department or a location being a gate, also require application validation; their foreign keys alone do not enforce those classifications.
 
 ## 5. Detailed table dictionary
 
@@ -268,7 +268,7 @@ Purpose: shared master-data values, including parent/child classifications.
 | `created_at` | timestamptz | No | `now()` |
 | `updated_at` | timestamptz | No | `now()` |
 
-Allowed types: `DEPARTMENT`, `JOB_ROLE`, `SUBCATEGORY`, `PROGRAM_BATCH`, `ID_PROOF_TYPE`, `BLACKLIST_REASON`, `PERMISSION_LEVEL`.
+Allowed types: `DEPARTMENT`, `JOB_ROLE`, `SUBCATEGORY`, `PROGRAM_BATCH`, `ID_PROOF_TYPE`, `BLACKLIST_REASON`.
 
 Uniqueness: `(lookup_type, COALESCE(parent_id, 0), COALESCE(category_id, 0), lower(name))`.
 
@@ -285,7 +285,6 @@ Purpose: person classification, approval rules, and dynamic registration form co
 | `form_type` | varchar(20) | No | `GENERIC`; form enum below |
 | `approval_required` | boolean | Yes | `false`; null means rule unconfirmed |
 | `overstay_cutoff` | time | Yes | Category cutoff time |
-| `permission_level_id` | integer | Yes | FK -> `lookup_value.lookup_id` |
 | `is_broad` | boolean | No | `false`; broad-category flag |
 | `broad_category_id` | smallint | Yes | FK -> `category.category_id` |
 | `status` | varchar(10) | No | `ACTIVE`; `ACTIVE` / `INACTIVE` |
@@ -367,7 +366,6 @@ Purpose: registered people, personal information, category-specific details, dra
 | `id_proof_last4` | varchar(4) | Yes | Masking suffix |
 | `emergency_contact_name` | varchar(100) | Yes | Emergency contact |
 | `emergency_contact_mobile` | varchar(10) | Yes | Emergency mobile |
-| `permission_level_id` | integer | Yes | FK -> `lookup_value.lookup_id` |
 | `category_details` | jsonb | No | `{}`; dynamic form values |
 | `accompanying` | jsonb | No | `[]`; accompanying-person metadata |
 | `accompanying_count` | smallint | No | `0` |
@@ -575,7 +573,6 @@ These are insertion defaults; existing conflicting category rows are not compreh
 
 ### 6.2 Lookup values and locations
 
-- Permission level: `Access level to confirm` (a placeholder requiring an operational policy decision).
 - Departments: Gurukul, Goushala, Accounts, Housekeeping, Security.
 - ID proof types: Aadhaar Card, PAN Card, Driving Licence, Voter ID, Passport.
 - Blacklist reason: Repeated policy violation.
@@ -739,7 +736,7 @@ Source: [category routes](../Maitribodh-API/src/modules/categories/categories.ro
 | GET | `/api/v1/categories/:categoryId` | ADMIN | Category ID | `200`, category |
 | PATCH | `/api/v1/categories/:categoryId` | ADMIN | At least one supported field | `200`, updated category |
 
-Create fields: `name`, `icon`, `description`, `formType`, `approvalRequired`, `overstayCutoff`, `permissionLevelId`, `isBroad`, `broadCategoryId`.
+Create fields: `name`, `icon`, `description`, `formType`, `approvalRequired`, `overstayCutoff`, `isBroad`, `broadCategoryId`.
 
 PATCH additionally supports `status` and `formSchema`. `approvalRequired` accepts null; cutoff accepts `HH:MM`, `HH:MM:SS`, or null. `formSchema` is configured through PATCH, not the create route.
 
@@ -782,7 +779,7 @@ Sources: [person routes](../Maitribodh-API/src/modules/persons/persons.routes.js
 | GET | `/api/v1/persons/:personId` | MANAGEMENT | Person ID | `200`, person detail with category and location IDs |
 | GET | `/api/v1/persons/:personId/activity` | MANAGEMENT | Person ID | `200`, `{ "items": [...] }` |
 | PATCH | `/api/v1/persons/:personId` | MANAGEMENT | Profile fields described below | `200`, updated profile result |
-| PATCH | `/api/v1/persons/:personId/access` | MANAGEMENT | Required: `permissionLevelId` (ID or null), `locationIds`, `expiresOn` (date or empty string) | `200`, updated access result |
+| PATCH | `/api/v1/persons/:personId/access` | MANAGEMENT | Required: `locationIds`, `expiresOn` (date or empty string) | `200`, updated access result |
 | POST | `/api/v1/persons/:personId/status` | ADMIN | `status`: `ACTIVE` / `DEACTIVATED`; required `reason` (1-300 chars) | `200`, updated status |
 | POST | `/api/v1/persons/:personId/photo` | REGISTRATION | Multipart `photo` | `200`, `{ "photo_key": "..." }` |
 | GET | `/api/v1/persons/:personId/files/:key` | REGISTRATION | Person ID and associated file key | `200`, private file download |
@@ -810,7 +807,6 @@ Registration `metadata` is a JSON string containing:
 | `emergencyName` | Up to 100 characters |
 | `idProofTypeId` | Positive integer or null |
 | `idProofNumber` | Up to 50 characters; selected proof-type pattern checked when available |
-| `permissionLevelId` | Positive integer or null |
 | `locationIds` | Array of positive integers, at most 100 |
 | `accompanyingCount` | Integer from 0 to 32767, default 0 |
 | `categoryDetails` | JSON object with category-defined fields |
@@ -1119,7 +1115,7 @@ The final query checks TLS for that SQL session. Also verify the actual API conn
 - [ ] All seven migration entries are present with matching checksums.
 - [ ] Production secrets are securely injected; no credentials are in source control.
 - [ ] Initial Super Admin is created through an approved production bootstrap procedure.
-- [ ] Required operational master data is reviewed, including permission levels and program batches.
+- [ ] Required operational master data is reviewed, including departments, ID proof types, blacklist reasons, and program batches.
 - [ ] Registration, approval, QR, check-in, checkout, and reporting are smoke-tested.
 - [ ] Private photo/document storage is backed up and accessible to the API.
 - [ ] Existing-data migration preserves application data and migration history.

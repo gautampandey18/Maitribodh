@@ -16,7 +16,7 @@ import { requestMessage, useResource } from '../utils/resources.js';
 import InternationalPhoneField from '../components/InternationalPhoneField.jsx';
 import { formatPhoneNumber, toE164Phone } from '../utils/phone.js';
 
-const initialValues = { firstName: '', lastName: '', mobile: '', mobileCountry: 'IN', alternateMobile: '', residentStatus: 'RESIDENT', passportNumber: '', idProofTypeId: '', idProofNumber: '', gender: '', dateOfBirth: '', address: '', email: '', emergencyName: '', emergencyMobile: '', permissionLevelId: '', locationIds: [], accompanyingCount: 0, remarks: '', categoryDetails: {}, consent: false };
+const initialValues = { firstName: '', lastName: '', mobile: '', mobileCountry: 'IN', alternateMobile: '', residentStatus: 'RESIDENT', passportNumber: '', idProofTypeId: '', idProofNumber: '', gender: '', dateOfBirth: '', address: '', email: '', emergencyName: '', emergencyMobile: '', locationIds: [], accompanyingCount: 0, remarks: '', categoryDetails: {}, consent: false };
 const steps = ['Category', 'Profile', 'Access', 'Documents', 'Review'];
 const categoryIcons = {
   STAFF: WorkOutlineIcon,
@@ -25,6 +25,14 @@ const categoryIcons = {
   CONTRACTOR: BuildOutlinedIcon,
   PARTICIPANT: SchoolOutlinedIcon,
   PARIVAR: VolunteerActivismOutlinedIcon,
+};
+const categoryTileColors = {
+  STAFF: { accent: '#E17324', background: '#FFF6EF', border: '#F6D5BA' },
+  VISITOR: { accent: '#0E8C99', background: '#EDF8F9', border: '#C0E4E8' },
+  VENDOR: { accent: '#2E9E6B', background: '#F0FAF5', border: '#C3E7D4' },
+  CONTRACTOR: { accent: '#5B6B7A', background: '#F4F6F8', border: '#D6DDE3' },
+  PARTICIPANT: { accent: '#C98A0B', background: '#FFF9EA', border: '#F1DFAC' },
+  PARIVAR: { accent: '#D0293B', background: '#FFF2F3', border: '#F4C5CB' },
 };
 const commonFields = [
   { key: 'firstName', label: 'First Name', required: true, maxLength: 100, pattern: '[\\p{L}\\p{M} \\x2d]+' },
@@ -94,7 +102,7 @@ export default function RegisterPage() {
     setBusy(true);
     try {
       const form = new FormData();
-      form.append('metadata', JSON.stringify({ ...values, mobile, categoryId: Number(category.category_id), idProofTypeId: values.idProofTypeId ? Number(values.idProofTypeId) : null, permissionLevelId: values.permissionLevelId ? Number(values.permissionLevelId) : null, source: fromGate ? 'WALK_IN' : 'MANUAL' }));
+      form.append('metadata', JSON.stringify({ ...values, mobile, categoryId: Number(category.category_id), idProofTypeId: values.idProofTypeId ? Number(values.idProofTypeId) : null, source: fromGate ? 'WALK_IN' : 'MANUAL' }));
       if (photo) form.append('photo', photo);
       documents.forEach((file) => form.append('documents', file));
       const { data } = await api.post('/persons', form, { headers: { 'Content-Type': undefined } });
@@ -117,7 +125,8 @@ export default function RegisterPage() {
       {step === 0 && <>
         {categories.length ? <Box className="category-grid">{categories.map((item) => {
           const Icon = categoryIcons[item.form_type] ?? PersonOutlineIcon;
-          return <Button className="registration-category-card" key={item.category_id} variant={category?.category_id === item.category_id ? 'contained' : 'outlined'} aria-pressed={category?.category_id === item.category_id} onClick={() => chooseCategory(item)}><Icon aria-hidden="true" /><span className="registration-category-name">{item.name}</span><span className="registration-category-description">{item.description || 'Register a person for Ashram access.'}</span></Button>;
+          const colors = categoryTileColors[item.form_type] ?? categoryTileColors.STAFF;
+          return <Button className="registration-category-card" key={item.category_id} variant="outlined" aria-pressed={category?.category_id === item.category_id} onClick={() => chooseCategory(item)} style={{ '--registration-accent': colors.accent, '--registration-background': colors.background, '--registration-border': colors.border }}><Icon aria-hidden="true" /><span className="registration-category-name">{item.name}</span><span className="registration-category-description">{item.description || 'Register a person for Ashram access.'}</span></Button>;
         })}</Box> : <Alert severity="warning">The registration options API returned no active categories. Check that categories are active and that this app is connected to the intended database.</Alert>}
         {!fromGate && drafts?.items?.length > 0 && <Box sx={{ mt: 3 }}><Typography variant="h3">Saved Drafts</Typography>{drafts.items.map((draft) => <Button key={draft.person_id} onClick={() => resumeDraft(draft)}>{draft.draft_data.firstName || 'Draft'} {draft.draft_data.lastName} · {new Date(draft.updated_at).toLocaleDateString()}</Button>)}</Box>}
       </>}
@@ -182,13 +191,32 @@ export default function RegisterPage() {
         <TextField label="Emergency Contact Mobile" value={values.emergencyMobile} onChange={(event) => change('emergencyMobile', event.target.value)} required={schema.emergencyRequired} inputProps={{ pattern: '[6-9][0-9]{9}', maxLength: 10 }} />
       </Box>}
       {step === 2 && <Box className="form-grid">
-        <TextField label="Assigned Permission Level" select value={values.permissionLevelId} onChange={(event) => change('permissionLevelId', event.target.value)}><MenuItem value="">None</MenuItem>{selectedOptions('PERMISSION_LEVEL').map((item) => <MenuItem key={item.id} value={item.id}>{item.name}</MenuItem>)}</TextField>
         <TextField label="Assigned Areas" select SelectProps={{ multiple: true }} value={values.locationIds} onChange={(event) => change('locationIds', event.target.value)}>{selectedOptions('AREA').map((item) => <MenuItem key={item.id} value={Number(item.id)}>{item.name}</MenuItem>)}</TextField>
         <TextField label="Additional people accompanying" type="number" inputProps={{ min: 0, max: 32767, step: 1 }} value={values.accompanyingCount} onChange={(event) => change('accompanyingCount', event.target.value)} />
         <TextField label="Remarks" multiline value={values.remarks} onChange={(event) => change('remarks', event.target.value)} inputProps={{ maxLength: 500 }} />
       </Box>}
       {step === 3 && <Box><Typography component="label" htmlFor="registration-documents">Documents</Typography><input id="registration-documents" type="file" multiple accept="application/pdf,image/jpeg,image/png" onChange={(event) => pickFiles(event.target.files, false)} />{documents.map((file) => <Typography key={file.name}>{file.name}</Typography>)}</Box>}
-      {step === 4 && <Box><Typography variant="h3">{values.firstName} {values.lastName}</Typography><Typography>{category?.name} · {formatPhoneNumber(toE164Phone(values.mobile, category?.form_type === 'VISITOR' ? values.mobileCountry : 'IN')) || values.mobile}</Typography>{category?.form_type === 'VISITOR' && values.categoryDetails.driver_available && <Typography>Driver available: {values.categoryDetails.driver_available === 'YES' ? 'Yes' : 'No'}{values.categoryDetails.driver_available === 'YES' && [values.categoryDetails.driver_name, values.categoryDetails.driver_mobile].filter(Boolean).length > 0 ? ` · ${[values.categoryDetails.driver_name, values.categoryDetails.driver_mobile].filter(Boolean).join(' · ')}` : ''}</Typography>}<Typography>{photo?.name} · {documents.length} document(s)</Typography><FormControlLabel control={<Checkbox checked={values.consent} onChange={(event) => change('consent', event.target.checked)} />} label="I confirm consent to store this profile and photograph for access management." /></Box>}
+      {step === 4 && <Box component="section" className="registration-review" aria-label="Registration review">
+        <Box className="registration-review-header">
+          <Typography component="h2" variant="h3">{values.firstName} {values.lastName}</Typography>
+          <Typography className="registration-review-summary">{category?.name} <span aria-hidden="true">·</span> {formatPhoneNumber(toE164Phone(values.mobile, category?.form_type === 'VISITOR' ? values.mobileCountry : 'IN')) || values.mobile}</Typography>
+        </Box>
+        <Box className="registration-review-facts">
+          <Box className="registration-review-fact">
+            <Typography variant="caption">Photograph</Typography>
+            <Typography>{photo?.name ?? 'No photograph selected'}</Typography>
+          </Box>
+          <Box className="registration-review-fact">
+            <Typography variant="caption">Documents</Typography>
+            <Typography>{documents.length} document(s)</Typography>
+          </Box>
+          {category?.form_type === 'VISITOR' && values.categoryDetails.driver_available && <Box className="registration-review-fact registration-review-driver">
+            <Typography variant="caption">Driver</Typography>
+            <Typography>{values.categoryDetails.driver_available === 'YES' ? 'Available' : 'Not available'}{values.categoryDetails.driver_available === 'YES' && [values.categoryDetails.driver_name, values.categoryDetails.driver_mobile].filter(Boolean).length > 0 ? ` · ${[values.categoryDetails.driver_name, values.categoryDetails.driver_mobile].filter(Boolean).join(' · ')}` : ''}</Typography>
+          </Box>}
+        </Box>
+        <FormControlLabel className="registration-review-consent" control={<Checkbox checked={values.consent} onChange={(event) => change('consent', event.target.checked)} />} label="I confirm consent to store this profile and photograph for access management." />
+      </Box>}
       {category?.approval_required === null && <Alert severity="warning">Submission is paused until the approval rule is confirmed.</Alert>}
       {category && <Alert severity={category.approval_required ? 'warning' : 'success'} sx={{ mt: 3 }}>{category.approval_required ? `${category.name} registrations go to the Approval Center. Access and QR are enabled only after an Approver/Admin approves.` : `${category.name} registration is live immediately. QR is generated on submit, no approval needed.`}</Alert>}
       <Box className="wizard-actions"><Button onClick={() => setStep(Math.max(0, step - 1))} disabled={step === 0 || busy}>Back</Button>{!fromGate && <Button startIcon={<SaveOutlinedIcon />} onClick={saveDraft} disabled={!category || busy}>Save Draft</Button>}<Button type="submit" variant="contained" endIcon={busy ? <CircularProgress size={16} /> : <ArrowForwardOutlinedIcon />} disabled={!category || busy || category.approval_required === null}>{step === 4 ? 'Submit Registration' : 'Continue'}</Button></Box>

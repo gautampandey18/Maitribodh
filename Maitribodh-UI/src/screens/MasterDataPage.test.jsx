@@ -16,6 +16,7 @@ it('searches master values within the selected lookup type', async () => {
   const user = userEvent.setup();
   render(<MemoryRouter><MasterDataPage /></MemoryRouter>);
 
+  expect(screen.queryByRole('tab', { name: 'Permission Levels' })).not.toBeInTheDocument();
   await user.click(screen.getByRole('tab', { name: 'Departments' }));
   expect(screen.getByRole('button', { name: 'Add Departments' }).closest('form')).toHaveClass('master-data-filter-toolbar');
   expect(await screen.findByText('Operations')).toBeInTheDocument();
@@ -44,9 +45,7 @@ it('opens category management from the Master Data Categories tab', async () => 
   vi.spyOn(api, 'get').mockImplementation((path) => Promise.resolve({
     data: path === '/categories'
       ? { items: [{ category_id: 1, name: 'Visitor', form_type: 'VISITOR', approval_required: false, status: 'ACTIVE' }], total: 1 }
-      : path === '/lookups/PERMISSION_LEVEL'
-        ? { items: [] }
-        : { items: [], total: 0, page: 1, pageSize: 5 },
+      : { items: [], total: 0, page: 1, pageSize: 5 },
   }));
   render(<MemoryRouter><MasterDataPage /></MemoryRouter>);
 
@@ -54,6 +53,23 @@ it('opens category management from the Master Data Categories tab', async () => 
   expect(screen.queryByRole('heading', { name: 'Categories', exact: true })).not.toBeInTheDocument();
   expect(await screen.findByText('Visitor')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Add category' }).closest('form')).toBeInTheDocument();
+});
+
+it('shows gate and area management as a Master Data tab', async () => {
+  const get = vi.spyOn(api, 'get').mockImplementation((path) => Promise.resolve({
+    data: path === '/locations'
+      ? { items: [{ location_id: 1, name: 'Main Gate', location_type: 'GATE', is_restricted: false }], total: 1 }
+      : { items: [{ lookup_id: 4, name: 'Security' }] },
+  }));
+  const user = userEvent.setup();
+  render(<MemoryRouter initialEntries={['/master?tab=locations']}><MasterDataPage /></MemoryRouter>);
+
+  expect(await screen.findByRole('table', { name: 'Active locations' })).toBeInTheDocument();
+  expect(screen.getByText('Main Gate')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Add location' })).toBeInTheDocument();
+  expect(get).toHaveBeenCalledWith('/locations', expect.objectContaining({ params: expect.objectContaining({ page: 1, pageSize: 5 }) }));
+  await user.click(screen.getByRole('tab', { name: 'Areas & Gates' }));
+  expect(screen.getByRole('table', { name: 'Active locations' })).toBeInTheDocument();
 });
 
 it('deletes an unreferenced master lookup value after confirmation', async () => {

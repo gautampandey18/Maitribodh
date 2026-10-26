@@ -25,4 +25,10 @@ describe('screen permissions', () => {
     expect(canAccessPath('SUPER_ADMIN', '/categories')).toBe(true);
     expect(canAccessPath('REG_OFFICER', '/categories')).toBe(false);
   });
+  it('keeps Areas and Gates inside Master Data instead of the sidebar', () => {
+    expect(NAVIGATION.some((screen) => screen.path === '/locations')).toBe(false);
+    expect(canAccessPath('ADMIN', '/locations')).toBe(true);
+    expect(canAccessPath('SUPER_ADMIN', '/locations')).toBe(true);
+    expect(canAccessPath('REG_OFFICER', '/locations')).toBe(false);
+  });
 });

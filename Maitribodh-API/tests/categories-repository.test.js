@@ -16,18 +16,18 @@ test('category list applies name, form type, and status filters before paginatio
   assert.match(call.sql, /LIMIT \$4 OFFSET \$5/);
   assert.deepEqual(call.values, ['visitor', 'VISITOR', 'ACTIVE', 10, 10]);
 });
-test('category list omits the removed permission-level field', async () => {
+test('category list omits legacy category hierarchy fields', async () => {
   const repository = createCategoriesRepository({
     async query(sql) {
-      assert.doesNotMatch(sql, /permission_level|lookup_value/);
-      return { rows: [{ category_id: 1, name: 'Visitor', permission_level_id: 4, permission_level: 'Open', total: 1 }] };
+      assert.doesNotMatch(sql, /lookup_value/);
+      return { rows: [{ category_id: 1, name: 'Visitor', is_broad: false, broad_category_id: null, total: 1 }] };
     },
   });
 
   const categories = await repository.listCategories({ pageSize: 10, offset: 0 });
 
-  assert.equal('permission_level_id' in categories[0], false);
-  assert.equal('permission_level' in categories[0], false);
+  assert.equal('is_broad' in categories[0], false);
+  assert.equal('broad_category_id' in categories[0], false);
 });
 
 test('category creation persists approved fields and audit atomically', async () => {
@@ -78,7 +78,6 @@ test('category update uses whitelisted columns and audits old/new values atomica
     form_type: 'GENERIC',
     approval_required: false,
     overstay_cutoff: null,
-    permission_level_id: null,
     is_broad: false,
     broad_category_id: null,
   };
@@ -109,8 +108,6 @@ test('category update uses whitelisted columns and audits old/new values atomica
   });
 
   assert.equal(updated.name, 'Helper Updated');
-  assert.equal('permission_level_id' in updated, false);
-  assert.equal('permission_level' in updated, false);
   assert.equal(calls[0].sql, 'BEGIN');
   assert.match(calls[1].sql, /FOR UPDATE/);
   assert.match(calls[2].sql, /SET name = \$1, updated_at = now\(\)/);

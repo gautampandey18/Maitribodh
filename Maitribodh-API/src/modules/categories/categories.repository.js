@@ -12,8 +12,6 @@ export function createCategoriesRepository(pool) {
     const category = { ...row };
     delete category.is_broad;
     delete category.broad_category_id;
-    delete category.permission_level_id;
-    delete category.permission_level;
     return category;
   }
 

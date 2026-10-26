@@ -45,6 +45,7 @@ it('loads live summary metrics and the inside list', async () => {
   );
 
   expect(await screen.findByText('Active Members')).toBeInTheDocument();
+  expect(screen.getByText(/Last sync:.*Live monitoring/)).toBeInTheDocument();
   expect(screen.getByText('1 inside')).toBeInTheDocument();
   expect(screen.getByText('Asha Patel')).toBeInTheDocument();
   expect(screen.getByText('Main Gate')).toBeInTheDocument();
@@ -55,6 +56,9 @@ it('loads live summary metrics and the inside list', async () => {
   expect(screen.getByRole('img', { name: 'Active person category mix' })).toBeInTheDocument();
   expect(screen.getByText('Occupancy by Location')).toBeInTheDocument();
   expect(screen.getByText('Occupancy by Category')).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Occupancy Breakdown' })).toBeInTheDocument();
+  expect(screen.getByRole('table', { name: 'People currently inside' }).closest('.dashboard-inside'))
+    .not.toContainElement(screen.getByText('Occupancy by Location'));
   expect(screen.getByText('CHECK IN')).toBeInTheDocument();
   expect(screen.getByText('Ravi Pending')).toBeInTheDocument();
   expect(screen.getByText('No blacklist attempts today')).toBeInTheDocument();

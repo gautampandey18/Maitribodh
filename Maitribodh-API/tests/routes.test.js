@@ -166,6 +166,7 @@ test('admin list routes validate and forward user, master, category, and locatio
   await request(app).get('/api/v1/users?query=alex&role=ADMIN&status=ACTIVE&page=2&pageSize=10').expect(200);
   await request(app).get('/api/v1/categories?query=visitor&formType=VISITOR&status=ACTIVE').expect(200);
   await request(app).get('/api/v1/lookups/DEPARTMENT?query=operations&includeInactive=true&page=1&pageSize=5').expect(200);
+  await request(app).get('/api/v1/lookups/PERMISSION_LEVEL').expect(400);
   await request(app).get('/api/v1/locations?query=north&locationType=GATE&page=1&pageSize=5').expect(200);
 
   assert.deepEqual(requests[0], ['users', { query: 'alex', role: 'ADMIN', status: 'ACTIVE', page: 2, pageSize: 10, offset: 10 }]);
