@@ -147,7 +147,6 @@ export default function ReportsPage() {
     <Box className="reports-page">
       <Box className="page-heading">
         <Box>
-          <Typography className="eyebrow">OPERATIONS</Typography>
           <Typography component="h1" variant="h1">Reports &amp; Analytics</Typography>
           <Typography color="text.secondary" sx={{ mt: 0.75 }}>Review operational records with optional filters.</Typography>
         </Box>

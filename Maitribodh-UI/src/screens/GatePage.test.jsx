@@ -63,6 +63,10 @@ it('requires lookup and photo confirmation before check-in', async () => {
   await user.type(screen.getByRole('textbox', { name: 'Mobile number, name or Person ID' }), 'MB-000008');
   await user.click(screen.getByRole('button', { name: 'Find Person' }));
   expect(await screen.findByText('PROFILE FOUND')).toBeInTheDocument();
+  const personCard = screen.getByRole('region', { name: 'Selected person details' });
+  expect(personCard).toHaveClass('gate-person-panel');
+  expect(personCard).toHaveTextContent('Asha Patel');
+  expect(personCard).toHaveTextContent('MB-000008');
   expect(post).toHaveBeenCalledWith('/gate/lookups', { query: 'MB-000008', locationId: 2 });
   expect(screen.getByRole('button', { name: 'Check-In' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Check-Out' })).toBeDisabled();

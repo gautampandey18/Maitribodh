@@ -188,7 +188,6 @@ export default function BlacklistPage() {
     <Box className="blacklist-page">
       <Box className="page-heading">
         <Box>
-          <Typography className="eyebrow">ACCESS CONTROL</Typography>
           <Typography component="h1" variant="h1">Blacklist Management</Typography>
         </Box>
         <Button variant="contained" color="error" startIcon={<AddIcon />} onClick={openAdd}>

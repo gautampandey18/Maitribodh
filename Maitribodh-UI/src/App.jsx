@@ -40,7 +40,6 @@ import PasswordPage from './screens/PasswordPage.jsx';
 import UsersPage from './screens/UsersPage.jsx';
 import PersonsPage from './screens/PersonsPage.jsx';
 import PublicQrPage from './screens/PublicQrPage.jsx';
-import LocationsPage from './screens/LocationsPage.jsx';
 import BlacklistPage from './screens/BlacklistPage.jsx';
 import ReportsPage from './screens/ReportsPage.jsx';
 import RegisterPage from './screens/RegisterPage.jsx';
@@ -63,7 +62,7 @@ export default function App() {
         <Route element={<AppShell />}>
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/categories" element={<AdminOnly><Navigate to="/master?tab=categories" replace /></AdminOnly>} />
-          <Route path="/locations" element={<AdminOnly><LocationsPage /></AdminOnly>} />
+          <Route path="/locations" element={<AdminOnly><Navigate to="/master?tab=locations" replace /></AdminOnly>} />
           <Route path="/blacklist" element={<AdminOnly><BlacklistPage /></AdminOnly>} />
           <Route path="/reports" element={<ReportAccess><ReportsPage /></ReportAccess>} />
           <Route path="/users" element={<AdminOnly><UsersPage /></AdminOnly>} />
@@ -139,7 +138,7 @@ function AppShell() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const visibleNavigation = NAVIGATION.filter((item) => canAccessPath(auth.user?.role, item.path));
   const userRole = auth.user?.role?.replaceAll('_', ' ') ?? 'Unknown';
-  const icons = { '/dashboard': <DashboardOutlinedIcon />, '/persons': <SearchOutlinedIcon />, '/register': <PeopleAltOutlinedIcon />, '/approvals': <FactCheckOutlinedIcon />, '/qr': <KeyOutlinedIcon />, '/gate': <PlaceOutlinedIcon />, '/blacklist': <GppBadOutlinedIcon />, '/reports': <AssessmentOutlinedIcon />, '/users': <PeopleAltOutlinedIcon />, '/master': <TuneOutlinedIcon />, '/locations': <PlaceOutlinedIcon />, '/audit': <FactCheckOutlinedIcon /> };
+  const icons = { '/dashboard': <DashboardOutlinedIcon />, '/persons': <SearchOutlinedIcon />, '/register': <PeopleAltOutlinedIcon />, '/approvals': <FactCheckOutlinedIcon />, '/qr': <KeyOutlinedIcon />, '/gate': <PlaceOutlinedIcon />, '/blacklist': <GppBadOutlinedIcon />, '/reports': <AssessmentOutlinedIcon />, '/users': <PeopleAltOutlinedIcon />, '/master': <TuneOutlinedIcon />, '/audit': <FactCheckOutlinedIcon /> };
   const navigationWidth = sidebarCollapsed ? collapsedDrawerWidth : drawerWidth;
 
   async function handleLogout() {
@@ -182,10 +181,13 @@ function AppShell() {
               <MenuIcon />
             </IconButton>
           )}
-          <Typography sx={{ display: { xs: 'block', sm: 'none' }, fontWeight: 700 }}>MAMS</Typography>
-          <Box className="top-context" sx={{ display: { xs: 'none', sm: 'block' } }}>
-            <Typography variant="overline">MAITRIBODH ASHRAM</Typography>
-            <Typography variant="body2">Access operations</Typography>
+          <Box className="top-brand-lockup">
+            <Box component="img" className="top-brand-logo" src="/maitriboddlogo.png" alt="MaitriBodh logo" />
+            <Typography className="top-brand-mobile" sx={{ display: { xs: 'block', sm: 'none' } }}>MAMS</Typography>
+            <Box className="top-context" sx={{ display: { xs: 'none', sm: 'flex' } }}>
+              <Typography variant="overline">MAITRIBODH ASHRAM</Typography>
+              <Typography variant="body2">Access operations</Typography>
+            </Box>
           </Box>
           <Box className="top-actions">
             <NotificationsBell />
@@ -223,7 +225,7 @@ function AppShell() {
       </Box>
       <Box component="main" className="main-content" sx={{ ml: { md: `${navigationWidth}px` } }}>
         <Toolbar />
-        <Box className="page-container"><Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>Home / {NAVIGATION.find((item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`))?.label ?? 'Change Password'}</Typography><Outlet /></Box>
+        <Box className="page-container"><Outlet /></Box>
       </Box>
     </Box>
   );

@@ -135,9 +135,9 @@ export default function DashboardPage() {
   return (
     <Box className="dashboard-page">
       <Box className="page-heading">
-        <Box>
+        <Box className="dashboard-heading-content">
           <Typography component="h1" variant="h1">Dashboard</Typography>
-          <Typography color="text.secondary" sx={{ mt: 0.75 }}>Last sync: {lastSyncedAt ? `${Math.max(0, Math.floor((Date.now() - lastSyncedAt) / 1000))}s ago` : '—'} · Live monitoring</Typography>
+          <Typography color="text.secondary">Last sync: {lastSyncedAt ? `${Math.max(0, Math.floor((Date.now() - lastSyncedAt) / 1000))}s ago` : '—'} · Live monitoring</Typography>
         </Box>
       </Box>
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
@@ -231,6 +231,11 @@ export default function DashboardPage() {
               onPageChange={(_event, nextPage) => loadInside(nextPage, insideRowsPerPage).catch(() => setError('Occupancy data could not be loaded.'))}
               onRowsPerPageChange={(event) => loadInside(0, Number(event.target.value)).catch(() => setError('Occupancy data could not be loaded.'))}
             />
+          </Paper>
+          <Paper className="table-panel dashboard-occupancy-breakdown-panel" elevation={0}>
+            <Box className="table-panel-heading">
+              <Typography variant="h3">Occupancy Breakdown</Typography>
+            </Box>
             <Box className="dashboard-occupancy-breakdown">
               <Box>
                 <Typography className="dashboard-breakdown-title">Occupancy by Location</Typography>

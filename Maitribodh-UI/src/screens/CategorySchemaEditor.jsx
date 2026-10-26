@@ -7,7 +7,7 @@ import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import { api } from '../api.js';
 import { requestMessage } from '../utils/resources.js';
 
-const sources = ['DEPARTMENT', 'JOB_ROLE', 'SUBCATEGORY', 'PROGRAM_BATCH', 'ID_PROOF_TYPE', 'BLACKLIST_REASON', 'PERMISSION_LEVEL', 'AREA'];
+const sources = ['DEPARTMENT', 'JOB_ROLE', 'SUBCATEGORY', 'PROGRAM_BATCH', 'ID_PROOF_TYPE', 'BLACKLIST_REASON', 'AREA'];
 export default function CategorySchemaEditor({ category, onSaved }) {
   const [schema, setSchema] = useState(null);
   const [error, setError] = useState('');

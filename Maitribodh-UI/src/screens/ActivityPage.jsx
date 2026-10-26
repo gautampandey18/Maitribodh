@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Alert, Badge, Box, Button, Drawer, IconButton, List, ListItem, ListItemText, MenuItem, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow, TextField, Tooltip, Typography } from '@mui/material';
+import { useEffect, useRef, useState } from 'react';
+import { Alert, Badge, Box, Button, Drawer, IconButton, List, ListItem, MenuItem, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow, TextField, Tooltip, Typography } from '@mui/material';
 import NotificationsOutlinedIcon from '@mui/icons-material/NotificationsOutlined';
 import CloseOutlinedIcon from '@mui/icons-material/CloseOutlined';
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
@@ -40,15 +40,82 @@ export function NotificationsBell() {
   const [open, setOpen] = useState(false);
   const [failure, setFailure] = useState('');
   const [busy, setBusy] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+  const [panelRight, setPanelRight] = useState(12);
+  const triggerRef = useRef(null);
+  useEffect(() => {
+    document.body.classList.toggle('notifications-panel-open', open);
+    return () => document.body.classList.remove('notifications-panel-open');
+  }, [open]);
+  useEffect(() => {
+    if (!open) return undefined;
+    function alignPanel() {
+      const bounds = triggerRef.current?.getBoundingClientRect();
+      if (!bounds) return;
+      const panelWidth = Math.min(420, window.innerWidth - 24);
+      const panelRightEdge = Math.max(panelWidth + 12, Math.min(window.innerWidth - 12, bounds.left + bounds.width / 2 + 76));
+      setPanelRight(Math.max(12, window.innerWidth - panelRightEdge));
+    }
+    alignPanel();
+    window.addEventListener('resize', alignPanel);
+    return () => window.removeEventListener('resize', alignPanel);
+  }, [open]);
   async function readAll() {
     setBusy(true); setFailure('');
     try { await api.post('/notifications/read'); reload(); }
     catch (requestError) { setFailure(requestMessage(requestError)); }
     finally { setBusy(false); }
   }
+  function togglePanel() {
+    if (open) setOpen(false);
+    else { setShowAll(false); setOpen(true); reload(); }
+  }
+  const notifications = showAll ? data?.items ?? [] : (data?.items ?? []).slice(0, 7);
   return <>
-    <Tooltip title="Notifications"><IconButton aria-label="Open notifications" onClick={() => { setOpen(true); reload(); }}><Badge badgeContent={data?.unreadCount ?? 0} color="error"><NotificationsOutlinedIcon /></Badge></IconButton></Tooltip>
-    <Drawer anchor="right" open={open} onClose={() => setOpen(false)}><Box sx={{ width: 'min(420px, 100vw)', p: 3 }}><IconButton aria-label="Close notifications" onClick={() => setOpen(false)} sx={{ float: 'right' }}><CloseOutlinedIcon /></IconButton><Typography variant="h2">Notifications</Typography>{(failure || error) && <Alert severity="error">{failure || error}</Alert>}<Button onClick={readAll} disabled={busy || !data?.unreadCount}>Mark all as read</Button><List>{data?.items?.map((item) => <ListItem key={item.notification_id} divider><ListItemText primary={`${item.title}${item.is_read ? '' : ' · New'}`} secondary={<>{item.body}<br />{new Date(item.created_at).toLocaleString()}</>} /></ListItem>)}</List>{data?.items?.length === 0 && <Typography>No notifications.</Typography>}</Box></Drawer>
+    <Tooltip title={open ? 'Close notifications' : 'Notifications'}>
+      <IconButton ref={triggerRef} className="notifications-trigger" aria-label={open ? 'Close notifications' : 'Open notifications'} aria-expanded={open} aria-controls="notification-panel" onClick={togglePanel}>
+        <Badge badgeContent={data?.unreadCount ?? 0} color="error"><NotificationsOutlinedIcon /></Badge>
+      </IconButton>
+    </Tooltip>
+    <Drawer
+      anchor="top"
+      className="notification-drawer"
+      open={open}
+      onClose={() => setOpen(false)}
+      transitionDuration={{ enter: 280, exit: 220 }}
+      ModalProps={{ keepMounted: true }}
+      slotProps={{ paper: { 'aria-labelledby': 'notification-panel-title' } }}
+    >
+      <Box id="notification-panel" className="notification-panel" style={{ '--notification-panel-right': `${panelRight}px` }}>
+        <Box className="notification-panel-header">
+          <Box>
+            <Typography id="notification-panel-title" variant="h2">Notification</Typography>
+            <Typography className="notification-unread-count">{data?.unreadCount ?? 0} unread</Typography>
+          </Box>
+          <Box className="notification-panel-actions">
+            <Button size="small" onClick={readAll} disabled={busy || !data?.unreadCount}>Mark all as read</Button>
+            <IconButton aria-label="Dismiss notifications" onClick={() => setOpen(false)}><CloseOutlinedIcon /></IconButton>
+          </Box>
+        </Box>
+        {(failure || error) && <Alert severity="error" sx={{ mb: 2 }}>{failure || error}</Alert>}
+        <List className="notification-list" disablePadding>
+          {notifications.map((item) => (
+            <ListItem className={`notification-item${item.is_read ? '' : ' unread'}`} key={item.notification_id} divider>
+              <Box className="notification-item-copy">
+                <Typography className="notification-item-title">{item.title}</Typography>
+                <Typography className="notification-item-body">{item.body}</Typography>
+                <Typography className="notification-item-time">{new Date(item.created_at).toLocaleString()}</Typography>
+              </Box>
+              {!item.is_read && <Box className="notification-unread-dot" aria-label="Unread" />}
+            </ListItem>
+          ))}
+        </List>
+        {data?.items?.length === 0 && <Typography className="notification-empty">No notifications.</Typography>}
+        {(data?.items?.length ?? 0) > 0 && <Box className="notification-panel-footer">
+          <Button onClick={() => setShowAll((current) => !current)}>{showAll ? 'Show recent notifications' : 'View all notifications'} <span aria-hidden="true">»</span></Button>
+        </Box>}
+      </Box>
+    </Drawer>
   </>;
 }
 

@@ -159,7 +159,6 @@ export default function PersonsPage() {
     <Box className="persons-page">
       <Box className="page-heading">
         <Box>
-          <Typography className="eyebrow">REGISTRATION</Typography>
           <Typography component="h1" variant="h1">Person Management</Typography>
         </Box>
         <Button component={Link} to="/register" variant="contained">Register Person</Button>

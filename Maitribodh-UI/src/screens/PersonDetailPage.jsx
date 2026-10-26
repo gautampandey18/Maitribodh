@@ -3,42 +3,32 @@ import { useSelector } from 'react-redux';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   Alert, Avatar, Box, Button, Checkbox, CircularProgress, Dialog, DialogActions,
-  DialogContent, DialogTitle, FormControl, InputLabel, MenuItem, Select, TextField, Typography,
+  DialogContent, DialogTitle, FormControl, IconButton, InputLabel, MenuItem, Select, TextField, Tooltip, Typography,
 } from '@mui/material';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
 import UploadOutlinedIcon from '@mui/icons-material/UploadOutlined';
-import QrCode2OutlinedIcon from '@mui/icons-material/QrCode2Outlined';
 import { api } from '../api.js';
 import { downloadBlob, requestMessage, useResource } from '../utils/resources.js';
 import InternationalPhoneField from '../components/InternationalPhoneField.jsx';
 import { formatPhoneNumber, splitPhoneNumber, toE164Phone } from '../utils/phone.js';
 
-/* ── QR preview (reused by QR section) ─────────────────────────────── */
-export function QrPreview({ personId, personCode, mini = false }) {
+/* ── Identity-card QR preview ───────────────────────────────────────── */
+export function QrPreview({ personId, personCode, onQrBlob }) {
   const [image, setImage] = useState('');
-  const [blob, setBlob] = useState(null);
   const [error, setError] = useState('');
   useEffect(() => {
     let active = true; let url;
     api.get(`/persons/${personId}/qr`, { responseType: 'blob' })
-      .then(({ data }) => { if (active) { url = URL.createObjectURL(data); setImage(url); setBlob(data); } })
+      .then(({ data }) => { if (active) { url = URL.createObjectURL(data); setImage(url); onQrBlob?.(data); } })
       .catch((f) => { if (active) setError(requestMessage(f, 'QR is not available for this person.')); });
     return () => { active = false; if (url) URL.revokeObjectURL(url); };
-  }, [personId]);
+  }, [personId, onQrBlob]);
   if (error) return <Alert severity="warning">{error}</Alert>;
   if (!image) return <CircularProgress size={20} />;
-  if (mini) return <Box component="img" src={image} alt={`QR for ${personCode}`} sx={{ width: 72, height: 72, objectFit: 'contain', borderRadius: 1 }} />;
   return (
-    <Box>
-      <Box component="img" src={image} alt={`QR code for ${personCode}`} sx={{ width: 200, height: 200, maxWidth: '100%', objectFit: 'contain', display: 'block', mb: 1 }} />
-      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-        <Button size="small" startIcon={<DownloadOutlinedIcon />} onClick={() => downloadBlob(blob, `Maitribodh-QR-${personCode}.png`)}>Download</Button>
-        <Button size="small" onClick={() => { const w = window.open('', '_blank'); if (w) { const img = w.document.createElement('img'); img.src = image; img.onload = () => w.print(); w.document.body.append(img); } }}>Print</Button>
-      </Box>
-      <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-        Version 1 · Expiry: Never · Scannable QR · encodes the registered mobile number.
-      </Typography>
+    <Box className="idc-qr-content">
+      <Box component="img" src={image} alt={`QR code for ${personCode}`} className="idc-qr-image" />
     </Box>
   );
 }
@@ -88,35 +78,40 @@ function usePersonPhoto(personId, photoKey) {
   return src;
 }
 
-function IdentityCard({ person, role, onEdit, onViewQr, onToggleStatus }) {
+function IdentityCard({ person, role, onToggleStatus }) {
   const initials = `${person.first_name?.[0] ?? ''}${person.last_name?.[0] ?? ''}`.toUpperCase();
   const photoSrc = usePersonPhoto(person.person_id, person.photo_key);
+  const [qrBlob, setQrBlob] = useState(null);
   const st = person.status;
   return (
     <Box component="aside" className="idc-card" aria-label="Identity card">
-      {/* Band */}
       <Box className="idc-band">
         <span className="idc-org">MAITRIBODH ASHRAM</span>
         <span className="idc-kind">IDENTITY CARD</span>
       </Box>
       {/* Top */}
       <Box className="idc-top">
-        {photoSrc
-          ? <Box component="img" src={photoSrc} alt={person.first_name} className="idc-photo" />
-          : <Avatar className="idc-photo" aria-hidden="true">{initials}</Avatar>}
-        <Typography className="idc-name">{person.first_name} {person.last_name}</Typography>
-        <Typography className="idc-role">{person.email ?? '—'}</Typography>
-        <Box className="idc-id">{person.person_code}</Box>
-        <Box className="idc-badges">
-          <Box component="span" sx={{ fontSize: '0.72rem', fontWeight: 700, px: 1, py: 0.25, borderRadius: '999px', background: 'var(--th-soft)', color: 'var(--th-primary)' }}>{person.category}</Box>
-          <Box component="span" sx={{ fontSize: '0.72rem', px: 1, py: 0.25, borderRadius: '999px', ...statusSx(st) }}>{statusLabel(st)}</Box>
+        <Box className="idc-profile">
+          {photoSrc
+            ? <Box component="img" src={photoSrc} alt={person.first_name} className="idc-photo" />
+            : <Avatar className="idc-photo" aria-hidden="true">{initials}</Avatar>}
+          <Box className="idc-profile-info">
+            <Typography className="idc-name">{person.first_name} {person.last_name}</Typography>
+            <Box className="idc-id">{person.person_code}</Box>
+            <Box className="idc-badges">
+              <Box component="span" sx={{ fontSize: '0.72rem', fontWeight: 700, px: 1, py: 0.25, borderRadius: '999px', background: 'var(--th-soft)', color: 'var(--th-primary)' }}>{person.category}</Box>
+              <Box component="span" sx={{ fontSize: '0.72rem', px: 1, py: 0.25, borderRadius: '999px', ...statusSx(st) }}>{statusLabel(st)}</Box>
+            </Box>
+          </Box>
+        </Box>
+        <Box className="idc-qr-panel">
+          <QrPreview personId={person.person_id} personCode={person.person_code} onQrBlob={setQrBlob} />
         </Box>
       </Box>
       {/* Rows */}
       <Box className="idc-rows">
         {[
           ['Mobile', formatPhoneNumber(person.mobile)],
-          ['Alternate mobile', person.alternate_mobile],
           ['Email', person.email],
           ['Address', person.address],
           ['Emergency contact', [person.emergency_contact_name, person.emergency_contact_mobile].filter(Boolean).join(' · ')],
@@ -127,20 +122,19 @@ function IdentityCard({ person, role, onEdit, onViewQr, onToggleStatus }) {
           </Box>
         ))}
       </Box>
-      {/* QR foot */}
-      <Box className="idc-foot">
-        <Box className="idc-foot-qr"><QrPreview personId={person.person_id} personCode={person.person_code} mini /></Box>
-        <Box>
-          <Typography className="idc-foot-t1">QR active · v{person.qr_version ?? 1}</Typography>
-          <Typography className="idc-foot-t2">Scan at any authorised gate</Typography>
-        </Box>
-      </Box>
-      {/* Actions */}
       <Box className="idc-actions">
-        <Button variant="contained" size="small" startIcon={<EditOutlinedIcon />} onClick={onEdit} sx={{ flex: 1 }}>Edit profile</Button>
-        <Button variant="outlined" size="small" startIcon={<QrCode2OutlinedIcon />} onClick={onViewQr} sx={{ flex: 1 }}>View QR</Button>
+        <Box className="idc-qr-meta">
+          <Tooltip title="Download QR code">
+            <span>
+              <IconButton aria-label="Download QR code" onClick={() => downloadBlob(qrBlob, `Maitribodh-QR-${person.person_code}.png`)} size="small" disabled={!qrBlob}>
+                <DownloadOutlinedIcon />
+              </IconButton>
+            </span>
+          </Tooltip>
+          <Typography className="idc-qr-version">v{person.qr_version ?? 1}</Typography>
+        </Box>
         {['ADMIN', 'SUPER_ADMIN'].includes(role) && (
-          <Button size="small" color="inherit" onClick={onToggleStatus} sx={{ width: '100%', mt: 0.5, color: 'text.secondary', fontSize: '0.75rem' }}>
+          <Button size="small" color="inherit" onClick={onToggleStatus} sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>
             {st === 'DEACTIVATED' ? 'Reactivate' : 'Deactivate'}
           </Button>
         )}
@@ -171,7 +165,6 @@ export default function PersonDetailPage() {
   const [audit, setAudit] = useState(null);
   const [statusTarget, setStatusTarget] = useState('');
   const [reason, setReason] = useState('');
-  const [qrDialogOpen, setQrDialogOpen] = useState(false);
 
   const changePhoneCountry = useCallback((country) => {
     setEdit((prev) => prev ? { ...prev, country } : prev);
@@ -231,7 +224,7 @@ export default function PersonDetailPage() {
   async function saveAccess(event) {
     event.preventDefault(); setBusy(true); setFailure('');
     try {
-      await api.patch(`/persons/${personId}/access`, { ...accessDraft, permissionLevelId: accessDraft.permissionLevelId ? Number(accessDraft.permissionLevelId) : null });
+      await api.patch(`/persons/${personId}/access`, accessDraft);
       setAccessEdit(false); reload();
     } catch (e) { setFailure(requestMessage(e)); } finally { setBusy(false); }
   }
@@ -247,7 +240,6 @@ export default function PersonDetailPage() {
 
   /* derived */
   const category = accessOptions?.categories.find((c) => c.name === person?.category);
-  const permissionLevels = accessOptions?.lookups.filter((l) => l.lookup_type === 'PERMISSION_LEVEL') ?? [];
   const areas = accessOptions?.locations.filter((l) => l.location_type === 'AREA') ?? [];
   const locationNames = new Map(areas.map((a) => [String(a.location_id), a.name]));
   const categoryFieldNames = new Map((category?.schema?.fields ?? []).map((f) => [f.key, f.label]));
@@ -295,8 +287,6 @@ export default function PersonDetailPage() {
           <IdentityCard
             person={person}
             role={role}
-            onEdit={beginEdit}
-            onViewQr={() => setQrDialogOpen(true)}
             onToggleStatus={() => setStatusTarget(person.status === 'DEACTIVATED' ? 'ACTIVE' : 'DEACTIVATED')}
           />
 
@@ -308,13 +298,7 @@ export default function PersonDetailPage() {
               id="overview" wide
               title="Profile details"
               editing={Boolean(edit)}
-              action={canEdit && (edit
-                ? <Box sx={{ display: 'flex', gap: 1 }}>
-                    <Button size="small" onClick={() => { setEdit(null); setProfilePhoto(null); }} disabled={busy}>Cancel</Button>
-                    <Button size="small" variant="contained" type="submit" form="profile-edit-form" disabled={busy}>Save</Button>
-                  </Box>
-                : <Button size="small" startIcon={<EditOutlinedIcon />} onClick={beginEdit}>Edit profile</Button>
-              )}
+              action={canEdit && !edit && <Button size="small" startIcon={<EditOutlinedIcon />} onClick={beginEdit}>Edit profile</Button>}
             >
               {edit ? (
                 <Box id="profile-edit-form" component="form" onSubmit={save} className="form-grid person-overview-grid">
@@ -327,6 +311,10 @@ export default function PersonDetailPage() {
                     <Typography component="label" htmlFor="profile-photo-edit">Profile photo (optional)</Typography>
                     <input id="profile-photo-edit" type="file" accept="image/jpeg,image/png" capture="environment" onChange={(e) => { const f = e.target.files?.[0] ?? null; if (f && (f.size > 5 * 1024 * 1024 || !['image/jpeg', 'image/png'].includes(f.type))) { setFailure('Choose a JPG or PNG photograph no larger than 5 MB.'); setProfilePhoto(null); e.target.value = ''; return; } setFailure(''); setProfilePhoto(f); }} />
                     <Typography variant="caption">{profilePhoto?.name ?? (person.photo_key ? 'Leave empty to keep the current photo.' : 'Leave empty; Security will capture a photo at first check-in.')}</Typography>
+                  </Box>
+                  <Box className="person-form-actions">
+                    <Button size="small" onClick={() => { setEdit(null); setProfilePhoto(null); }} disabled={busy}>Cancel</Button>
+                    <Button size="small" variant="contained" type="submit" disabled={busy}>Save</Button>
                   </Box>
                 </Box>
               ) : (
@@ -341,20 +329,10 @@ export default function PersonDetailPage() {
               id="access" wide
               title="Access details"
               editing={accessEdit}
-              action={canEdit && (accessEdit
-                ? <Box sx={{ display: 'flex', gap: 1 }}>
-                    <Button size="small" onClick={() => setAccessEdit(false)} disabled={busy}>Cancel</Button>
-                    <Button size="small" variant="contained" type="submit" form="person-access-form" disabled={busy}>Save</Button>
-                  </Box>
-                : <Button size="small" startIcon={<EditOutlinedIcon />} onClick={() => { setAccessDraft({ permissionLevelId: person.permission_level_id ?? '', locationIds: person.location_ids ?? [], expiresOn: person.expires_on ? String(person.expires_on).slice(0, 10) : '' }); setAccessEdit(true); }}>Edit access</Button>
-              )}
+              action={canEdit && !accessEdit && <Button size="small" startIcon={<EditOutlinedIcon />} onClick={() => { setAccessDraft({ locationIds: person.location_ids ?? [], expiresOn: person.expires_on ? String(person.expires_on).slice(0, 10) : '' }); setAccessEdit(true); }}>Edit access</Button>}
             >
               {accessEdit ? (
                 <Box id="person-access-form" component="form" onSubmit={saveAccess} className="form-grid person-overview-grid">
-                  <TextField select label="Permission level" value={accessDraft.permissionLevelId} onChange={(e) => setAccessDraft({ ...accessDraft, permissionLevelId: e.target.value })}>
-                    <MenuItem value="">None</MenuItem>
-                    {permissionLevels.map((l) => <MenuItem key={l.lookup_id} value={l.lookup_id}>{l.name}</MenuItem>)}
-                  </TextField>
                   <FormControl>
                     <InputLabel id="assigned-areas-label">Assigned areas</InputLabel>
                     <Select labelId="assigned-areas-label" multiple value={accessDraft.locationIds.map(Number)} label="Assigned areas" onChange={(e) => setAccessDraft({ ...accessDraft, locationIds: e.target.value.map(Number) })} renderValue={(sel) => sel.map((id) => locationNames.get(String(id)) ?? id).join(', ')}>
@@ -362,11 +340,14 @@ export default function PersonDetailPage() {
                     </Select>
                   </FormControl>
                   <TextField label="Access valid until" type="date" value={accessDraft.expiresOn} onChange={(e) => setAccessDraft({ ...accessDraft, expiresOn: e.target.value })} InputLabelProps={{ shrink: true }} />
+                  <Box className="person-form-actions">
+                    <Button size="small" onClick={() => setAccessEdit(false)} disabled={busy}>Cancel</Button>
+                    <Button size="small" variant="contained" type="submit" disabled={busy}>Save</Button>
+                  </Box>
                 </Box>
               ) : (
                 <>
                   <Box className="person-readonly-grid">
-                    <Field label="Permission level" value={permissionLevels.find((l) => String(l.lookup_id) === String(person.permission_level_id))?.name ?? 'Default'} />
                     <Field label="Assigned areas" value={person.location_ids?.length ? person.location_ids.map((id) => locationNames.get(String(id)) ?? id).join(', ') : 'None assigned'} />
                     <Field label="Access valid until" value={person.expires_on ? new Date(`${String(person.expires_on).slice(0, 10)}T00:00:00`).toLocaleDateString() : 'Until revoked'} />
                     <Field label="QR version" value={person.qr_version} />
@@ -411,11 +392,6 @@ export default function PersonDetailPage() {
                 : <Typography color="text.secondary">No documents uploaded.</Typography>}
             </SectionCard>
 
-            {/* QR code */}
-            <SectionCard id="qr" title="QR code">
-              <QrPreview personId={personId} personCode={person.person_code} />
-            </SectionCard>
-
             {/* Visit activity */}
             <SectionCard id="activity" title="Visit activity">
               {activity === null
@@ -455,13 +431,6 @@ export default function PersonDetailPage() {
           </Box>
         </Box>
       )}
-
-      {/* QR dialog */}
-      <Dialog open={qrDialogOpen} onClose={() => setQrDialogOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>QR Code — {person?.person_code}</DialogTitle>
-        <DialogContent><QrPreview personId={personId} personCode={person?.person_code} /></DialogContent>
-        <DialogActions><Button onClick={() => setQrDialogOpen(false)}>Close</Button></DialogActions>
-      </Dialog>
 
       {/* Status change dialog */}
       <Dialog open={Boolean(statusTarget)} onClose={() => !busy && setStatusTarget('')}>

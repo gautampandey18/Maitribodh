@@ -19,47 +19,25 @@ test('registration creates a versioned active profile, audit and notifications i
   const person = await repository.create({ input, category, photoKey: 'private-photo.jpg', documents: [], passportEncrypted: null, actor: { userId: 9, role: 'ADMIN', device: 'Browser '.padEnd(140, 'x') } });
   assert.equal(person.qr_version, 1);
   assert.equal(calls[0].sql, 'BEGIN');
+  const insertCall = calls.find((call) => call.sql.includes('INSERT INTO mams.person'));
+  assert.doesNotMatch(insertCall.sql, /permission_level_id/);
+  assert.deepEqual(JSON.parse(insertCall.values[15]), input.categoryDetails);
   const auditCall = calls.find((call) => call.sql.includes('INSERT INTO mams.audit_log'));
   assert.ok(auditCall);
   assert.equal(auditCall.values[7].length, 100);
   assert.ok(calls.some((call) => call.sql.includes('INSERT INTO mams.notification')));
   assert.equal(calls.at(-1).sql, 'COMMIT');
 });
-test('registration does not apply a legacy category permission as a default', async () => {
-  const calls = [];
-  const client = {
-    async query(sql, values) {
-      calls.push({ sql, values });
-      if (sql.includes('FOR SHARE')) return { rows: [{ ...category, permission_level_id: 22 }] };
-      if (sql.includes('INSERT INTO mams.person')) return { rows: [{ person_id: 8, person_code: 'MB-000008', status: 'ACTIVE', qr_version: 1 }] };
-      return { rows: [], rowCount: 1 };
-    },
-    release() {},
-  };
-  const repository = createRegistrationRepository({ async connect() { return client; } });
-
-  await repository.create({
-    input,
-    category: { ...category, permission_level_id: 22 },
-    photoKey: 'private-photo.jpg',
-    documents: [],
-    actor: { userId: 9, role: 'ADMIN' },
-  });
-
-  const insertCall = calls.find((call) => call.sql.includes('INSERT INTO mams.person'));
-  assert.equal(insertCall.values[15], null);
-});
-test('registration category options omit legacy category permission defaults', async () => {
+test('registration category options omit legacy category hierarchy fields', async () => {
   const repository = createRegistrationRepository({
     async query(sql) {
-      if (sql.includes('mams.category')) return { rows: [{ ...category, permission_level_id: 22, is_broad: false, broad_category_id: null }] };
+      if (sql.includes('mams.category')) return { rows: [{ ...category, is_broad: false, broad_category_id: null }] };
       return { rows: [] };
     },
   });
 
   const options = await repository.options();
 
-  assert.equal('permission_level_id' in options.categories[0], false);
   assert.equal('is_broad' in options.categories[0], false);
   assert.equal('broad_category_id' in options.categories[0], false);
 });
@@ -94,7 +72,7 @@ test('text category fields are not treated as integer master-data references', a
 
   assert.equal(calls.some(({ sql }) => sql.includes('FROM mams.lookup_value WHERE lookup_id')), false);
   const insertCall = calls.find(({ sql }) => sql.includes('INSERT INTO mams.person'));
-  assert.deepEqual(JSON.parse(insertCall.values[16]), { approval_note: 'approved' });
+  assert.deepEqual(JSON.parse(insertCall.values[15]), { approval_note: 'approved' });
 });
 test('draft list excludes drafts whose categories are inactive or deleted', async () => {
   let call;
@@ -110,6 +88,21 @@ test('draft list excludes drafts whose categories are inactive or deleted', asyn
   assert.deepEqual(drafts, [{ person_id: 12, draft_data: { categoryId: 1 }, updated_at: '2026-10-20T10:00:00Z' }]);
   assert.match(call.sql, /JOIN mams\.category c ON c\.category_id = p\.category_id AND c\.status = 'ACTIVE'/);
   assert.deepEqual(call.values, [9]);
+});
+test('draft persistence drops obsolete permission-level input', async () => {
+  let call;
+  const client = {
+    async query(sql, values) {
+      if (sql.includes('INSERT INTO mams.person')) call = { sql, values };
+      return { rows: [{ person_id: 12 }], rowCount: 1 };
+    },
+    release() {},
+  };
+  const repository = createRegistrationRepository({ async connect() { return client; } });
+
+  await repository.saveDraft({ draftId: undefined, input: { categoryId: 1, permissionLevelId: 2 }, actor: { userId: 9 } });
+
+  assert.deepEqual(JSON.parse(call.values[2]), { categoryId: 1, passportNumber: '', idProofNumber: '' });
 });
 test('profile updates commit the edited fields and audit the change', async () => {
   const calls = [];
@@ -232,20 +225,19 @@ test('pending persons cannot be deactivated and later reactivated to bypass appr
   const repository = createRegistrationRepository({ async connect() { return client; } });
   await assert.rejects(repository.setStatus({ personId: 8, status: 'DEACTIVATED', reason: 'test', actor: { userId: 9, role: 'ADMIN' } }), (error) => error.code === 'INVALID_STATE');
 });
-test('access updates validate assignments, replace area links and write an audit record', async () => {
+test('access updates replace area links and write an audit record', async () => {
   const calls = [];
   const client = {
     async query(sql, values) {
       calls.push({ sql, values });
-      if (sql.includes('SELECT p.permission_level_id')) return { rows: [{ permission_level_id: 1, expires_on: null, form_type: 'VISITOR' }] };
-      if (sql.includes('lookup_value')) return { rows: [{ lookup_id: 2 }], rowCount: 1 };
+      if (sql.includes('SELECT p.expires_on')) return { rows: [{ expires_on: null, form_type: 'VISITOR' }] };
       if (sql.includes('SELECT location_id')) return { rows: [{ location_id: 4 }, { location_id: 5 }], rowCount: 2 };
       return { rows: [], rowCount: 1 };
     }, release() {},
   };
   const repository = createRegistrationRepository({ async connect() { return client; } });
-  const result = await repository.updateAccess({ personId: 8, changes: { permissionLevelId: 2, locationIds: [4, 5, 4], expiresOn: '2026-12-31' }, actor: { userId: 9, role: 'ADMIN' } });
-  assert.deepEqual(result, { permission_level_id: 2, location_ids: [4, 5], expires_on: '2026-12-31' });
+  const result = await repository.updateAccess({ personId: 8, changes: { locationIds: [4, 5, 4], expiresOn: '2026-12-31' }, actor: { userId: 9, role: 'ADMIN' } });
+  assert.deepEqual(result, { location_ids: [4, 5], expires_on: '2026-12-31' });
   assert.equal(calls.filter((call) => call.sql.includes('INSERT INTO mams.person_location')).length, 2);
   assert.ok(calls.some((call) => call.sql.includes('INSERT INTO mams.audit_log')));
   assert.equal(calls.at(-1).sql, 'COMMIT');

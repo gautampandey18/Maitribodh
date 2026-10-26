@@ -23,7 +23,6 @@ export const registrationInputSchema = z.object({
   dateOfBirth: z.union([z.iso.date(), z.literal('')]).optional().default(''),
   address: optionalText(500), email: z.union([z.email().max(150), z.literal('')]).optional().default(''),
   emergencyName: optionalText(100), emergencyMobile: z.union([indianMobile, z.literal('')]).optional().default(''),
-  permissionLevelId: z.coerce.number().int().positive().nullable().optional().default(null),
   locationIds: z.array(z.coerce.number().int().positive()).max(100).default([]),
   accompanyingCount: z.coerce.number().int().min(0).max(32767).default(0),
   remarks: optionalText(500), categoryDetails: z.record(z.string(), z.union([z.string().max(500), z.number()])).default({}),

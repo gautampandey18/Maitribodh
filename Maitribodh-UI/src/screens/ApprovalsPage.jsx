@@ -144,7 +144,6 @@ export default function ApprovalsPage() {
     <Box className="approvals-page">
       <Box className="page-heading">
         <Box>
-          <Typography className="eyebrow">REGISTRATION</Typography>
           <Typography component="h1" variant="h1">Approval Center</Typography>
         </Box>
         <Tooltip title={`Refresh ${tabLabel(tab).toLowerCase()}`}>

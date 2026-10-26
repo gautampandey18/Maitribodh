@@ -123,7 +123,7 @@ Public QR lookup is an unauthenticated user-facing operation with reduced output
 | FR-RBAC-004 | Security Guard landing path shall be Gate; other implemented roles default to Dashboard. | Implemented |
 | FR-RBAC-005 | The API shall apply role authorization to protected route operations, not rely only on UI visibility. | Implemented |
 | FR-RBAC-006 | Security Guard registration shall be restricted to Visitor category/form type. | Implemented |
-| FR-RBAC-007 | Security Guard shall not assign permission level or areas when creating a walk-in registration; server shall clear those values and mark walk-in source. | Implemented |
+| FR-RBAC-007 | Security Guard shall not assign areas when creating a walk-in registration; server shall clear those values and mark walk-in source. | Implemented |
 | FR-RBAC-008 | System shall support database-driven fine-grained permission-code matrix and custom role administration. | Not implemented |
 
 The detailed UI screen matrix is in `Maitribodh-UI/src/constants/navigation.js`; each API route group additionally applies its own allowed-role list.
@@ -133,14 +133,14 @@ The detailed UI screen matrix is in `Maitribodh-UI/src/constants/navigation.js`;
 | ID | Requirement | Status |
 |---|---|---|
 | FR-CAT-001 | Admin/Super Admin shall search/filter/paginate categories by name/description query, form type, and status. | Implemented |
-| FR-CAT-002 | Admin/Super Admin shall create categories with name, icon, description, form type, nullable approval policy, overstay cutoff, permission-level default, and broad-category metadata. | Implemented |
+| FR-CAT-002 | Admin/Super Admin shall create categories with name, icon, description, form type, nullable approval policy, overstay cutoff, and broad-category metadata. | Implemented |
 | FR-CAT-003 | Admin/Super Admin shall update category details/status and its registration form schema. | Implemented |
-| FR-CAT-004 | Category name shall be unique; invalid permission/broad-category references shall be rejected. | Implemented |
+| FR-CAT-004 | Category name shall be unique; invalid broad-category references shall be rejected. | Implemented |
 | FR-CAT-005 | At least one category shall remain active. | Implemented |
 | FR-CAT-006 | Category form schema shall support up to 50 unique fields with key, label, type, required flag, optional lookup source, and optional allowed options. | Implemented |
 | FR-CAT-007 | Supported field types shall be text, date, number, and select. Keys shall match `[a-z][a-z0-9_]{0,49}` and be unique within the schema. | Implemented |
 | FR-CAT-008 | Schema shall support `addressRequired` and `emergencyRequired` switches. | Implemented |
-| FR-CAT-009 | Select sources shall support Department, Job Role, Subcategory, Program/Batch, ID Proof Type, Blacklist Reason, Permission Level, and Area. | Implemented |
+| FR-CAT-009 | Select sources shall support Department, Job Role, Subcategory, Program/Batch, ID Proof Type, Blacklist Reason, and Area. | Implemented |
 | FR-CAT-010 | Category registration options shall use saved non-empty schema when present and otherwise use the form-type built-in schema. | Implemented |
 | FR-CAT-011 | `approvalRequired = null` shall block registration submission until the rule is confirmed. | Implemented |
 | FR-CAT-012 | Category create/update/schema/status operations shall be audited. | Implemented |
@@ -156,7 +156,7 @@ Built-in form fields are listed in section 5.2. Six form types in the current UI
 |---|---|---|
 | FR-MASTER-001 | Authenticated users shall retrieve active lookup values by type, with optional parent/query filters and pagination. | Implemented |
 | FR-MASTER-002 | Admin/Super Admin shall retrieve inactive lookup values and create/update lookup entries. | Implemented |
-| FR-MASTER-003 | System shall support Department, Job Role, Subcategory, Program/Batch, ID Proof Type, Blacklist Reason, and Permission Level lookup types. | Implemented |
+| FR-MASTER-003 | System shall support Department, Job Role, Subcategory, Program/Batch, ID Proof Type, and Blacklist Reason lookup types. | Implemented |
 | FR-MASTER-004 | System shall validate parent/category/master references and reject duplicate/invalid values. | Implemented |
 | FR-MASTER-005 | Inactive values shall remain available to administrators for reference/reactivation; there is no hard-delete interface. | Implemented |
 | FR-MASTER-006 | System shall provide full master deletion, merge, and referential cleanup workflows. | Not implemented |
@@ -238,7 +238,7 @@ Built-in form fields are listed in section 5.2. Six form types in the current UI
 | FR-PER-003 | Management roles shall update basic contact/profile fields supported by the current edit endpoint. | Implemented |
 | FR-PER-004 | Staff-profile edits shall be restricted to Admin/Super Admin. | Implemented |
 | FR-PER-005 | Mobile change for an active person shall increment QR version and create corresponding audit information. | Implemented |
-| FR-PER-006 | Management roles shall update permission level, assigned active areas, and expiry date. | Implemented |
+| FR-PER-006 | Management roles shall update assigned active areas and expiry date. | Implemented |
 | FR-PER-007 | Authorized registration roles shall capture or replace profile photo with valid JPG/PNG up to 2 MB. Guards may only repair a missing photo for an active non-draft record. | Implemented |
 | FR-PER-008 | Management roles shall append optional person documents subject to count/type/size validation. | Implemented |
 | FR-PER-009 | Admin/Super Admin shall change person status between Active and Deactivated with a required reason and audit. | Implemented |

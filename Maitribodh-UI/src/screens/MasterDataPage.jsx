@@ -9,20 +9,23 @@ import ToggleOnOutlinedIcon from '@mui/icons-material/ToggleOnOutlined';
 import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined';
 import { api } from '../api.js';
 import CategoriesPage from './CategoriesPage.jsx';
+import LocationsPage from './LocationsPage.jsx';
 import { requestMessage, useResource } from '../utils/resources.js';
 
 const types = [
   { key: 'DEPARTMENT', label: 'Departments' }, { key: 'JOB_ROLE', label: 'Job Roles' },
   { key: 'SUBCATEGORY', label: 'Subcategories' }, { key: 'ID_PROOF_TYPE', label: 'ID Proof Types' },
-  { key: 'BLACKLIST_REASON', label: 'Blacklist Reasons' }, { key: 'PERMISSION_LEVEL', label: 'Permission Levels' },
+  { key: 'BLACKLIST_REASON', label: 'Blacklist Reasons' },
   { key: 'PROGRAM_BATCH', label: 'Programs & Batches' },
 ];
 export default function MasterDataPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [lookupType, setLookupType] = useState('CATEGORIES');
-  const type = searchParams.get('tab') === 'categories' ? 'CATEGORIES' : lookupType;
+  const activeTab = searchParams.get('tab');
+  const type = activeTab === 'categories' ? 'CATEGORIES' : activeTab === 'locations' ? 'LOCATIONS' : lookupType;
   function selectType(nextType) {
     if (nextType === 'CATEGORIES') setSearchParams({ tab: 'categories' });
+    else if (nextType === 'LOCATIONS') setSearchParams({ tab: 'locations' });
     else {
       setLookupType(nextType);
       setSearchParams({});
@@ -32,9 +35,10 @@ export default function MasterDataPage() {
     <Box className="page-heading"><Typography component="h1" variant="h1">Master Data</Typography></Box>
     <Tabs value={type} onChange={(_event, value) => selectType(value)} variant="scrollable" scrollButtons="auto">
       <Tab value="CATEGORIES" label="Categories" />
+      <Tab value="LOCATIONS" label="Areas & Gates" />
       {types.map((item) => <Tab key={item.key} value={item.key} label={item.label} />)}
     </Tabs>
-    {type === 'CATEGORIES' ? <CategoriesPage /> : <LookupValuesPage type={type} />}
+    {type === 'CATEGORIES' ? <CategoriesPage /> : type === 'LOCATIONS' ? <LocationsPage /> : <LookupValuesPage type={type} />}
   </Box>;
 }
 

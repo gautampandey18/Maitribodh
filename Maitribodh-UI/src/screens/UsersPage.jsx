@@ -317,7 +317,6 @@ export default function UsersPage() {
     <Box className="users-page">
       <Box className="page-heading">
         <Box>
-          <Typography className="eyebrow">ACCESS CONTROL</Typography>
           <Typography component="h1" variant="h1">Users</Typography>
         </Box>
         <Button variant="contained" color="secondary" startIcon={<AddIcon />} onClick={() => { setFormError(''); setEditTarget(null); setUserForm(emptyUser); setCreateOpen(true); }}>

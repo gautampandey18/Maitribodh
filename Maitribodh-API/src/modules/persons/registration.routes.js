@@ -67,7 +67,6 @@ export function createRegistrationRouter({ repository, authenticate, encryptionS
     if (!category) throw new ApiError(404, 'CATEGORY_NOT_FOUND', 'Category not found');
     validateCategoryDetails(input, category, request.auth.role);
     if (request.auth.role === 'SECURITY_GUARD') {
-      input.permissionLevelId = null;
       input.locationIds = [];
       input.source = 'WALK_IN';
     }
@@ -203,7 +202,6 @@ export function createRegistrationRouter({ repository, authenticate, encryptionS
   }));
   router.patch('/:personId/access', authorize(...managementRoles), asyncHandler(async (request, response) => {
     const schema = z.object({
-      permissionLevelId: z.union([z.coerce.number().int().positive(), z.null()]),
       locationIds: z.array(z.coerce.number().int().positive()).max(100),
       expiresOn: z.union([z.iso.date(), z.literal('')]),
     });
