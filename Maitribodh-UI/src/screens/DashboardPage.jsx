@@ -24,14 +24,14 @@ import { useSelector } from 'react-redux';
 import { api } from '../api.js';
 
 const metrics = [
-  ['active_persons', 'Active Members'],
-  ['registrations_today', 'Registrations Today'],
-  ['checkins_today', 'Check-Ins Today'],
-  ['checkouts_today', 'Check-Outs Today'],
-  ['pending_approvals', 'Pending Approvals'],
-  ['blacklist_attempts_today', 'Blacklist Alerts'],
+  ['active_persons', 'Active Members', '#E17324', '#FFF6EF', '#F6D5BA'],
+  ['registrations_today', 'Registrations Today', '#2E9E6B', '#F0FAF5', '#C3E7D4'],
+  ['checkins_today', 'Check-Ins Today', '#0E8C99', '#EDF8F9', '#C0E4E8'],
+  ['checkouts_today', 'Check-Outs Today', '#5B6B7A', '#F4F6F8', '#D6DDE3'],
+  ['pending_approvals', 'Pending Approvals', '#C98A0B', '#FFF9EA', '#F1DFAC'],
+  ['blacklist_attempts_today', 'Blacklist Alerts', '#D0293B', '#FFF2F3', '#F4C5CB'],
 ];
-const mixColors = ['#f7d327', '#d0a823', '#504c41'];
+const mixColors = ['#E17324', '#0E8C99', '#8E5BD8'];
 
 export default function DashboardPage() {
   const user = useSelector((state) => state.auth.user);
@@ -146,15 +146,38 @@ export default function DashboardPage() {
       ) : (
         <>
           <Box className="dashboard-metrics" aria-label="Daily operations summary">
-            {metrics.map(([key, label]) => (
-              <Paper className="dashboard-metric" elevation={0} key={key}>
+            {metrics.map(([key, label, accent, bg, border]) => (
+              <Box key={key} className="dashboard-metric" sx={{ background: bg, borderColor: border, borderTopColor: accent }}>
+                <Box className="dashboard-metric-circle" sx={{ background: accent, opacity: .12 }} />
                 <Typography className="dashboard-metric-label">{label}</Typography>
-                <Typography component="p" className="dashboard-metric-value">{summary?.[key] ?? 0}</Typography>
+                <Typography component="p" className="dashboard-metric-value" sx={{ color: 'var(--th-text)', fontSize: '1.5rem', fontWeight: 800, lineHeight: 1 }}>{summary?.[key] ?? 0}</Typography>
                 <Typography className={`dashboard-metric-note dashboard-note-${key}`}>
                   {key === 'pending_approvals' ? 'Needs review' : key === 'blacklist_attempts_today' ? 'Action required' : key === 'checkouts_today' ? 'On pace' : key === 'checkins_today' ? 'This shift' : ''}
                 </Typography>
-              </Paper>
+              </Box>
             ))}
+          </Box>
+          <Box className="dashboard-insights">
+            <Paper className="table-panel dashboard-chart-panel" elevation={0}>
+              <Box className="table-panel-heading">
+                <Box>
+                  <Typography variant="h3">Daily Check-In Trend</Typography>
+                  <Typography variant="body2" color="text.secondary">Last 7 days</Typography>
+                </Box>
+              </Box>
+              <Box className="dashboard-trend" role="img" aria-label="Daily check-in trend for the last seven days">
+                {summary?.checkin_trend?.length ? <TrendChart trend={summary.checkin_trend} /> : <Typography color="text.secondary">No check-in activity yet.</Typography>}
+              </Box>
+            </Paper>
+            <Paper className="table-panel dashboard-chart-panel" elevation={0}>
+              <Box className="table-panel-heading">
+                <Box>
+                  <Typography variant="h3">Category Mix</Typography>
+                  <Typography variant="body2" color="text.secondary">This week</Typography>
+                </Box>
+              </Box>
+              {summary?.category_mix?.length ? <CategoryDonut mix={summary.category_mix} total={summary.active_persons ?? 0} /> : <Box className="dashboard-category-mix"><Typography color="text.secondary">No active registrations.</Typography></Box>}
+            </Paper>
           </Box>
           <Paper className="table-panel dashboard-inside" elevation={0}>
             <Box className="table-panel-heading">
@@ -209,32 +232,20 @@ export default function DashboardPage() {
               onRowsPerPageChange={(event) => loadInside(0, Number(event.target.value)).catch(() => setError('Occupancy data could not be loaded.'))}
             />
             <Box className="dashboard-occupancy-breakdown">
-              <Box><Typography className="dashboard-breakdown-title">Occupancy by Location</Typography>{occupancyByLocation.map(({ name, count }) => <Box className="dashboard-breakdown-row" key={name}><span>{name}</span><b>{count}</b></Box>)}{!occupancyByLocation.length && <Typography variant="caption">No open check-ins.</Typography>}</Box>
-              <Box><Typography className="dashboard-breakdown-title">Occupancy by Category</Typography>{occupancyByCategory.map(({ name, count }) => <Box className="dashboard-breakdown-row" key={name}><span>{name}</span><b>{count}</b></Box>)}{!occupancyByCategory.length && <Typography variant="caption">No open check-ins.</Typography>}</Box>
+              <Box>
+                <Typography className="dashboard-breakdown-title">Occupancy by Location</Typography>
+                {occupancyByLocation.length
+                  ? <OccupancyBarChart data={occupancyByLocation} color="#E17324" />
+                  : <Typography variant="caption">No open check-ins.</Typography>}
+              </Box>
+              <Box>
+                <Typography className="dashboard-breakdown-title">Occupancy by Category</Typography>
+                {occupancyByCategory.length
+                  ? <OccupancyBarChart data={occupancyByCategory} color="#2E9E6B" />
+                  : <Typography variant="caption">No open check-ins.</Typography>}
+              </Box>
             </Box>
           </Paper>
-          <Box className="dashboard-insights">
-            <Paper className="table-panel dashboard-chart-panel" elevation={0}>
-              <Box className="table-panel-heading">
-                <Box>
-                  <Typography variant="h3">Daily Check-In Trend</Typography>
-                  <Typography variant="body2" color="text.secondary">Last 7 days</Typography>
-                </Box>
-              </Box>
-              <Box className="dashboard-trend" role="img" aria-label="Daily check-in trend for the last seven days">
-                {summary?.checkin_trend?.length ? <TrendChart trend={summary.checkin_trend} /> : <Typography color="text.secondary">No check-in activity yet.</Typography>}
-              </Box>
-            </Paper>
-            <Paper className="table-panel dashboard-chart-panel" elevation={0}>
-              <Box className="table-panel-heading">
-                <Box>
-                  <Typography variant="h3">Category Mix</Typography>
-                  <Typography variant="body2" color="text.secondary">This week</Typography>
-                </Box>
-              </Box>
-              {summary?.category_mix?.length ? <CategoryDonut mix={summary.category_mix} total={summary.active_persons ?? 0} /> : <Box className="dashboard-category-mix"><Typography color="text.secondary">No active registrations.</Typography></Box>}
-            </Paper>
-          </Box>
           <Box className="dashboard-lower">
             <Paper className="table-panel" elevation={0}>
               <Box className="table-panel-heading">
@@ -323,6 +334,28 @@ export default function DashboardPage() {
   );
 }
 
+function OccupancyBarChart({ data, color }) {
+  const max = Math.max(1, ...data.map((d) => Number(d.count)));
+  return (
+    <Box sx={{ display: 'grid', gap: '10px', mt: 1 }}>
+      {data.map(({ name, count }) => {
+        const pct = Math.round((Number(count) / max) * 100);
+        return (
+          <Box key={name}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: '4px' }}>
+              <Typography variant="caption" sx={{ color: 'var(--th-text)', fontWeight: 500 }}>{name}</Typography>
+              <Typography variant="caption" sx={{ color, fontWeight: 700 }}>{count}</Typography>
+            </Box>
+            <Box sx={{ height: 8, borderRadius: 999, background: 'var(--th-fill)', overflow: 'hidden' }}>
+              <Box sx={{ height: '100%', width: `${pct}%`, borderRadius: 999, background: color, transition: 'width 600ms cubic-bezier(.2,.8,.2,1)' }} />
+            </Box>
+          </Box>
+        );
+      })}
+    </Box>
+  );
+}
+
 function formatDate(value) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
@@ -347,7 +380,41 @@ function CategoryDonut({ mix, total }) {
   ];
   const sum = groups.reduce((value, group) => value + group.count, 0);
   let offset = 0;
-  return <Box className="dashboard-category-mix"><Box className="dashboard-donut" role="img" aria-label="Active person category mix"><svg viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="46" pathLength="100" className="donut-track" />{groups.map((group, index) => { const percent = sum ? group.count / sum * 100 : 0; const currentOffset = offset; offset += percent; return percent ? <circle key={group.name} cx="60" cy="60" r="46" pathLength="100" className="donut-segment" style={{ stroke: mixColors[index], strokeDasharray: `${percent} ${100 - percent}`, strokeDashoffset: -currentOffset }}><title>{`${group.name}: ${Math.round(percent)}%`}</title></circle> : null; })}</svg><Box className="donut-total"><b>{total}</b><span>Active</span></Box></Box><Box className="donut-legend">{groups.map((group, index) => <Box className="donut-legend-row" key={group.name}><span className="donut-swatch" style={{ background: mixColors[index] }} /><span>{group.name}</span><b>{sum ? Math.round(group.count / sum * 100) : 0}%</b></Box>)}</Box></Box>;
+  return (
+    <Box className="dashboard-category-mix">
+      <Box className="dashboard-donut" role="img" aria-label="Active person category mix">
+        <svg viewBox="0 0 120 120" aria-hidden="true">
+          <circle cx="60" cy="60" r="46" pathLength="100" className="donut-track" />
+          {groups.map((group, index) => {
+            const percent = sum ? group.count / sum * 100 : 0;
+            const currentOffset = offset;
+            offset += percent;
+            return percent ? <circle key={group.name} cx="60" cy="60" r="46" pathLength="100" className="donut-segment" style={{ stroke: mixColors[index], strokeDasharray: `${percent} ${100 - percent}`, strokeDashoffset: -currentOffset }}><title>{`${group.name}: ${Math.round(percent)}%`}</title></circle> : null;
+          })}
+        </svg>
+        <Box className="donut-total"><b>{total}</b><span>Active</span></Box>
+      </Box>
+      <Box className="donut-legend">
+        {groups.map((group, index) => {
+          const pct = sum ? Math.round(group.count / sum * 100) : 0;
+          return (
+            <Box key={group.name} className="donut-legend-row">
+              <span className="donut-swatch" style={{ background: mixColors[index] }} />
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: '3px' }}>
+                  <span>{group.name}</span>
+                  <b style={{ color: mixColors[index] }}>{pct}%</b>
+                </Box>
+                <Box sx={{ height: 4, borderRadius: 999, background: 'var(--th-fill)' }}>
+                  <Box sx={{ height: '100%', width: `${pct}%`, borderRadius: 999, background: mixColors[index], transition: 'width 800ms cubic-bezier(.2,.8,.2,1)' }} />
+                </Box>
+              </Box>
+            </Box>
+          );
+        })}
+      </Box>
+    </Box>
+  );
 }
 
 function sumCategories(mix, keys) {

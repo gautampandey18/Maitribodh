@@ -220,11 +220,11 @@ export default function PersonsPage() {
                 {items.map((item) => (
                   <TableRow key={item.person_id} hover>
                     <TableCell>
-                      <Button component={Link} to={`/persons/${item.person_id}`} color="secondary" sx={{ p: 0, justifyContent: 'flex-start' }}>{item.name}</Button>
+                      <Button component={Link} to={`/persons/${item.person_id}`} color="primary" variant="text" sx={{ p: 0, justifyContent: 'flex-start', fontWeight: 600 }}>{item.name}</Button>
                     </TableCell>
                     <TableCell>{item.category}</TableCell>
                     <TableCell>{item.mobile ?? '—'}</TableCell>
-                    <TableCell><Chip size="small" label={statusLabel(item.status)} color={statusColor(item.status)} /></TableCell>
+                    <TableCell><Chip size="small" label={statusLabel(item.status)} sx={statusColor(item.status)} /></TableCell>
                     <TableCell>{formatDate(item.created_at)}</TableCell>
                     <TableCell align="right">
                       <Tooltip title="Actions">
@@ -290,9 +290,9 @@ export default function PersonsPage() {
 }
 
 function statusColor(status) {
-  if (status === 'ACTIVE') return 'success';
-  if (status === 'REJECTED' || status === 'DEACTIVATED') return 'error';
-  return 'warning';
+  if (status === 'ACTIVE') return { background: '#E6F4EA', color: '#2E7D32', fontWeight: 600 };
+  if (status === 'REJECTED' || status === 'DEACTIVATED') return { background: '#FDECEA', color: '#C62828', fontWeight: 600 };
+  return { background: '#FFF3E0', color: '#E65100', fontWeight: 600 };
 }
 
 function statusLabel(status) {

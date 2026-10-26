@@ -5,7 +5,6 @@ export function createCategoriesRepository(pool) {
     name: 'name',
     formType: 'form_type',
     approvalRequired: 'approval_required',
-    overstayCutoff: 'overstay_cutoff',
     status: 'status',
     formSchema: 'form_schema',
   };
@@ -47,7 +46,6 @@ export function createCategoriesRepository(pool) {
       description,
       formType,
       approvalRequired,
-      overstayCutoff,
       actorUserId,
       actorRole,
       ipAddress,
@@ -58,15 +56,14 @@ export function createCategoriesRepository(pool) {
         await client.query('BEGIN');
         const result = await client.query(
           `INSERT INTO mams.category
-             (name, form_type, approval_required, overstay_cutoff, icon, description)
-            VALUES ($1, $2, $3, $4, $5, $6)
+             (name, form_type, approval_required, icon, description)
+            VALUES ($1, $2, $3, $4, $5)
             RETURNING category_id, name, form_type, approval_required,
-                     overstay_cutoff, icon, description, status, created_at`,
+                     icon, description, status, created_at`,
           [
             name,
             formType,
             approvalRequired,
-            overstayCutoff,
             icon,
             description,
           ],
