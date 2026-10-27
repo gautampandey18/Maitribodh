@@ -2,17 +2,17 @@
 
 ## Metadata
 - Project_Name: Maitribodh Access Management System (MAMS)
-- Execution_Mode: Forward_Engineering
+- Execution_Mode: Reverse_Engineering_Only
 - Delivery_Tier: Enterprise
 - Domain: Software
 - Data_Analytics_Subtype: Not_Applicable
-- Source_Baseline_ID: SRC-BL-005
-- Document_Version: 3.5
-- Date: 2026-10-09
+- Source_Baseline_ID: SRC-BL-006
+- Document_Version: 3.6
+- Date: 2026-10-27
 - Owner: Aditya Sharma, QA_Owner (RACI-001, SRC-011)
 
 ## Purpose
-Define test design and release evidence for the current source baseline. No application implementation, executed tests, scans, or deployment evidence were provided; all evidence states below are prospective.
+Record repository test structure and observed local test outcomes separately from historical target-release evidence. API and UI source/tests are present. This run executed the API and UI test suites; no live database, production environment, security scan, performance test, or deployment evidence was inspected.
 
 ## Quality Gate Thresholds By Tier
 
@@ -30,7 +30,7 @@ Define test design and release evidence for the current source baseline. No appl
 
 | Execution_Mode | Required_Test_Types | Required_Evidence | Missing_Test_Impact |
 |---|---|---|---|
-| Forward_Engineering | Unit, component, API integration, database migration, end-to-end, security, accessibility, performance, recovery | CI results, traceability, scan reports, load/security/restore reports | Build and release cannot pass quality gates |
+| Reverse_Engineering_Only | Source inventory, existing automated suite execution, and evidence/gap assessment; target/release tests are not authorized by this run | Local test command/results, source inventory and explicit unknowns | Failed tests are recorded as current-state risks; no build authorization is issued |
 
 ## Implementation Unit And Test Strategy
 - UI: Vitest/React Testing Library for form schemas, role-aware routes, state transitions, loading/error/empty states and responsive gate interactions.
@@ -39,6 +39,20 @@ Define test design and release evidence for the current source baseline. No appl
 - E2E: registration to approval/QR to gate check-in/out; blacklist denial; public lookup with shared mobile; bulk upload errors; report/export; manual outage/reconciliation.
 - Security: role matrix, public QR abuse/privacy assessment, JWT/session lifecycle, SQL parameterization, upload magic-byte/size checks, S3 signed URL/IAM/KMS review.
 - TEP-001 threshold: >=80% line coverage on services, reducers and utils; lint/format, tests, SAST, dependency, SBOM/license, container and secrets gates run on every PR/build.
+
+## Current Repository Test Execution
+
+| Test_Run_ID | Project | Command | Result | Observed_Details | Limitation |
+|---|---|---|---|---|---|
+| RUN-TEST-API-001 | API | `npm test` from `Maitribodh-API` | Fail | 193 passed, 2 failed: `invalid lookup references become a validation response`; `category create route validates and forwards normalized fields` | Local automated suite only; no PostgreSQL-backed deployment or production test. |
+| RUN-TEST-UI-001 | UI | `npm test` from `Maitribodh-UI` | Fail | 98 passed, 3 timed out at the configured 30-second limit in Blacklist, Register, and Users screen tests | Test command exited non-zero; investigate timeouts before relying on suite as a release gate. |
+| RUN-TEST-API-002 | API | `npm test` from `Maitribodh-API` | Fail | 193 passed, 2 failed: `invalid lookup references become a validation response`; `category create route validates and forwards normalized fields` | Latest local verification; no PostgreSQL-backed deployment or production test. |
+| RUN-TEST-UI-002 | UI | `npm test` from `Maitribodh-UI` (isolated rerun) | Fail | 93 passed, 8 timed out across Blacklist, Gate, Register, and Users screens; time limits were 5 and 30 seconds | Latest isolated local verification; investigate test/runtime slowness before using as release evidence. |
+| RUN-BUILD-UI-001 | UI | `npm run build` from `Maitribodh-UI` | Pass with warnings | Vite production build and PWA service worker generated successfully; dependency annotation and large-chunk warnings were emitted | UI build only; API has no `build` script. This does not authorize implementation or deployment. |
+
+- The verification-only request and runs were completed on 2026-10-27; they did not authorize implementation changes.
+- These results are current-state evidence from 2026-10-27, not approval of any test failure or waiver.
+- The prior TEP-001, G2/G3, and test requirements below remain historical target-release evidence from SRC-BL-005; they are not evidence that the present repository passes those gates.
 
 ## TEP-001 CI/CD Quality Gates
 
@@ -160,26 +174,26 @@ Define test design and release evidence for the current source baseline. No appl
 | REG-008 | Release/resilience | Migration, restore, rollback, paper-register reconciliation | Service/data loss |
 
 ## Build Prompt Validation
-- Build prompt must use baseline SRC-BL-005 and current versions of 00–08.
-- Verify every FR-001–FR-022 appears in 02, 06, 07 and 09; every NFR-001–NFR-012 maps to evidence.
-- DEC-001/002 and WVR-001/005/006 allow build/UAT under stated controls; do not release to G3 without pen test, counsel review, drills and TEP-001 evidence. Do not seed unapproved production masters.
+- Build prompt 09 references SRC-BL-005 and is stale against current baseline SRC-BL-006; it must not be used as an implementation handoff.
+- No build prompt is generated or approved in this Reverse_Engineering_Only run.
+- Prior FR/NFR traceability and DEC/WVR/G1 statements belong to the historical target baseline, not to current test or deployment evidence.
 - Data & Analytics requirements are Not Applicable because Domain=Software.
 
 ## Enterprise Readiness Score
 
 | Readiness_Area | Required_For_Tier | Evidence_Found | Status | Gap_or_Action | Owner |
 |---|---|---|---|---|---|
-| Security | Yes | Signed DEC-001/TA-001/CTRL-01–06; pen test planned | Amber | DAST per UAT; independent pen test due before G3 under WVR-001 | Vineet Agrawal, Security_Owner |
-| Data_Governance | Yes | Signed POL-001, consent/retention/data rights | Amber | Interim policy for build/UAT; counsel review and evidence before G3 | Vineet Agrawal, Data_Owner |
-| Compliance | Yes | Signed DEC-002/POL-001; DPDP applies | Amber | Counsel review/lawful-basis confirmation and data processing agreements before G3 | Vineet Agrawal, Compliance_Owner |
-| DevSecOps | Yes | Approved QG-01–08 controls | Amber | Execute from first merge; collect SCA/SBOM/secret/SAST/container evidence | Vineet Agrawal, Security_Owner |
-| Operations | Yes | DEC-003 topology and RB-001–006 runbooks approved | Amber | Provision, restore/rollback rehearsal and DRL-01–06 before G2/G3 under WVR-005 | Vineet Agrawal, Operations_Owner |
-| Governance_Approvals | Yes | Signed RACI-001, DEC-001–004, G0 baseline acceptance and G1 build-start approval | Amber | G1 approved 2026-10-09; G2/G3 release approvals and evidence remain pending | Vineet Agrawal, Business_Sponsor |
-| Data_Quality | Software core integrity | Duplicate allowed and open-visit constraint described | Amber | Transaction and concurrency tests not executed | Data_Owner |
+| Security | Yes | Security-related code/config and prior target controls are documented; no current scans or live deployment evidence | Unknown | Verify deployed controls, scan results, public QR exposure and uploaded-file handling; do not infer from prior decisions | Security_Owner (not verified) |
+| Data_Governance | Yes | Updated docs describe consent, draft and retention behavior | Documented; runtime unverified | Verify actual database/file lifecycle and retention execution | Data_Owner (not verified) |
+| Compliance | Yes | PII/DPDP obligations documented; no current compliance evidence inspected | Unknown | Obtain current legal/control evidence for any production assessment | Compliance_Owner (not verified) |
+| DevSecOps | Yes | npm scripts/manifests and locks present; no CI workflow or scan results found | Gap | Establish/locate pipeline and capture dependency, secrets, SAST/SBOM/image evidence | Security_Owner (not verified) |
+| Operations | Yes | Local development/migration/backup/reset scripts documented; no cloud runtime proof | Gap | Confirm real environment, owner, monitoring, restore and release evidence | Operations_Owner (not verified) |
+| Governance_Approvals | Yes | Historical SRC-011 decisions and G1 approval belong to SRC-BL-005 | Not_Current_Baseline | Approve a new target baseline before any future build; do not carry prior G1 forward | Business_Sponsor |
+| Data_Quality | Software core integrity | Latest API/UI verification has 2 API failures and 8 UI timeouts | Fail | Investigate ten failing tests; no release readiness claim | QA_Owner (not verified) |
 | MDM_Stewardship | Data & Analytics subtype only | Not_Applicable | NA | Domain=Software; no MDM scope | Not_Applicable |
 
 ## Quality Gate Decision
-- Quality_Gate_Result: Conditional_Pass for build after automated validator Pass and G1 signature
-- Blocking_Gaps: No unresolved DEC-001–004 blocker remains for build; validator Pass and signed G1 are still mandatory before implementation. G2/G3 release conditions include pen test, DPDP counsel review, load/performance evidence, drills and TEP-001 evidence.
-- Conditional work: Approved implementation may start only after 10 records Pass and G1 is signed; WVR-001/005/006 defer evidence timing only, not release criteria.
+- Quality_Gate_Result: Current_State_Assessment_Only; test evidence is not green
+- Blocking_Gaps: API tests (2) and UI tests (3) failed in the local run; live database, production, CI, security, performance and recovery evidence are unavailable. These gaps block a release-readiness conclusion.
+- Build_Authorization: None. This reverse-engineering run is not a build handoff. Historical G1/waivers from SRC-BL-005 do not authorize a future build from SRC-BL-006.
 - Data Quality Validation Matrix: Not Applicable — Domain=Software; data-integrity cases are covered in the NFR and regression matrices above.

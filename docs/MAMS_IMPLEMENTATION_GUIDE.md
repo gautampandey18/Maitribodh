@@ -50,7 +50,7 @@ The schema starts from a core set of entities in migration `0001_initial_schema.
 |---|---|
 | `app_user` | Portal accounts, built-in role, active status, password hash, login lock/version state |
 | `lookup_value` | Configurable lookup/master values such as departments, job roles, and proof types |
-| `category` | Person categories, form type, approval setting, and related category metadata |
+| `category` | Person categories, form type, approval setting, configurable registration schema, and category metadata |
 | `location` | Gate and area records; gates and areas are distinct location types |
 | `person` | Identity/profile fields, encrypted identity values, registration/access status, QR version, and workflow metadata |
 | `person_location` | Person-to-area access assignments |
@@ -61,7 +61,7 @@ The schema starts from a core set of entities in migration `0001_initial_schema.
 | `audit_log` | Append-oriented audit history |
 | `bulk_upload` | Persistence model for upload batches; the complete bulk-upload workflow is not implemented |
 
-The exact column definitions, constraints, indexes, and foreign keys are in the migration files. Later migrations extend authentication, registration drafts/category form schemas, master data, and photo rules. Migrations are checksum-tracked: applied SQL files must not be edited; new schema changes belong in a new migration.
+The exact column definitions, constraints, indexes, and foreign keys are in the migration files. Migrations `0008`–`0010` additionally normalize person primary mobile numbers to E.164, remove category overstay cutoffs, and remove permission-level lookup/assignment fields. Migrations are checksum-tracked: applied SQL files must not be edited; new schema changes belong in a new migration.
 
 ## 3. Delivered functional areas
 
@@ -223,6 +223,9 @@ The migration set is sequential; run migrations before starting/restarting the A
 | `0005_seed_registration_masters.sql` | Mockup-oriented registration category/master seed values |
 | `0006_optional_person_photo.sql` | Preserves compatibility with existing photo-less people |
 | `0007_require_person_photo.sql` | Requires photos for newly registered people while retaining the legacy exception |
+| `0008_international_person_mobile.sql` | Normalizes existing Indian primary mobile values to E.164 and adds the database E.164 constraint |
+| `0009_drop_overstay_cutoff.sql` | Removes category overstay-cutoff data |
+| `0010_remove_permission_levels.sql` | Removes permission-level lookup/assignment fields and schema/draft references |
 
 Development fixtures are synthetic and guarded for loopback development databases. Do not run development/demo seeding against shared or production data. The reset script is destructive to all data in the `mams` schema and should only be used for an explicitly disposable local database after confirming the connection target. Uploaded files are on local disk by default and are not removed by the database reset.
 
@@ -343,7 +346,7 @@ The temporary credential can be used for only one successful login. If it has be
 
 ### 9.2 Category setup and registration form design
 
-Categories determine which form applies to a person. The category record carries a name, icon/description metadata, form type, nullable approval setting, active/inactive state, optional permission-level default, optional overstay cutoff, and optional broad-category relationship. Admins can filter categories by text, type, and status; create/update records; and activate/deactivate them.
+Categories determine which form applies to a person. The current category API manages name, icon/description metadata, form type, nullable approval setting, active/inactive state, and the persisted form schema. Permission-level assignment and category overstay-cutoff fields are not part of the current schema/API; migrations `0010` and `0009` removed them. Legacy broad-category columns remain in the database but are not exposed by category API operations. Admins can filter categories by text, type, and status; create/update records; and activate/deactivate them.
 
 **Supported form types and current built-in schema fields**
 
@@ -358,6 +361,8 @@ Categories determine which form applies to a person. The category record carries
 | `GENERIC` | Purpose / Details | Neither required by default |
 
 The list above is the default schema in `Maitribodh-API/src/constants/registration.js`. If a category has a persisted non-empty `form_schema`, that category-specific schema takes precedence over the built-in schema.
+
+The Visitor screen also collects optional driver availability (`YES`/`NO`). If `YES` is selected, optional driver name and Indian 10-digit contact fields are shown. API validation rejects driver details when availability is not `YES`; these conditional fields are not part of the default schema table.
 
 **Schema editor**
 
@@ -388,7 +393,7 @@ Common information comprises first/last name, primary/alternate mobile, date of 
 Current API input checks include:
 
 - Names: 1–100 characters, Unicode letters/combining marks/spaces/hyphens.
-- Indian mobile fields: exactly 10 digits beginning 6–9; this applies to primary, alternate (if supplied), and emergency mobile.
+- Primary mobile: a valid phone number in E.164 form; Visitor registrations may use an international number, while non-Visitor categories require an Indian number. Alternate and emergency mobile fields use the Indian 10-digit pattern beginning 6–9.
 - Gender: `MALE`, `FEMALE`, or `OTHER`.
 - Date of birth cannot be in the future; date values must be valid ISO dates.
 - Email must be valid and at most 150 characters if supplied.
@@ -432,7 +437,7 @@ The UI requests JPG/PNG photos only, up to 2 MB. The API verifies the image can 
 - Draft API requires a selected active category and applies the Security Guard/Visitor restriction.
 - UI clears consent and passport value when restoring a draft and clears selected photo/documents, so the user must supply consent again and re-enter sensitive values/reselect files.
 - Sensitive passport/ID-proof numbers and file bytes are deliberately not saved in resumable draft data.
-- The configured draft retention constant is seven days. Drafts are a convenience for incomplete registration, not a valid active profile.
+- Draft listing includes only drafts updated in the preceding seven days. Drafts are a convenience for incomplete registration, not a valid active profile.
 
 ### 9.4 Person management and profile detail
 

@@ -6,6 +6,7 @@
 | Document type | Functional Requirements Document (FRD) |
 | System | Maitribodh Access Management System (MAMS) |
 | Baseline | Current implementation in this repository |
+| Implementation snapshot | API/UI source and database migrations 0001–0010 |
 | Status | As-implemented functional specification |
 | Related documents | [Business Requirements Document](./MAMS_BRD.md), [Implementation and Flow Guide](./MAMS_IMPLEMENTATION_GUIDE.md), [Implementation Status](./MAMS_IMPLEMENTATION_STATUS.md) |
 
@@ -48,7 +49,7 @@ Public QR lookup is an unauthenticated user-facing operation with reduced output
 | API prefix / route family | Primary function |
 |---|---|
 | `/api/v1/auth` | Login, logout, password change |
-| `/api/v1/users` | User listing, creation, details, password reset, deactivation/permission updates |
+| `/api/v1/users` | User listing, creation, details, password reset, deactivation, and bulk-upload flag updates |
 | `/api/v1/categories` | Category CRUD/status/schema administration |
 | `/api/v1/lookups` | Lookup/master values |
 | `/api/v1/locations` | Gate and Area administration |
@@ -133,9 +134,9 @@ The detailed UI screen matrix is in `Maitribodh-UI/src/constants/navigation.js`;
 | ID | Requirement | Status |
 |---|---|---|
 | FR-CAT-001 | Admin/Super Admin shall search/filter/paginate categories by name/description query, form type, and status. | Implemented |
-| FR-CAT-002 | Admin/Super Admin shall create categories with name, icon, description, form type, nullable approval policy, overstay cutoff, and broad-category metadata. | Implemented |
-| FR-CAT-003 | Admin/Super Admin shall update category details/status and its registration form schema. | Implemented |
-| FR-CAT-004 | Category name shall be unique; invalid broad-category references shall be rejected. | Implemented |
+| FR-CAT-002 | Admin/Super Admin shall create categories with name, icon, description, form type, and nullable approval policy. | Implemented |
+| FR-CAT-003 | Admin/Super Admin shall update supported category details/status and its registration form schema. | Implemented |
+| FR-CAT-004 | Category name shall be unique; legacy broad-category database fields are not configurable through the current category API. | Implemented |
 | FR-CAT-005 | At least one category shall remain active. | Implemented |
 | FR-CAT-006 | Category form schema shall support up to 50 unique fields with key, label, type, required flag, optional lookup source, and optional allowed options. | Implemented |
 | FR-CAT-007 | Supported field types shall be text, date, number, and select. Keys shall match `[a-z][a-z0-9_]{0,49}` and be unique within the schema. | Implemented |
@@ -145,6 +146,7 @@ The detailed UI screen matrix is in `Maitribodh-UI/src/constants/navigation.js`;
 | FR-CAT-011 | `approvalRequired = null` shall block registration submission until the rule is confirmed. | Implemented |
 | FR-CAT-012 | Category create/update/schema/status operations shall be audited. | Implemented |
 | FR-CAT-013 | Category administration shall include the required named document schemas and mandatory document rules. | Not implemented |
+| FR-CAT-014 | Category administration shall expose permission-level assignment or category overstay-cutoff controls. | Not implemented; the former schema fields were removed by migrations 0010 and 0009 respectively. |
 
 Built-in form fields are listed in section 5.2. Six form types in the current UI are Staff, Parivar, Visitor, Vendor, Contractor, and Participant; the API schema also includes Generic fallback.
 
@@ -181,7 +183,7 @@ Built-in form fields are listed in section 5.2. Six form types in the current UI
 | FR-REG-002 | Registration UI shall provide five steps: Category, Profile, Access, Documents, Review. | Implemented |
 | FR-REG-003 | UI shall render common profile fields and category-defined fields, supporting dependent Job Role options filtered by selected Department. | Implemented |
 | FR-REG-004 | Gate-originated and Security Guard registration shall offer Visitor categories only. | Implemented |
-| FR-REG-005 | Registration screen shall support the common profile fields, category details, assigned permission, areas, accompanying count, remarks, consent, photo, and optional documents as applicable. | Implemented |
+| FR-REG-005 | Registration screen shall support common profile fields, category details, areas, accompanying count, remarks, consent, photo, and optional documents as applicable. | Implemented |
 | FR-REG-006 | New registration shall require `consent: true`. | Implemented |
 | FR-REG-007 | New registration shall require one valid JPG or PNG photo no larger than 2 MB. | Implemented |
 | FR-REG-008 | Photo shall be decoded, orientation-corrected, resized within 600×600 without enlargement, and normalized to JPEG. | Implemented |
@@ -198,17 +200,18 @@ Built-in form fields are listed in section 5.2. Six form types in the current UI
 | ID | Requirement | Current rule |
 |---|---|---|
 | FR-REG-020 | First and last name shall each be 1–100 characters containing Unicode letters/marks, spaces, or hyphens. | Implemented |
-| FR-REG-021 | Primary, alternate, and emergency mobile (when provided) shall match a 10-digit Indian mobile pattern beginning 6–9. | Implemented |
-| FR-REG-022 | Gender shall be Male, Female, or Other; DOB cannot be in the future. | Implemented |
-| FR-REG-023 | Email, if provided, shall be valid and no longer than 150 characters. | Implemented |
-| FR-REG-024 | Non-resident registration shall supply a 6–9 alphanumeric passport number. | Implemented |
-| FR-REG-025 | Supplying an ID-proof number requires an active ID-proof type; configured Aadhaar/PAN/Passport patterns shall be validated. | Implemented |
-| FR-REG-026 | Required schema fields shall be non-empty; date fields shall be valid ISO dates; number fields shall be positive whole numbers; select values shall be allowed. | Implemented |
-| FR-REG-027 | Lookup-backed fields shall reference active values of the correct type. Job Role must belong to the selected Department; Subcategory must match the selected category when category-scoped. | Implemented |
-| FR-REG-028 | Address/emergency details shall be required when category schema flags require them. | Implemented |
-| FR-REG-029 | Contract end date shall not precede start date; joining/member-since dates shall not be future; supplied GSTIN shall be 15 uppercase letters/digits. | Implemented |
-| FR-REG-030 | System shall support international E.164 registration mobile values and configurable per-category mobile patterns. | Not implemented |
-| FR-REG-031 | System shall enforce 150-character person-name maximum and all external-source-specific profile rules. | Not implemented; current API accepts up to 100 characters. |
+| FR-REG-021 | Primary mobile shall be a valid phone number; Visitor may use a valid international number and all other registration categories require a valid Indian number. Stored primary values use E.164 form. | Implemented |
+| FR-REG-022 | Alternate and emergency mobile numbers (when provided) shall match a 10-digit Indian mobile pattern beginning 6–9. | Implemented |
+| FR-REG-023 | Gender shall be Male, Female, or Other; DOB cannot be in the future. | Implemented |
+| FR-REG-024 | Email, if provided, shall be valid and no longer than 150 characters. | Implemented |
+| FR-REG-025 | Non-resident registration shall supply a 6–9 alphanumeric passport number. | Implemented |
+| FR-REG-026 | Supplying an ID-proof number requires an active ID-proof type; configured Aadhaar/PAN/Passport patterns shall be validated. | Implemented |
+| FR-REG-027 | Required schema fields shall be non-empty; date fields shall be valid ISO dates; number fields shall be positive whole numbers; select values shall be allowed. | Implemented |
+| FR-REG-028 | Lookup-backed fields shall reference active values of the correct type. Job Role must belong to the selected Department; Subcategory must match the selected category when category-scoped. | Implemented |
+| FR-REG-029 | Address/emergency details shall be required when category schema flags require them. | Implemented |
+| FR-REG-030 | Contract end date shall not precede start date; joining/member-since dates shall not be future; supplied GSTIN shall be 15 uppercase letters/digits. | Implemented |
+| FR-REG-031 | Person names shall be limited to 100 characters and the currently implemented character set. | Implemented |
+| FR-REG-032 | System shall support arbitrary configurable per-category mobile patterns and a 150-character person-name maximum. | Not implemented |
 
 #### Drafts
 
@@ -266,7 +269,7 @@ Built-in form fields are listed in section 5.2. Six form types in the current UI
 
 | ID | Requirement | Status |
 |---|---|---|
-| FR-GATE-001 | Gate lookup shall accept exactly one of QR payload, 10-digit mobile, or text query and an active location ID. | Implemented |
+| FR-GATE-001 | Gate lookup shall accept exactly one of QR payload, Indian 10-digit or international E.164 mobile, or text query and an active location ID. | Implemented |
 | FR-GATE-002 | API shall reject lookup against inactive/nonexistent location. | Implemented |
 | FR-GATE-003 | QR payload shall be signature-checked, format-checked, and compared against current person code/version. | Implemented |
 | FR-GATE-004 | Lookup shall return candidates with masked mobile and outcome state, including eligible, invalid QR, blacklist, not active/expired, already inside, location warning, or not found. | Implemented |
@@ -377,6 +380,8 @@ Persisted non-empty category form schema overrides the defaults below. These are
 
 Additionally, Staff and Parivar require address and emergency contact by default; Participant requires emergency contact. These rules may be overridden by a persisted category schema for that category.
 
+The Visitor screen also collects optional driver availability (`YES`/`NO`). When `YES` is selected, optional driver name and Indian 10-digit contact fields are shown. API validation rejects driver details when availability is not `YES`; these conditional fields are not part of the default schema field list above.
+
 ### 5.2 Registration payload/data lifecycle
 
 1. **Options read:** active categories include their computed schema; active lookups and locations are returned for the form.
@@ -455,7 +460,7 @@ Registration role / Register Person
 Guard enters Gate / Register Visitor
     -> UI limits options to Visitor
     -> Guard completes visitor registration and photo/consent
-    -> API enforces Visitor only, clears permission and area assignment, source=WALK_IN
+    -> API enforces Visitor only, clears area assignments, source=WALK_IN
     -> Registration commits as ACTIVE or PENDING based on category approval policy
     -> If ACTIVE: UI returns to Gate with person code and gate/area context
     -> Guard performs explicit lookup and photo confirmation
@@ -494,7 +499,7 @@ This summarizes current navigation/route policy. Individual API operations may b
 
 | Screen/function | Super Admin | Admin | Approver | Registration Officer | Security Guard | Viewer |
 |---|---:|---:|---:|---:|---:|---:|
-| Dashboard | Yes | Yes | Yes | Yes | Route not in standard navigation | Yes |
+| Dashboard | Yes | Yes | Yes | Yes | Yes | Yes |
 | Person management/detail | Yes | Yes | Yes | Yes | No | No |
 | Register Person | Yes | Yes | Yes | Yes | Yes (Visitor only) | No |
 | Approval Center | Yes | Yes | Yes | No | No | No |

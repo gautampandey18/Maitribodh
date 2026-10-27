@@ -2,26 +2,28 @@
 
 ## Metadata
 - Project_Name: Maitribodh Access Management System (MAMS)
-- Execution_Mode: Forward_Engineering
+- Execution_Mode: Reverse_Engineering_Only
 - Delivery_Tier: Enterprise
 - Domain: Software
 - Data_Analytics_Subtype: Not_Applicable
-- Document_Version: 5.4
-- Date: 2026-10-09
+- Document_Version: 5.5
+- Date: 2026-10-27
 - Source_Baseline_Owner: Vineet Agrawal, Business_Sponsor
 
 ## Purpose
-- Baseline_Objective: Re-establish the source of truth from the complete current input set and replace the stale SRC-BL-002 baseline.
-- Source_Root: `SDD_Process/Inputs Artifacts/` (actual folder name; master prompt and templates say `Input Artifacts/`)
+- Baseline_Objective: Reconcile the updated implementation documentation with the current API/UI repository, migrations and tests; preserve the distinction between as-is evidence and the previous target-state baseline.
+- Source_Root: Repository root, `docs/`, `Maitribodh-API/`, `Maitribodh-UI/`, and `SDD_Process/Inputs Artifacts/`
 - Output_Root: `SDD_Process/Generated Artifacts/`
 - Evidence_Rule: Inputs are reference evidence until their facts are extracted into optimized artifacts.
 - Input_Organization_Rule: Current inputs are directly in the root and one SQL subfolder; no manifest is present.
 - Auto_Classification_Rule: Classified from path, filename, extension, document headings/content, HTML, and SQL contents. PDF content could not be extracted in this run and is explicitly marked unverified.
-- Baseline_Mode: Change_Impact; approved blocker decisions applied with G3 conditions
-- Baseline_ID: SRC-BL-005
-- Baseline_Created_At: 2026-10-08
-- Previous_Baseline_ID: SRC-BL-004
-- Current_Baseline_Status: Current; approved decisions recorded, validator Pass and G1 approval recorded 2026-10-09
+- Baseline_Mode: Change_Impact; targeted reverse-engineering refresh
+- Baseline_ID: SRC-BL-006
+- Baseline_Created_At: 2026-10-27
+- Previous_Baseline_ID: SRC-BL-005
+- Current_Baseline_Status: Current for repository-as-is documentation; prior forward-engineering build handoff SRC-BL-005 is stale and not authorized by this run
+- Open_Source_Change_IDs: SRC-CHG-005 (impact assessed; targeted refresh completed)
+- Build_Prompt_Impact: Stale; prior SRC-BL-005 build handoff must not be executed against SRC-BL-006
 
 ## Consolidated Source Inventory
 
@@ -137,6 +139,51 @@ SRC-CHG-003's proposed pack was superseded by signed SRC-CHG-004. Apply its Sect
 | 07_Quality_Test_And_Validation.md | Requirements, NFRs, test reports | Partial | No executed tests or scan evidence | Define tests and mark evidence not yet produced |
 | 08_Release_Operations_And_Governance.md | Architecture, NFRs, approvals, compliance | Partial | Named owners, approved retention and production signoffs | Enterprise readiness remains conditional/blocked |
 | 09_Build_Prompt.md | Accepted optimized artifacts | Yes, after regeneration | Human approval and unresolved production blockers | Build prompt conditional; implementation is not authorized by this baseline |
+
+## SRC-BL-006 Current Implementation Reconciliation
+
+This amendment is authoritative for the 2026-10-27 reverse-engineering run. The earlier SRC-BL-002 through SRC-BL-005 inventories and decisions are retained as history; they describe the earlier target-design inputs and must not be read as proof of the current code, a deployed environment, or applied database state.
+
+### Current Source Additions
+
+| Source_ID | File_or_Folder | Source_Type | Status | Priority | Consumed_By_Artifacts | Key_Facts_Extracted | Gaps_or_Risks |
+|---|---|---|---|---|---|---|---|
+| SRC-012 | `docs/MAMS_BRD.md` | Current_Implementation_Documentation | Updated repository doc | Primary for current business behavior | 00, 01, 03, 07, 08 | Explicit current-implementation baseline, Visitor international primary number, Indian phone constraints for other categories, creator-owned seven-day drafts and renewed consent on resume | Documentation is not live-system evidence |
+| SRC-013 | `docs/MAMS_FRD.md` | Current_Implementation_Documentation | Updated repository doc | Primary for current functional/API behavior | 00, 01, 03, 07, 08 | Current role/API access, registration, drafts, approval, gate and implemented/not-implemented distinctions | Verify behavior against tests and live environment where applicable |
+| SRC-014 | `docs/MAMS_DATABASE_AND_API_REFERENCE.md` | Current_Implementation_Documentation | Updated repository doc | Primary for documented schema/API reference | 00, 01, 03, 07, 08 | Migration history 0001–0010, E.164 primary mobile, removed overstay cutoff/permission-level fields, routes and data rules | Applied database state is unknown |
+| SRC-015 | `docs/MAMS_IMPLEMENTATION_GUIDE.md` | Current_Implementation_Documentation | Updated repository doc | Primary for implementation/module workflows | 00, 01, 03, 07, 08 | Current module workflows and development constraints, including migration immutability and draft behavior | Treat documented behavior as described, not independently exercised |
+| SRC-016 | `docs/MAMS_IMPLEMENTATION_STATUS.md` | Current_Implementation_Documentation | Updated repository doc | Primary for implemented vs incomplete boundary | 00, 01, 03, 07, 08 | Current implemented features, known gaps, phone/draft rules and migration-state caveat | Feature status is repository documentation; production status is unverified |
+| SRC-017 | `docs/LOCAL_DEVELOPMENT.md` | Current_Implementation_Documentation | Updated repository doc | Primary for local workflow | 00, 01, 03, 07, 08 | Windows/PowerShell, Node >=22, PostgreSQL local workflow, tests/lint/build and safe local reset guidance | Local instructions do not establish deployment configuration |
+| SRC-018 | `Maitribodh-API/src/`, `Maitribodh-API/package.json`, `Maitribodh-API/package-lock.json`, `Maitribodh-API/tests/` | Codebase | Current repository | Primary for API implementation and test evidence | 00, 01, 03, 07, 08 | Express 5 API, route/service/repository modules, PostgreSQL access and API test results | `npm test`: 193 pass, 2 fail in this run |
+| SRC-019 | `Maitribodh-UI/src/`, `Maitribodh-UI/package.json`, `Maitribodh-UI/package-lock.json` | Codebase | Current repository | Primary for UI implementation and test evidence | 00, 01, 03, 07, 08 | React 19/Vite UI, operational screens and test suites | `npm test`: 98 pass, 3 timeout failures in this run |
+| SRC-020 | `Maitribodh-API/db/migrations/`, `Maitribodh-API/db/migrate.js` | Database / Codebase | Current repository | Primary for schema history and migration execution mechanism | 00, 01, 03, 07, 08 | Ten ordered migrations; checksum checks and transaction-scoped migration execution | No live `public.schema_migrations` inspection |
+| SRC-021 | Root/project readmes, local PowerShell scripts, package lockfiles and root deployment inventory | Codebase / Operations | Current repository | Supporting | 00, 01, 03, 07, 08 | Local setup, migration, seed, backup and reset commands; no CI workflow/Terraform/container deployment file found in inspected root | Assets may exist outside this repository; root lockfile has no root manifest |
+
+### SRC-BL-006 Source Change And Impact
+
+| Change_ID | Detected_At | Source_ID | Change_Type | Change_Severity | Change_Summary | Previous_Baseline | New_Baseline | Impacted_Artifacts | Regeneration_Action | Validation_And_Build_Impact | Owner |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| SRC-CHG-005 | 2026-10-27 | SRC-012–SRC-021 | Current implementation sources reconciled; mode corrected | High | Updated docs describe current implementation and code/migrations/tests are present, contradicting SRC-BL-005's greenfield/no-code classification; current behavior differs from assumptions in earlier target artifacts | SRC-BL-005 | SRC-BL-006 | 00, 01, 03, 07, 08, 09, 10 | Targeted reverse-engineering refresh; create 03; do not regenerate future-state artifacts without a target change request | Re-run validator; prior 09 build prompt marked stale; no build authorization | Not assigned |
+
+| Impact_ID | Change_ID | Affected_Facts_or_IDs | Impacted_Artifacts | Regeneration_Action | Downstream_Dependencies | Validation_Impact | Build_Prompt_Impact | Governance_Needed |
+|---|---|---|---|---|---|---|---|---|
+| IMPACT-005 | SRC-CHG-005 | Existing API/UI source, migrations, current draft/phone/permission/overstay behavior, actual test outcomes, lack of live deployment evidence | 00, 01, 03, 07, 08, 09, 10 | Regenerate current-state intake/baseline/analysis, refresh test and governance evidence, mark prior build prompt stale, validate | 01 -> 03/07/08 -> 09 staleness -> 10 | Validator must pass for Reverse_Engineering_Only; manual review records failing tests and unknown runtime/migration state | SRC-BL-005 build prompt is stale; do not execute or treat its earlier G1 as authorization for SRC-BL-006 | Source change recorded; future enhancement/build scope requires separate product/owner approval |
+
+### SRC-BL-006 Regeneration Decision
+
+- Lifecycle_Run_Mode: `Change_Impact` with targeted regeneration.
+- Execution_Mode: `Reverse_Engineering_Only`, because the request is to document the current implementation and contains no new target-state feature, modernization, rewrite, or migration goal.
+- Required/current-run artifacts: 00, 01, 03, 07, 08, 10. Artifacts 02 and 04–06 remain prior target-state reference artifacts and are not regenerated in this run.
+- Artifact 09 remains present for history but is marked `Stale_Not_Approved`; SRC-BL-005 and its G1 approval do not authorize a build from SRC-BL-006.
+- The application code is current-state evidence only. Future requirements and target decisions require an explicitly scoped follow-on run.
+
+### Current Source Precedence
+
+1. Repository API/UI code, migrations, manifests and test execution are authoritative for observed implementation behavior.
+2. SRC-012–SRC-017 explain intended/documented current behavior and implementation gaps; when not directly tested or run against a live environment, their claims remain `Documented`, not `Observed`.
+3. Signed SRC-011 remains historical governance evidence for its prior target build. Its decisions do not prove that controls are deployed or that G1 applies to SRC-BL-006.
+4. Legacy SRC-001–SRC-009 remain design/requirement references. They do not override current code for as-is analysis and are not a substitute for new target requirements.
+5. No live database, production environment, cloud account, monitoring, or deployment logs were examined.
 
 ## Traceability Instructions
 - Every current input appears above; SRC-005 is present but unverified and no claims are attributed to its unextracted contents.

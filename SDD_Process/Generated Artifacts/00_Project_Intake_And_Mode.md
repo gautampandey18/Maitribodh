@@ -3,27 +3,29 @@
 ## Metadata
 - Project_Name: Maitribodh Access Management System (MAMS)
 - Project_Code: MAITRIBODH-AMS
-- Document_Version: 3.1
-- Date: 2026-10-08
+- Document_Version: 3.2
+- Date: 2026-10-27
 - Intake_Owner: Vineet Agrawal, Business_Sponsor
 - Generated_From_Master_Prompt: Yes
 
 ## Purpose
-- Intake_Objective: Establish a traceable greenfield baseline from the current BRD, FRD, architecture, database design, flow reference and UI mockup.
-- User_Input_Model: Files were found in `SDD_Process/Inputs Artifacts/`; this differs from the canonical `Input Artifacts/` folder name in the master prompt.
-- Execution_Mode: Forward_Engineering
+- Intake_Objective: Establish a traceable, repository-backed current-state baseline from the implemented API, UI, migrations, tests, and updated `docs/`.
+- User_Input_Model: Current implementation sources are in the repository root and `docs/`; legacy design inputs remain under `SDD_Process/Inputs Artifacts/`.
+- Execution_Mode: Reverse_Engineering_Only
 - Delivery_Tier: Enterprise
 - Domain: Software
 - Data_Analytics_Subtype: Not_Applicable
 - Dashboard_Frontend_In_Scope: No (operational application dashboards are software UI, not BI delivery)
-- Build_Target_Type: Application_Code
-- Generation_Strategy: Full optimized artifact set; skip only 03 because no existing application/source-code or runtime evidence exists.
+- Build_Target_Type: Current_State_Documentation
+- Lifecycle_Run_Mode: Change_Impact
+- Source_Baseline_ID: SRC-BL-006
+- Generation_Strategy: Targeted reverse-engineering refresh of 00, 01, 03, 07, 08 and 10; prior target build artifacts are retained but are not a current implementation handoff.
 
 ## Project Classification
 
 | Classification_ID | Classification_Area | Value | Rationale | Source_IDs | Impact |
 |---|---|---|---|---|---|
-| CLASS-001 | Project_Domain | Software | Greenfield web/PWA application with user roles, registration workflows, gate operations and application database | SRC-001–SRC-009 | Software optimized artifact rules apply |
+| CLASS-001 | Project_Domain | Software | Existing repository contains a React/Node.js application, PostgreSQL migrations and API/UI tests | SRC-018–SRC-021 | Software optimized artifact rules apply |
 | CLASS-002 | Data_Analytics_Subtype | Not_Applicable | PostgreSQL is transactional application storage; no pipeline, warehouse, BI semantic layer or governance catalog evidence | SRC-001–SRC-009 | Data & Analytics conditional sections are N/A |
 | CLASS-003 | Risk_Profile | High | Gate access decisions, identity photographs, mobile/passport/ID data, public QR retrieval and audit obligations | SRC-001–SRC-003 | Enterprise security, privacy, operational and approval gates are mandatory |
 | CLASS-004 | Regulatory_Exposure | DPDP applies; interim POL-001 approved for build/UAT | SRC-001/SRC-003 state DPDP applies; DEC-002 approves notice/consent/retention policy for build/UAT, with full counsel review before G3 | SRC-001, SRC-003, SRC-011 | Apply CR-002/POL-001; no G3 release before legal review and evidence |
@@ -33,10 +35,10 @@
 
 | Detection_ID | Evidence | Interpretation | Decision | Confidence | Related_Input_Source |
 |---|---|---|---|---|---|
-| DET-001 | BRD/FRD, architecture, UI mockup and SQL reference files; no application source tree or runtime evidence | New application requirements and design inputs only | Forward_Engineering | High | SRC-001–SRC-009 |
-| DET-002 | HTML/CSS/JS is a mockup; SQL files are schema, sample data and query references | Not an existing deployable codebase | Skip 03_Current_State_Analysis.md | High | SRC-006–SRC-009 |
+| DET-001 | Existing API/UI source, package manifests, migrations and automated tests are present alongside current implementation documentation | Existing implementation is the primary as-is evidence | Reverse_Engineering_Only | High | SRC-012–SRC-021 |
+| DET-002 | Updated docs describe repository behavior; no new feature, migration, modernization, rewrite or enhancement request is included | Current state only; do not infer a future-state build from old target artifacts | No 02/04/05/06/09 generation in this run; create 03 | High | SRC-012–SRC-017, SRC-018–SRC-021 |
 | DET-003 | PII, gate admission decisions, audit and DPDP obligations | Production business/security sensitivity | Enterprise | High | SRC-001–SRC-003 |
-| DET-004 | No orchestration, warehouse, BI semantic-model or catalog artifacts | Application domain, not Data & Analytics | Domain=Software | High | SRC-001–SRC-009 |
+| DET-004 | No pipeline, warehouse, BI semantic-model or catalog artifacts | Application domain, not Data & Analytics | Domain=Software | High | SRC-012–SRC-021 |
 
 ## Source Folder Inventory
 
@@ -52,6 +54,11 @@
 | SRC-008 | Inputs Artifacts/Maitribodh_AMS_Database_SQL_v2/ | 02_seed_data.sql | Database | Sample | Supporting | Illustrative master data | Replace/approve sample values before production |
 | SRC-009 | Inputs Artifacts/Maitribodh_AMS_Database_SQL_v2/ | 03_api_queries.sql | Technical | Draft | Primary for query behavior | API data operations and jobs | Validate against FRD, authorization and transaction boundaries |
 | SRC-011 | Inputs Artifacts/ | MAMS Blocker Resolution Pack v1.pdf | Governance / Decision_Pack | Approved v1.2; named decisions signed 2026-10-08 | Primary for blocker decisions and approved change requests | DEC-001–004, POL-001, RB-001–006, TEP-001, WVR-001/005/006, CR-001–003 | G1 was pending when this pack was signed; it was subsequently approved on 2026-10-09. G3 pen test, legal review, drills and evidence remain required |
+| SRC-012–017 | `docs/` | Six updated MAMS implementation and local-development Markdown references | Current implementation documentation | Updated 2026-10-27 | Primary for documented as-is behavior | Business rules, API/data behavior, implementation boundaries and Windows local operations | Does not prove a live deployment or applied database state |
+| SRC-018 | `Maitribodh-API/` | API source, manifest, tests and database runtime code | Codebase | Current repository | Primary for API as-is structure/behavior | Express routes/services/repositories, API tests, migrations runner | Tests have 2 failures in this run; no live DB inspection |
+| SRC-019 | `Maitribodh-UI/` | UI source, manifest and tests | Codebase | Current repository | Primary for UI as-is structure/behavior | React screens, client API/store, UI tests | Tests have 3 timeouts in this run |
+| SRC-020 | `Maitribodh-API/db/migrations/` | Ten numbered PostgreSQL migrations | Database / Codebase | Current repository | Primary for repository schema history | Migrations 0001–0010 | Files do not prove which migrations are applied in any database |
+| SRC-021 | Repository root and project configuration | Readmes, lockfiles, scripts and deployment/CI inventory | Codebase / Operations | Current repository | Supporting | Local setup and operations; checked-in deployment evidence | No CI workflow, Terraform, container manifest or live runtime evidence found in inspected root |
 
 ## Stakeholders And Ownership
 
@@ -78,46 +85,37 @@
 
 | Artifact | Required_For_Greenfield | Required_For_Reverse_To_Forward | Required_For_Regulated | Domain_Subtype_Condition | Generate | Reason |
 |---|---|---|---|---|---|---|
-| 00_Project_Intake_And_Mode.md | Yes | Yes | Yes | Always | Yes | Entry baseline |
-| 01_Source_Baseline.md | Yes | Yes | Yes | No change | Yes | Nine current source files |
-| 02_Requirements_And_Scope.md | Yes | Yes | Yes | No change | Yes | BRD and FRD supplied |
-| 03_Current_State_Analysis.md | No | Yes | Yes when existing system | No change | No | No existing application code/runtime evidence |
-| 04_Target_Solution_Architecture.md | Yes | Yes | Yes | No change | Yes | Target architecture and security required |
-| 05_Technology_Engineering_And_Design.md | Yes | Yes | Yes | Software; UI sections required | Yes | Architecture and mockup supplied |
-| 06_Backlog_Delivery_And_Migration_Plan.md | Yes | Yes | Yes | No change | Yes | Delivery backlog required; data migration is N/A (fresh start) |
-| 07_Quality_Test_And_Validation.md | Yes | Yes | Yes | No change | Yes | Enterprise quality and evidence gates required |
-| 08_Release_Operations_And_Governance.md | Yes | Yes | Yes | No change | Yes | Enterprise governance, operations and compliance required |
-| 09_Build_Prompt.md | Build in scope | Yes | Yes | Application_Code | Yes, gated | Implementation handoff is not authorized until 10 passes |
+| 00_Project_Intake_And_Mode.md | Yes | Yes | Yes | Always | Yes | Current run classification |
+| 01_Source_Baseline.md | Yes | Yes | Yes | No change | Yes | Current docs, source code, migrations and tests reconciled as SRC-BL-006 |
+| 02_Requirements_And_Scope.md | Yes | Yes | Yes | No change | No | No new target-state requirements were requested; prior version retained as historical target scope |
+| 03_Current_State_Analysis.md | No | Yes | Yes when existing system | No change | Yes | Repository has API/UI source, migrations and tests |
+| 04_Target_Solution_Architecture.md | Yes | Yes | Yes | No change | No | No new target architecture decision requested; prior version is not current-state evidence |
+| 05_Technology_Engineering_And_Design.md | Yes | Yes | Yes | Software; UI sections required | No | No technology change request; implementation inventory is in 03 |
+| 06_Backlog_Delivery_And_Migration_Plan.md | Yes | Yes | Yes | No change | No | No new delivery/migration scope requested |
+| 07_Quality_Test_And_Validation.md | Yes | Yes | Yes | No change | Yes | Refresh with current test execution and evidence gaps |
+| 08_Release_Operations_And_Governance.md | Yes | Yes | Yes | No change | Yes | Refresh source-change decision and verified operational evidence |
+| 09_Build_Prompt.md | Build in scope | Yes | Yes | Application_Code | No | Prior build prompt is stale against SRC-BL-006; no build requested |
 
 ## Tool And Integration Targets
 
 | Target_ID | Target_Type | Tool_or_System | Intended_Use | Required | Owner | Notes |
 |---|---|---|---|---|---|---|
-| TOOL-001 | Cloud | AWS: ECS Fargate, RDS PostgreSQL, S3, CloudFront/WAF, Route 53/ACM, KMS, Secrets Manager, CloudWatch | Production hosting and operations | Yes | IT Team | Architecture target; provisioning/account readiness unverified |
-| TOOL-002 | Repository_CICD | GitHub / GitHub Actions | Source control, CI, deployment | Yes | IT Team | Architecture describes repo `Maitribudh-AMS`; no repository supplied |
-| TOOL-003 | IaC | Terraform | Environment infrastructure | Yes | IT Team | Source architecture; code and approval not supplied |
+| TOOL-001 | Cloud | AWS services named in historical architecture | Prior target architecture only | Not verified as current | Unknown | Not observed | No cloud account, infrastructure-as-code, deployment or runtime evidence was inspected |
+| TOOL-002 | Repository_CICD | Current Git repository; GitHub Actions not found in inspected root | Source control; CI/deployment unverified | No current pipeline evidence | Unknown | Not observed | No `.github/workflows` directory or CI run was present in the inspected repository |
+| TOOL-003 | IaC | Terraform | Environment infrastructure | Not verified as current | Unknown | Not observed | No Terraform files were found in the inspected repository root |
 | TOOL-004 | External_Integration | Email, SMS/OTP, WhatsApp, SSO | Not used in Phase 1 | No | Product_Owner | Explicitly excluded in current architecture/requirements |
 
 ## Open Questions And Blockers
 
 | Question_ID | Question | Impact | Blocking | Owner | Due_Date | Related_Source |
 |---|---|---|---|---|---|---|
-| Q-INTAKE-001 | Confirm responsive web/device-camera gate platform (OI-01) | User-device and rollout design | Yes before design approval | Ashram Management | Not specified | SRC-001, SRC-003 |
-| Q-INTAKE-002 | Confirm photo capture/upload and interim storage/consent handling (OI-06) | Registration and PII controls | No for build/UAT; approved by POL-001, full legal review before G3 | Data_Owner | 2026-10-08; legal review before G3 | SRC-001–SRC-003, SRC-011 |
-| Q-INTAKE-003 | Approve detailed DPDP controls, consent, retention periods and audit retention (OI-10) | Legal/privacy and lifecycle | No for build/UAT under signed interim POL-001; legal review still blocks G3 | Compliance_Owner | Before G3 | SRC-001, SRC-003, SRC-011 |
-| Q-INTAKE-004 | Confirm whether approval_required is configurable for each category (OI-09) | Category behavior/schema | Yes before acceptance | Product_Owner | Not specified | SRC-001, SRC-002, SRC-007 |
-| Q-INTAKE-005 | Confirm overstay cutoffs for categories other than day visitors/contractors and alert recipients (OI-11) | Background job and notification tests | Yes before release | Operations_Owner | Not specified | SRC-001–SRC-003 |
-| Q-INTAKE-006 | Decide if accompanying people count toward occupancy (OI-12) | Occupancy reports and counts | Yes before acceptance | Product_Owner | Not specified | SRC-001, SRC-007 |
-| Q-INTAKE-007 | Approve mappings between six base categories and broad categories; permissions (OI-16) | Seed data and access policy | Yes before production setup | Product_Owner | Not specified | SRC-001, SRC-008 |
-| Q-INTAKE-008 | Finalize bulk-upload columns, photos and approval handling for Staff/Parivar rows (OI-17) | Upload implementation and tests | Yes before bulk-upload release | Product_Owner | Not specified | SRC-001, SRC-002 |
-| Q-INTAKE-009 | Confirm QR payload fields/versioning that guarantee uniqueness across duplicate/shared-mobile registrations (OI-19) | QR validation, lookup and gate scan | No; signed QR uses Person ID/version/HMAC per DEC-001 | Architecture_Owner | 2026-10-08 | SRC-001–SRC-004, SRC-009, SRC-011 |
-| Q-INTAKE-010 | Resolve conflicting scale statements and select capacity baseline | Infrastructure sizing and performance gate | No; CAP-01–06/SLO-01–06 approved by DEC-003; load test remains before G2/G3 | Architecture_Owner | 2026-10-08; load test before G2 | SRC-001, SRC-003, SRC-011 |
-| Q-INTAKE-011 | Approve production and pilot topology and availability targets | Resilience, cost and release scope | No; selected in DEC-003; production provisioning still pending | Business_Sponsor | 2026-10-08 | SRC-003, SRC-011 |
-| Q-INTAKE-012 | Name accountable individual approvers and accept/reject the source architecture and this baseline | Governance and build authorization | Resolved for build: G0 baseline accepted and G1 approved on 2026-10-09 by Vineet Agrawal and Sujal Ray; G2/G3 approvals remain | Business_Sponsor | 2026-10-09; approved | SRC-001–SRC-003, SRC-011; approval confirmed by requester, separate evidence ID not provided |
-| Q-INTAKE-013 | Hold the decision meeting and complete/sign the Blocker Resolution Pack; confirm proposed resolutions/waivers and provide named owners/dates | Validation readiness and closure of BLOCK-001–006 | Resolved for build: pack v1.2 signed, validator passed, and G1 approved on 2026-10-09; later G2/G3 evidence remains | Business_Sponsor and control owners | 2026-10-09; resolved for build | SRC-011; approval confirmed by requester, separate evidence ID not provided |
+| Q-INTAKE-001 | Which database/environment is authoritative, and which of migrations 0001–0010 are applied there? | Prevents claims about deployed schema/data state | Yes for deployment claims | Operations_Owner (not verified) | Not specified | SRC-020, SRC-016 |
+| Q-INTAKE-002 | Are CI, Terraform, container, monitoring and cloud-deployment assets maintained outside this repository? | Current repository may not include the full operating system | No | Release_Owner (not verified) | Not specified | SRC-021 |
+| Q-INTAKE-003 | What is the approved disposition for the five failing API/UI tests observed in this run? | Test readiness and any future implementation handoff | Yes for release readiness | QA_Owner (not verified) | Not specified | SRC-018, SRC-019 |
 
 ## Traceability Instructions
 - All current inputs are listed in this artifact and expanded in 01; SRC-005 is explicitly unverified.
 - Domain=Software and Data_Analytics_Subtype=Not_Applicable govern conditional sections in 02–09.
 - Current source inputs supersede the previous baseline; unresolved questions and material risks flow to 07–10.
 - No application implementation may start unless `10_ADLC_Validation_Report.md` is Pass or Conditional Pass with approved exceptions.
+- This run is reverse-engineering only. Updated `docs/` and repository source are evidence of the current application; prior forward-engineering build artifacts are retained as historical material and are not authorized for execution.

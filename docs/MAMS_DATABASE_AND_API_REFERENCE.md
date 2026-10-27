@@ -1,10 +1,10 @@
 # MAMS Database, Schema, Tables, and API Reference
 
-Reference date: 2026-10-13.
+Reference date: 2026-10-27.
 
 ## 1. Scope and source of truth
 
-This document describes the database objects and API endpoints implemented in this repository. The table definitions below represent the final schema after migrations `0001` through `0007`, not just the initial migration.
+This document describes the database objects and API endpoints implemented in this repository. The table definitions below represent the final schema after migrations `0001` through `0010`, not just the initial migration.
 
 **Verification boundary:** this document was generated from source code and SQL migrations. It does not confirm that an AWS RDS instance exists, that migrations have run against a particular database, or that a deployed API is reachable. No database or AWS resources were created while preparing this reference.
 
@@ -159,8 +159,13 @@ Do not manually edit an applied migration. Add a new numbered migration for futu
 | [0005_seed_registration_masters.sql](../Maitribodh-API/db/migrations/0005_seed_registration_masters.sql) | Adds category icon/description and inserts baseline master data |
 | [0006_optional_person_photo.sql](../Maitribodh-API/db/migrations/0006_optional_person_photo.sql) | Removes photo from the general completed-person constraint |
 | [0007_require_person_photo.sql](../Maitribodh-API/db/migrations/0007_require_person_photo.sql) | Adds `photo_required`; preserves existing records with `false`, then defaults new rows to `true` |
+| [0008_international_person_mobile.sql](../Maitribodh-API/db/migrations/0008_international_person_mobile.sql) | Expands person primary mobile to 16 characters, normalizes existing Indian values to `+91` E.164 form, and enforces an E.164 database check |
+| [0009_drop_overstay_cutoff.sql](../Maitribodh-API/db/migrations/0009_drop_overstay_cutoff.sql) | Removes the category `overstay_cutoff` column |
+| [0010_remove_permission_levels.sql](../Maitribodh-API/db/migrations/0010_remove_permission_levels.sql) | Removes permission-level lookup values and category/person columns and removes configured permission-level fields from saved schemas and drafts |
 
 **Final photo behavior:** existing records are not retroactively forced to have a photograph. New non-draft rows normally require a photo through `photo_required=true`. The registration API independently requires a valid photo.
+
+Migration files shown here are the repository's migration history, not proof that any particular database has applied them. Verify the target database's `public.schema_migrations` before relying on its schema.
 
 ## 4. Table inventory and relationships
 
@@ -187,7 +192,7 @@ Do not manually edit an applied migration. Add a new numbered migration for futu
 ```text
 app_user -------< person (registered_by / approved_by / updated_by / consent_captured_by)
 app_user -------< visit / approval_history / blacklist / notification / audit_log
-app_user -------< bulk_upload / person_location
+app_user -------< bulk_upload
 category -------< person
 category -------< lookup_value
 category -------< category (broad_category_id)
@@ -284,7 +289,6 @@ Purpose: person classification, approval rules, and dynamic registration form co
 | `name` | varchar(50) | No | Case-insensitively unique name |
 | `form_type` | varchar(20) | No | `GENERIC`; form enum below |
 | `approval_required` | boolean | Yes | `false`; null means rule unconfirmed |
-| `overstay_cutoff` | time | Yes | Category cutoff time |
 | `is_broad` | boolean | No | `false`; broad-category flag |
 | `broad_category_id` | smallint | Yes | FK -> `category.category_id` |
 | `status` | varchar(10) | No | `ACTIVE`; `ACTIVE` / `INACTIVE` |
@@ -296,7 +300,7 @@ Purpose: person classification, approval rules, and dynamic registration form co
 
 Form types: `STAFF`, `PARIVAR`, `VISITOR`, `VENDOR`, `CONTRACTOR`, `PARTICIPANT`, `GENERIC`.
 
-The registration API blocks submission when `approval_required` is null. A non-empty custom `form_schema` takes precedence over the built-in form-type schema.
+The registration API blocks submission when `approval_required` is null. A non-empty custom `form_schema` takes precedence over the built-in form-type schema. The `overstay_cutoff` column was removed in migration `0009`; permission-level assignment was removed in migration `0010`. The current category API does not expose broad-category fields even though legacy broad-category columns remain in the database.
 
 Custom form schema supports up to 50 uniquely keyed fields. Field types are `text`, `date`, `number`, and `select`; fields can specify required state, allowed options, or a master-data source. Schema-level flags control address and emergency-contact requirements.
 
@@ -351,8 +355,8 @@ Purpose: registered people, personal information, category-specific details, dra
 | `subcategory_id` | integer | Yes | FK -> `lookup_value.lookup_id` |
 | `first_name` | varchar(100) | Yes | Required by completion constraint outside drafts |
 | `last_name` | varchar(100) | Yes | Required by completion constraint outside drafts |
-| `mobile` | varchar(10) | Yes | Indexed, not unique |
-| `alternate_mobile` | varchar(10) | Yes | Alternate contact |
+| `mobile` | varchar(16) | Yes | Primary contact in E.164 form; indexed, not unique |
+| `alternate_mobile` | varchar(10) | Yes | Alternate Indian contact number |
 | `gender` | varchar(6) | Yes | `MALE` / `FEMALE` / `OTHER` |
 | `date_of_birth` | date | Yes | Birth date |
 | `resident_status` | varchar(12) | No | `RESIDENT`; `RESIDENT` / `NON_RESIDENT` |
@@ -365,7 +369,7 @@ Purpose: registered people, personal information, category-specific details, dra
 | `id_proof_number_enc` | text | Yes | Encrypted ID-proof data |
 | `id_proof_last4` | varchar(4) | Yes | Masking suffix |
 | `emergency_contact_name` | varchar(100) | Yes | Emergency contact |
-| `emergency_contact_mobile` | varchar(10) | Yes | Emergency mobile |
+| `emergency_contact_mobile` | varchar(10) | Yes | Emergency Indian mobile |
 | `category_details` | jsonb | No | `{}`; dynamic form values |
 | `accompanying` | jsonb | No | `[]`; accompanying-person metadata |
 | `accompanying_count` | smallint | No | `0` |
@@ -402,6 +406,8 @@ Important constraints:
 - Resident records cannot store encrypted passport data; non-resident non-drafts require it.
 - Registration consent fields must be all null or all populated.
 - Non-draft, non-bulk-upload records require registration consent.
+- `mobile` is constrained to E.164 format by migration `0008`; Visitor registration may use a valid international primary number, while non-Visitor categories require an Indian number.
+- Alternate and emergency mobile validation remains limited to the supported Indian 10-digit format.
 - Guardian consent fields must be all null or all populated.
 - Duplicate person mobiles are allowed; operator account mobiles are not.
 
@@ -560,16 +566,16 @@ Migration `0005` inserts baseline data with `ON CONFLICT DO NOTHING`. Identity I
 
 ### 6.1 Categories
 
-| Name | Form type | Approval required | Overstay cutoff |
-|---|---|---|---|
-| Staff | `STAFF` | Yes | None |
-| Visitor | `VISITOR` | No | `22:00` |
-| Vendor | `VENDOR` | No | None |
-| Contractor | `CONTRACTOR` | No | `22:00` |
-| Participant | `PARTICIPANT` | No | None |
-| Parivar Member | `PARIVAR` | Yes | None |
+| Name | Form type | Approval required |
+|---|---|---:|
+| Staff | `STAFF` | Yes |
+| Visitor | `VISITOR` | No |
+| Vendor | `VENDOR` | No |
+| Contractor | `CONTRACTOR` | No |
+| Participant | `PARTICIPANT` | No |
+| Parivar Member | `PARIVAR` | Yes |
 
-These are insertion defaults; existing conflicting category rows are not comprehensively overwritten.
+These are insertion defaults; existing conflicting category rows are not comprehensively overwritten. Migration `0010` removes the former `PERMISSION_LEVEL` lookup and category/person permission-level fields. Migration `0009` removes category overstay cutoffs.
 
 ### 6.2 Lookup values and locations
 
@@ -595,7 +601,7 @@ These are insertion defaults; existing conflicting category rows are not compreh
 | `PARIVAR` | `subcategory_id` | Address and emergency contact required; optional membership date, seva area, referral |
 | `GENERIC` | None in default schema | Optional `details` |
 
-Custom category schemas may change these requirements. Always fetch registration options before constructing a form.
+Custom category schemas may change these requirements. Always fetch registration options before constructing a form. The Visitor UI also collects optional `driver_available` (`YES`/`NO`) and, only when `YES`, optional `driver_name` and `driver_mobile`. Driver mobile is validated as an Indian 10-digit number; these conditional fields are not part of the default schema list.
 
 ## 7. API conventions and permissions
 
@@ -631,7 +637,7 @@ Route-level permission does not guarantee an operation will succeed: services an
 
 Notable restrictions:
 
-- Security guards can register only visitors; registration forces `source=WALK_IN` and clears requested custom permission/location assignments.
+- Security guards can register only Visitor-form categories; registration forces `source=WALK_IN` and clears area assignments. Permission-level assignment is not part of the current schema/API.
 - Staff profile editing has additional administrator-only restrictions.
 - Security guards may fetch profile photos but not person documents. Guard photo capture is limited to active non-Staff people without an existing photo, including references whose stored file is confirmed missing by the server. The missing reference is rechecked under the person row lock before updating; an existing or concurrently replaced photo cannot be overwritten by a guard.
 - An account with `must_change_password=true` can call only password change and logout until the password is changed.
@@ -736,9 +742,9 @@ Source: [category routes](../Maitribodh-API/src/modules/categories/categories.ro
 | GET | `/api/v1/categories/:categoryId` | ADMIN | Category ID | `200`, category |
 | PATCH | `/api/v1/categories/:categoryId` | ADMIN | At least one supported field | `200`, updated category |
 
-Create fields: `name`, `icon`, `description`, `formType`, `approvalRequired`, `overstayCutoff`, `isBroad`, `broadCategoryId`.
+Create fields: `name`, `icon`, `description`, `formType`, and `approvalRequired`.
 
-PATCH additionally supports `status` and `formSchema`. `approvalRequired` accepts null; cutoff accepts `HH:MM`, `HH:MM:SS`, or null. `formSchema` is configured through PATCH, not the create route.
+PATCH additionally supports `status` and `formSchema`. `approvalRequired` accepts null. The API does not expose `overstayCutoff`, `isBroad`, or `broadCategoryId`; the legacy broad-category database columns are not currently manageable through these routes.
 
 ### 8.5 Lookup values
 
@@ -795,12 +801,12 @@ Registration `metadata` is a JSON string containing:
 |---|---|
 | `categoryId` | Required positive integer |
 | `firstName`, `lastName` | Required, 1-100 characters; Unicode letters/marks, spaces, and hyphens |
-| `mobile` | Required 10-digit Indian mobile beginning with 6-9 |
+| `mobile` | Required valid phone number. Visitor registrations may use a valid international number; other form types require a valid Indian number. Persisted primary values use E.164 form. |
 | `gender` | Required: `MALE`, `FEMALE`, `OTHER` |
 | `consent` | Required literal `true` |
 | `residentStatus` | `RESIDENT` (default) or `NON_RESIDENT` |
 | `passportNumber` | Non-residents require 6-9 alphanumeric characters |
-| `alternateMobile`, `emergencyMobile` | Valid mobile or empty string |
+| `alternateMobile`, `emergencyMobile` | Indian 10-digit mobile beginning with 6-9, or empty string |
 | `dateOfBirth` | ISO date or empty string; future dates rejected |
 | `email` | Valid email up to 150 characters or empty string |
 | `address`, `remarks` | Up to 500 characters |
@@ -820,7 +826,7 @@ Further registration behavior:
 - Documents: PDF/JPG/PNG, at most 5 MiB each; at most 12 documents. Document images are converted to JPEG.
 - Files are stored under `UPLOAD_DIRECTORY`, not S3.
 - Person detail removes encrypted passport/ID values and draft payload from its response.
-- Draft payloads omit sensitive passport/ID numbers; photo/document bytes are not saved in drafts.
+- Draft payloads blank passport/ID numbers; photo/document bytes are not saved in drafts. Draft listing returns only the current user's drafts updated during the preceding seven days. The UI clears consent on resume and requires fresh consent at submission.
 - Profile PATCH requires `firstName`, `lastName`, and `mobile`; it is not a fully optional partial patch. Optional supported fields are `alternateMobile`, `email`, `address`, `emergencyName`, `emergencyMobile`; omitted optional fields receive validation defaults.
 - File downloads must refer to that person's photo or a listed document key. Security guards can download photos only.
 
@@ -841,9 +847,9 @@ Source: [public QR routes](../Maitribodh-API/src/modules/qr/public-qr.routes.js)
 
 | Method | Path | Access | Input | Success |
 |---|---|---|---|---|
-| POST | `/api/v1/public/qr-lookups` | PUBLIC, rate-limited | `mobile`: exactly 10 digits | `200`, `{ "items": [...] }` |
+| POST | `/api/v1/public/qr-lookups` | PUBLIC, rate-limited | Valid international E.164 mobile or 10-digit Indian mobile | `200`, `{ "items": [...] }` |
 
-Unlike registration validation, this route accepts any 10-digit mobile format. Service-level limiting can return `429` with `Retry-After`. Public lookup is distinct from the authenticated PNG generation endpoint.
+Ten-digit values are normalized as Indian `+91` numbers; international values must be valid phone numbers. Service-level limiting can return `429` with `Retry-After`. Public lookup is distinct from the authenticated PNG generation endpoint.
 
 ### 8.10 Gate lookup
 
@@ -851,9 +857,9 @@ Source: [gate routes](../Maitribodh-API/src/modules/gate/gate.routes.js).
 
 | Method | Path | Access | Input | Success |
 |---|---|---|---|---|
-| POST | `/api/v1/gate/lookups` | REGISTRATION | Required `locationId`; exactly one of `qrPayload`, `mobile`, `query` | `200`, lookup/eligibility result |
+| POST | `/api/v1/gate/lookups` | REGISTRATION | Required active `locationId`; exactly one of `qrPayload`, `mobile`, `query` | `200`, lookup/eligibility result |
 
-`qrPayload` is at most 256 characters; `mobile` is exactly 10 digits; `query` is 1-100 trimmed characters. Lookup does not itself create a visit; check-in uses the visits API.
+`qrPayload` is at most 256 characters; `mobile` is an Indian 10-digit or international E.164 number; `query` is 1-100 trimmed characters. Lookup does not itself create a visit; check-in uses the visits API. The UI Gate screen is provided to Admin, Super Admin, and Security Guard, while this API lookup route also permits Approver and Registration Officer roles.
 
 ### 8.11 Visits
 

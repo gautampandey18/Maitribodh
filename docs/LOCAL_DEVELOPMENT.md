@@ -7,7 +7,7 @@ This guide covers the local Windows/PowerShell workflow for the Maitribodh Acces
 - Node.js 22 or newer and npm.
 - PostgreSQL 16 running locally on `127.0.0.1:5432`.
 - PostgreSQL role `postgres` and its password.
-- PowerShell opened in the workspace `C:\Project\Maitribudh`.
+- PowerShell opened in the repository root, for example `C:\Project\Maitribodh-AMS\Maitribodh`.
 
 Check Node/npm and PostgreSQL client availability:
 
@@ -17,7 +17,7 @@ npm --version
 psql --version
 ```
 
-If PostgreSQL is stopped, start its Windows service from Services (`services.msc`) or the PostgreSQL application. The service name varies by installation. Verify connectivity by running the local DB task from `Maitribudh-API`:
+If PostgreSQL is stopped, start its Windows service from Services (`services.msc`) or the PostgreSQL application. The service name varies by installation. Verify connectivity by running the local DB task from `Maitribodh-API`:
 
 ```powershell
 npm run db:connect:local
@@ -30,13 +30,13 @@ Enter the password at the prompt; do not put it in the command line. At the `psq
 Install the locked dependencies from each project directory:
 
 ```powershell
-cd .\Maitribudh-API
+cd .\Maitribodh-API
 npm ci
-cd ..\Maitribudh-UI
+cd ..\Maitribodh-UI
 npm ci
 ```
 
-Apply migrations from `Maitribudh-API`. This npm command calls a local PowerShell helper that prompts for the DB password without echoing it and clears the temporary connection variable afterward:
+Apply migrations from `Maitribodh-API`. This npm command calls a local PowerShell helper that prompts for the DB password without echoing it and clears the temporary connection variable afterward:
 
 ```powershell
 npm run migrate:local
@@ -44,13 +44,15 @@ npm run migrate:local
 
 Migration `0007_require_person_photo.sql` requires photos on new person registrations; existing photo-less records are retained so Security can capture a photo at first check-in. Photos must be JPG/PNG and no larger than 2 MB. Run migrations before restarting the API.
 
+The current migration set also normalizes existing Indian primary person mobile numbers to E.164 and removes the legacy category overstay-cutoff and permission-level assignment fields. Visitor registration accepts valid international primary mobile numbers; other person categories require an Indian primary number. Review [MAMS_DATABASE_AND_API_REFERENCE.md](./MAMS_DATABASE_AND_API_REFERENCE.md) for the full migration history.
+
 Migrations are checksum-tracked and safe to rerun: already-applied migrations are skipped, and changed applied migrations cause an error. They create/update the `mams` schema and include the registration categories/master data.
 
 ### Optional Development Fixtures
 
 For a disposable local database with no existing application users or operational/custom data, seed synthetic development fixtures:
 
-Run from `Maitribudh-API`:
+Run from `Maitribodh-API`:
 
 ```powershell
 npm run seed:dev:local
@@ -62,7 +64,7 @@ This seed is intentionally one-time. If it reports `Development fixtures already
 
 Optional mockup role accounts can be added after the development seed:
 
-Run from `Maitribudh-API`:
+Run from `Maitribodh-API`:
 
 ```powershell
 npm run seed:demo-users:local
@@ -74,16 +76,14 @@ This prompts for the database password and one shared strong demo password. Each
 
 Use two separate PowerShell terminals, each opened in its project directory.
 
-Terminal 1, start the API on port 6200:
-
-Terminal 1, from `Maitribudh-API`, start the API on port 6200:
+Terminal 1, from `Maitribodh-API`, start the API on port 6200:
 ```powershell
 npm run dev:local
 ```
 
 Enter the PostgreSQL password at the masked prompt. The script creates temporary local JWT/QR secrets and clears them when stopped. Restarting it invalidates existing login sessions; sign in again after a restart. Leave this terminal running.
 
-Terminal 2, from `Maitribudh-UI`, start Vite:
+Terminal 2, from `Maitribodh-UI`, start Vite:
 
 ```powershell
 npm run dev
@@ -130,7 +130,7 @@ npm run build
 1. Stop the API with `Ctrl+C` in its terminal. Stop other local tools that are writing to this database.
 2. Optional but recommended: create a full database backup. Run from the API directory; `pg_dump` prompts for the password:
 
-    From `Maitribudh-API`, run the backup task; `pg_dump` prompts for the DB password and writes the dump under the OS temp directory:
+    From `Maitribodh-API`, run the backup task; `pg_dump` prompts for the DB password and writes the dump under the OS temp directory:
 
     ```powershell
     npm run db:backup:local
@@ -138,9 +138,9 @@ npm run build
 
 3. Connect to the explicitly local database and verify the target before deleting anything:
 
-    Run `npm run db:connect:local` from `Maitribudh-API` and enter the password at the prompt.
+    Run `npm run db:connect:local` from `Maitribodh-API` and enter the password at the prompt.
 
-    At the `psql` prompt, run `\conninfo`. Continue only if it confirms the expected local host and `postgres` database. Exit with `\q`, then run the guarded reset task from `Maitribudh-API`:
+    At the `psql` prompt, run `\conninfo`. Continue only if it confirms the expected local host and `postgres` database. Exit with `\q`, then run the guarded reset task from `Maitribodh-API`:
 
     ```powershell
     npm run db:reset:local

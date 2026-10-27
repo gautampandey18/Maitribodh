@@ -2,25 +2,30 @@
 
 ## Metadata
 - Project_Name: Maitribodh Access Management System (MAMS)
-- Execution_Mode: Forward_Engineering
+- Execution_Mode: Reverse_Engineering_Only
 - Delivery_Tier: Enterprise
 - Domain: Software
 - Data_Analytics_Subtype: Not_Applicable
-- Source_Baseline_ID: SRC-BL-005
-- Document_Version: 3.6
-- Date: 2026-10-08
+- Source_Baseline_ID: SRC-BL-006
+- Document_Version: 3.7
+- Date: 2026-10-27
 - Owner: Gaurav Sharma, Release_Owner (RACI-001, SRC-011)
 
 ## Purpose
-Define release and operational controls for the current greenfield baseline. Architecture is proposed and approval status is not stated; no environment, pipeline, runbook, test evidence or named approver has been verified.
+Record operational evidence and change governance for the current repository baseline. This run inspected local code and scripts only. It did not inspect a live environment, database, cloud account, CI run, monitoring system, or production runbook execution. The AWS topology and prior release gates below are historical target-state artifacts, not evidence of deployment.
 
 ## Release Notes
-- Release baseline: Initial MAMS build, no legacy import; target architecture uses React PWA, Express API, PostgreSQL 16 and AWS.
+- Current repository baseline: API, React/Vite UI, PostgreSQL migrations 0001–0010, local operating scripts and automated tests are present.
+- Current run: Reverse_Engineering_Only; no feature build or release is authorized by this artifact update.
+- Test run on 2026-10-27: API suite 193 passed/2 failed; UI suite 98 passed/3 timed out. See 07 and 03 for details.
+- No live database, applied migration state, cloud deployment, CI pipeline, monitoring, backup/restore execution or production approval evidence was inspected.
+- The AWS/ECS/RDS topology and prior G0/G1 approval below belong to SRC-BL-005 target-state history only; they do not establish that the current application is deployed or authorize work from SRC-BL-006.
 - DEC-001–004, POL-001, RACI-001, RB-001–006, TEP-001, WVR-001/005/006 and CR-001–003 are approved in SRC-011.
-- Build start was authorized on 2026-10-09 after validator Pass and G1 approval from Vineet Agrawal and Sujal Ray. Pen test, DPDP counsel review, load test, drills and TEP-001 evidence remain G2/G3 gates as applicable.
+- Historical SRC-BL-005 build start was authorized on 2026-10-09; that authorization is not carried forward to SRC-BL-006.
 - Older proposal-derived schedule, cost, VIP category, 15-minute timeout and one-record-per-person rule are superseded by SRC-BL-003 sources.
 
 ## Release Scope And Readiness
+The feature and gate rows below describe historical SRC-BL-005 target scope. They are not a current deployment or release-status report.
 
 | Release_Item_ID | Type | Scope_or_Gate | Readiness | Evidence | Note |
 |---|---|---|---|---|---|
@@ -31,6 +36,7 @@ Define release and operational controls for the current greenfield baseline. Arc
 | REL-005 | Operations | DEC-003 topology/capacity and approved outage/restore runbooks | Conditional for build/UAT | 04, 06, 07, SRC-011 | Topology/runbooks approved; provisioning, load test and drills remain before G2/G3 |
 
 ## Environment Configuration And Deployment Readiness
+The following environment profiles are historical target designs from SRC-BL-005. This repository inspection found no checked-in Terraform/container/CI deployment configuration and did not verify any AWS account or running environment.
 
 | Environment_ID | Purpose | Target_Configuration | Required_Controls | Owner | Status |
 |---|---|---|---|---|---|
@@ -44,7 +50,7 @@ Define release and operational controls for the current greenfield baseline. Arc
 - Environment variable values/secrets are not source-controlled; use Secrets Manager and restricted deployment identities.
 
 ## Source Control Build And Release Baseline
-- Repository: GitHub `Maitribudh-AMS` (target name only; actual repo/access not provided).
+- Repository: current working repository contains API and UI project folders. A GitHub Actions workflow was not found in the inspected root.
 - CI: zero-warning ESLint, Prettier check, UI/API unit/integration tests, >=80% coverage on services/reducers/utils, high-severity `npm audit` failure, SAST, SBOM/license, container and secret scans per QG-01–08.
 - Artifacts: commit-tagged Docker image to ECR; versioned UI build to environment S3; CloudFront invalidation.
 - Database: reviewed, numbered migrations; do not apply draft SQL without schema/query review and backup.
@@ -96,7 +102,7 @@ Define release and operational controls for the current greenfield baseline. Arc
 
 ## Governance Baseline And Ownership
 - Business_Sponsor: Vineet Agrawal. Product_Owner: Kantimati Iyer. Architecture_Owner: Sujal Ray. Security/Compliance/Data/Operations_Owner: Vineet Agrawal. QA_Owner: Aditya Sharma. Release_Owner: Gaurav Sharma (DevOps). Implementation_Lead: Gautam Pandey.
-- G0 baseline SRC-BL-004 is accepted by Vineet Agrawal and Sujal Ray under DEC-004. G1 was approved by Vineet Agrawal and Sujal Ray on 2026-10-09 after validator Pass; approval was confirmed by the requester in this conversation, with no separate evidence ID supplied.
+- Historical SRC-BL-004 G0 acceptance and SRC-BL-005 G1 approval were recorded by Vineet Agrawal and Sujal Ray. They do not approve or authorize SRC-BL-006.
 - Domain=Software; no data-governance stewardship or BI governance organization is applicable, but application PII ownership and DPDP governance remain mandatory.
 - DEC-001–004 and CR-001–003 are signed. The public QR residual risk is accepted for build/UAT; remaining pen test, legal review and operational/test evidence are release conditions.
 
@@ -107,8 +113,10 @@ Define release and operational controls for the current greenfield baseline. Arc
 | SRC-CHG-CTRL-002 | SRC-CHG-002 | SRC-BL-002 -> SRC-BL-003 | Critical | Current inputs replace the earlier baseline and alter requirements, tech, security, data and operations | Full regeneration; obtain named owner approval before implementation | Business_Sponsor | Pending |
 | SRC-CHG-CTRL-003 | SRC-CHG-003 | SRC-BL-003 -> SRC-BL-004 | High | Proposed unsigned pack added | Superseded by signed SRC-CHG-004; no decision accepted from v1.0 | Vineet Agrawal, Business_Sponsor | Superseded |
 | SRC-CHG-CTRL-004 | SRC-CHG-004 | SRC-BL-004 -> SRC-BL-005 | Critical | Signed v1.2 pack approves DEC-001–004, POL-001, RACI-001, runbooks, TEP-001, waivers and CR-001–003 | Section 9 outputs propagated; preserve G1/G2/G3 and release evidence conditions | Vineet Agrawal, Business_Sponsor | Approved 2026-10-08; validator Pass |
+| SRC-CHG-CTRL-005 | SRC-CHG-005 | SRC-BL-005 -> SRC-BL-006 | High | Updated current implementation docs and actual source/migration/test evidence supersede prior greenfield/no-code classification | Targeted refresh of 00/01/03/07/08/10; 09 explicitly stale; preserve 02/04–06 as historical target artifacts | Not assigned | Assessed for this reverse-engineering run; no new target/build approval |
 
 ## Architecture Change Register
+The following architecture decisions and approvals remain historical SRC-BL-005 target-state records; they do not establish current deployment behavior or new approval for SRC-BL-006.
 
 | Architecture_Change_ID | Change | Reason | Proposed_Artifacts | Owner | Approval_Required | Status | Implementation_Rule |
 |---|---|---|---|---|---|---|---|
@@ -125,8 +133,12 @@ Define release and operational controls for the current greenfield baseline. Arc
 | REGEN-003 | SRC-CHG-002 current-input-set change | SRC-BL-003 | 00, 01, 02, 04–10 | Full regeneration; 03 skipped as greenfield | Validator unavailable (Python missing); manual section/traceability review required | Pending named human approval |
 | REGEN-004 | SRC-CHG-003 unsigned resolution pack | SRC-BL-004 | 00, 01, 08, 09, 10 | Proposal-only readiness refresh | Superseded by REGEN-005; unsigned v1.0 decisions not applied | Superseded |
 | REGEN-005 | SRC-CHG-004 approved pack v1.2 | SRC-BL-005 | 00, 01, 02, 04, 06, 07, 08, 09, 10; 05 checked for mockup discrepancy | Signed Section 9 outputs applied; SRC-006/v2.10 discrepancy retained as warning | Automated validator Pass; G1 approved 2026-10-09 | Approved decisions; G1 approval confirmed by requester; no separate evidence ID supplied |
+| REGEN-006 | SRC-CHG-005 current repository/doc reconciliation | SRC-BL-006 | 00, 01, 03, 07, 08, 09, 10 | Targeted reverse-engineering refresh; prior build prompt marked stale; no future target regenerated | Validator run required; current test failures recorded in 03/07 | No build approval requested or granted |
+
+Current approval scope: SRC-BL-005 signed decisions remain historical target-design evidence. SRC-BL-006 has no build-start authorization. Any future enhancement or release requires a scoped target baseline and fresh owner approvals.
 
 ## Approval Gates
+The gate decisions below document the previous target build baseline. A future target-state build requires fresh baseline review and approvals.
 
 | Gate_ID | Gate | Required_Evidence | Owner | Decision | Blocking_If_Failed | Related_IDs |
 |---|---|---|---|---|---|---|

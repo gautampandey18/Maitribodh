@@ -516,7 +516,8 @@ def validate(
         if "03" in texts and "06" in texts and not has_any(texts["03"], ["Retain", "Modernize", "Replace", "Retire", "Rebuild"]):
             findings.append(Finding("Warning", "TARGET-MAPPING", ARTIFACTS["03"], "Current-state treatment mapping may be incomplete."))
 
-    if "09" in texts:
+    # A retained historical prompt is not a build handoff in reverse-only mode.
+    if "09" in texts and "09" in required_keys:
         blocker_terms = ["Open_Blocker", "Unresolved_Blocking", "Not_Ready", "Failed_Validation"]
         if has_any(texts["09"], blocker_terms):
             findings.append(Finding("Blocker", "BUILD-PROMPT-BLOCKER", ARTIFACTS["09"], "Build prompt contains blocker language."))
@@ -536,7 +537,7 @@ def validate(
         has_change_signal = has_any(texts["01"], ["Impact_Assessment_Needed", "Build_Prompt_Impact: Stale", "Current_Baseline_Status: Stale"])
         has_open_change = has_any(texts["01"], ["Impact_Assessment_Needed", "Build_Prompt_Impact: Stale", "Current_Baseline_Status: Stale"])
         if has_change_signal and has_open_change:
-            if "10" not in texts:
+            if not (generated_dir / REPORT_NAME).exists():
                 findings.append(Finding("Blocker", "SOURCE-CHANGE-VALIDATION", REPORT_NAME, "Source changes are present but validation report is missing."))
             if "09" in texts and not has_any(texts["09"], ["Source_Baseline_Status", "Open_Source_Change_IDs"]):
                 findings.append(Finding("Blocker", "BUILD-PROMPT-STALE-CHECK", ARTIFACTS["09"], "Build prompt does not include source baseline freshness fields."))
@@ -549,7 +550,17 @@ def render_report(mode: str, tier: str, findings: list[Finding]) -> str:
     warnings = [f for f in findings if f.severity.lower() == "warning"]
     infos = [f for f in findings if f.severity.lower() == "info"]
     result = "Fail" if blockers else ("Conditional Pass" if warnings else "Pass")
-    build_status = "Not Ready" if blockers else ("Conditional" if warnings else "Ready")
+    build_not_in_scope = mode.strip().lower().replace("-", "_").replace(" ", "_") == "reverse_engineering_only"
+    build_status = "Not Ready" if blockers else (
+        "Not_In_Scope" if build_not_in_scope else ("Conditional" if warnings else "Ready")
+    )
+    build_allowed = "No" if blockers or build_not_in_scope else ("Conditional" if warnings else "Yes")
+    approval_basis = "No build is in scope for Reverse_Engineering_Only." if build_not_in_scope and not blockers else result
+    required_before_build = (
+        "Define and approve a target-state scope, then run the applicable ADLC mode before implementation."
+        if build_not_in_scope
+        else "Resolve all blockers and approve warnings/waivers as needed."
+    )
 
     lines = [
         "# ADLC Validation Report",
@@ -582,9 +593,9 @@ def render_report(mode: str, tier: str, findings: list[Finding]) -> str:
         [
             "",
             "## Build Prompt Approval Decision",
-            f"- Build_Allowed: {'No' if blockers else ('Conditional' if warnings else 'Yes')}",
-            f"- Approval_Basis: {result}",
-            "- Required_Before_Build: Resolve all blockers and approve warnings/waivers as needed.",
+            f"- Build_Allowed: {build_allowed}",
+            f"- Approval_Basis: {approval_basis}",
+            f"- Required_Before_Build: {required_before_build}",
             "",
         ]
     )
@@ -611,6 +622,11 @@ def create_artifact(folder: Path, filename: str, sections: list[str], extra: str
 
 
 def run_self_test() -> int:
+    reverse_report = render_report("reverse_engineering_only", "enterprise", [])
+    if "Build_Prompt_Status: Not_In_Scope" not in reverse_report or "Build_Allowed: No" not in reverse_report:
+        print("Self-test failed: reverse-engineering-only mode must not authorize a build.")
+        return 1
+
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         for key in ["00", "01", "02", "04", "05", "06", "07", "08", "09"]:
