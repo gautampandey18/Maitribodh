@@ -7,14 +7,14 @@
 - Domain: Software
 - Data_Analytics_Subtype: Not_Applicable
 - Source_Baseline_ID: SRC-BL-006
-- Document_Version: 1.0
+- Document_Version: 1.2
 - Date: 2026-10-27
 - Owner: Not confirmed
 
 ## Purpose
 - Analysis_Objective: Reconstruct the present repository implementation and distinguish it from the previously documented target design.
 - Evidence_Rule: Repository code, migrations, tests, package manifests, and updated `docs/` are current-state evidence. The older `SRC-BL-005` forward-engineering artifacts remain historical target-state proposals and are not accepted as current implementation evidence.
-- Analysis_Scope: Local repository inspection and API/UI test execution only. No live database, deployed environment, production logs, cloud account, or runtime service was inspected.
+- Analysis_Scope: Local repository inspection, API/UI test and lint execution, and UI production build. No live database, deployed environment, production logs, cloud account, or runtime service was inspected.
 
 ## Codebase Analysis Depth And Confidence
 
@@ -43,7 +43,7 @@ Evidence status: `Observed` means supported directly by repository files or exec
 | CODE-SRC-001 | `Maitribodh-API/src/` | SourceSnapshot | Current repository | API entrypoint, route groups, middleware, services and repositories | No credentials copied | Evidence summarized in SRC-018. |
 | CODE-SRC-002 | `Maitribodh-UI/src/` | SourceSnapshot | Current repository | SPA entrypoint, screens, API client, Redux store, components, styles and UI tests | No credentials copied | Evidence summarized in SRC-019. |
 | CODE-SRC-003 | `Maitribodh-API/db/migrations/` | Database_Migration | Current repository | PostgreSQL schema history and current migration definitions | No database contents | Ten ordered migrations, 0001–0010. |
-| CODE-SRC-004 | `Maitribodh-API/tests/`, `Maitribodh-UI/src/**/*.test.*` | TestReport_Source | Current repository; tests executed 2026-10-27 | Test inventory and latest observed local outcomes | No production data | API: 193 passed, 2 failed. Latest isolated UI run: 93 passed, 8 timed out. UI production build passed. |
+| CODE-SRC-004 | `Maitribodh-API/tests/`, `Maitribodh-UI/src/**/*.test.*` | TestReport_Source | Current repository; tests executed 2026-10-27 | Test inventory and latest observed local outcomes | No production data | API: 197 passed, 0 failed. UI: 101 passed, 0 failed with the standard two-worker test command. API/UI lint passed; UI production build passed with warnings. |
 | CODE-SRC-005 | `Maitribodh-API/package.json`, `Maitribodh-UI/package.json`, lockfiles | DependencyManifest | Current repository | Runtime, dependencies, commands and test tooling | No environment secrets | Node engine declared `>=22`. |
 | CODE-SRC-006 | `Maitribodh-API/db/*.ps1`, `Maitribodh-API/db/*.js`, root and project README files | Runtime_Operations | Current repository | Local startup, migration, seed, backup and reset workflows | No secret values | Local scripts prompt for or generate local credentials; no cloud deployment evidence. |
 | CODE-SRC-007 | `docs/MAMS_BRD.md`, `docs/MAMS_FRD.md`, `docs/MAMS_DATABASE_AND_API_REFERENCE.md`, `docs/MAMS_IMPLEMENTATION_GUIDE.md`, `docs/MAMS_IMPLEMENTATION_STATUS.md`, `docs/LOCAL_DEVELOPMENT.md` | Current_Implementation_Documentation | Updated repository docs | Business context, current rules, migration/API reference, known gaps and local workflow | No sensitive values | SRC-012–SRC-017; docs are current-state references, not proof of deployed behavior. |
@@ -159,9 +159,13 @@ Not Applicable — Domain=Software; no data pipeline, warehouse/lakehouse, or BI
 | CSA-EV-001 | BuildConfig | API/UI package manifests and lockfiles | Runtime and build commands | Present | Separate npm projects; Node engine `>=22` | CUR-CMP-001, CUR-CMP-006 |
 | CSA-EV-002 | TestReport | API `npm test` run, 2026-10-27 | API automated tests | Failed | 193 passed, 2 failed: invalid lookup references validation response; category create route normalization | CUR-CMP-009 |
 | CSA-EV-003 | TestReport | UI `npm test` run, 2026-10-27 | UI component/screen tests | Failed | 98 passed, 3 failed by 30-second test timeout across Blacklist, Register, and Users screens | CUR-CMP-009 |
-| CSA-EV-007 | TestReport | API `npm test` verification run, 2026-10-27 | API automated tests | Failed | 193 passed, 2 failed: invalid lookup references validation response; category create route normalization | CUR-CMP-009 |
-| CSA-EV-008 | TestReport | Isolated UI `npm test` verification run, 2026-10-27 | UI component/screen tests | Failed | 93 passed, 8 timed out across Blacklist, Gate, Register, and Users screens (5- and 30-second test limits) | CUR-CMP-009 |
+| CSA-EV-007 | TestReport | API `npm test` before scoped category fixes, 2026-10-27 | API automated tests | Failed; superseded by CSA-EV-010 | 193 passed, 2 failed: invalid lookup references validation response; category create route normalization | CUR-CMP-009 |
+| CSA-EV-008 | TestReport | UI `npm test` with unrestricted workers, 2026-10-27 | UI component/screen tests | Failed; superseded by CSA-EV-012 | 93 passed, 8 timed out across Blacklist, Gate, Register, and Users screens (5- and 30-second test limits); subsequent two-worker run passed all 101 | CUR-CMP-009 |
 | CSA-EV-009 | BuildReport | UI `npm run build`, 2026-10-27 | UI production bundle | Passed with warnings | Production bundle generated; Rollup emitted dependency annotation and large-chunk warnings | CUR-CMP-006 |
+| CSA-EV-010 | TestReport | API `npm test` after scoped category API fixes, 2026-10-27 | API automated tests | Passed | 195 Node tests and 2 Jest tests passed; 0 failed | CUR-CMP-009 |
+| CSA-EV-011 | LintReport | API `npm run lint` after scoped category API fixes, 2026-10-27 | API source and tests | Passed | ESLint completed with zero warnings/errors | CUR-CMP-009 |
+| CSA-EV-012 | TestReport | UI `npm test`, 2026-10-27, Vitest capped at two workers | UI component/screen tests | Passed | 19 test files; 101 passed, 0 failed. Two-worker cap avoids timeout failures seen with unrestricted worker parallelism. | CUR-CMP-009 |
+| CSA-EV-013 | LintReport | UI `npm run lint`, 2026-10-27 | UI source and tests | Passed | ESLint completed with zero warnings/errors | CUR-CMP-009 |
 | CSA-EV-004 | DeployConfig | Repository root / `.github/workflows` | CI, container, IaC, cloud deployment | Missing in inspected root | No workflow or Terraform/Docker deployment configuration was found; target artifacts are not proof of deployment | CUR-RUN-005 |
 | CSA-EV-005 | RuntimeLog | Live API/database/environment | Operational behavior | Unknown | No live service, database, runtime logs, monitoring, or cloud account was inspected | CUR-RUN-001, CUR-RUN-003, CUR-RUN-005 |
 | CSA-EV-006 | MigrationState | `public.schema_migrations` in target database | Applied schema version | Unknown | Ten migration files exist; no DB connection/state was checked | CUR-CMP-008, CUR-DATA-001 |
@@ -170,8 +174,8 @@ Not Applicable — Domain=Software; no data pipeline, warehouse/lakehouse, or BI
 
 | Debt_or_Risk_ID | Area | Finding | Evidence | Severity | Impact | Recommended_Treatment | Related_Current_IDs |
 |---|---|---|---|---|---|---|---|
-| CUR-RISK-001 | Test | Latest API suite has 2 failures (193 passing) in lookup-reference validation and category create route normalization | CSA-EV-007 | High | Regression/validation behavior is not fully green | Reproduce and resolve or document approved disposition before relying on API suite as a release gate | CUR-CMP-009 |
-| CUR-RISK-002 | Test | Latest isolated UI suite has 8 timeout failures (93 passing), including tests with 5- and 30-second limits | CSA-EV-008 | High | Screen-flow test coverage does not pass consistently in current run | Diagnose slow/flaky paths and restore a stable suite before using it as release evidence | CUR-CMP-009 |
+| CUR-RISK-001 | Test | Earlier API run exposed unmapped category foreign-key errors and a stale route-test expectation for removed overstayCutoff | CSA-EV-007, CSA-EV-010 | High | Both issues are resolved: category create maps SQLSTATE 23503 to a safe validation error, the route test matches the documented API contract, and the full API suite passes | Keep regression coverage in the API suite | CUR-CMP-009 |
+| CUR-RISK-002 | Test | Unrestricted UI test workers caused timeouts; the standard two-worker command passes all 101 tests | CSA-EV-008, CSA-EV-012 | Resolved | Full UI regression coverage is green with capped worker parallelism | Retain the two-worker cap in the standard test script | CUR-CMP-009 |
 | CUR-RISK-003 | Operations | No live database/deployment, CI pipeline, cloud configuration, or monitoring evidence inspected | CSA-EV-004–006 | High | Migration state, production posture and release readiness cannot be inferred | Confirm environment inventory and obtain owner-approved operational evidence | CUR-RUN-003–005 |
 | CUR-RISK-004 | Data/Privacy | Updated docs describe PII safeguards and lifecycle; runtime retention/deletion job is not found in inspected API source | SRC-014–SRC-016, ENTRY-009 | High | Documented retention behavior may not be operationalized | Track retention automation and evidence; do not claim scheduled cleanup is active | CUR-DATA-003–005 |
 | CUR-RISK-005 | Security | Public QR and uploaded-file endpoints handle sensitive data; deployment-level WAF/alarms, pen test and scans are unverified | SRC-018, SRC-014 | High | External exposure remains unverified | Perform documented security checks in an authorized test environment and capture evidence | CUR-INT-001, CUR-INT-003 |
@@ -181,7 +185,7 @@ Not Applicable — Domain=Software; no data pipeline, warehouse/lakehouse, or BI
 
 | Candidate_ID | Current_State_ID | Candidate_Type | Current_Issue | Modernization_Option | Benefit | Risk | Priority | Related_Backlog_or_Target_IDs |
 |---|---|---|---|---|---|---|---|---|
-| MOD-CAND-001 | CUR-RISK-001, CUR-RISK-002 | Test | API and UI test suites fail in this local run | Diagnose and stabilize the failing tests before using them as release evidence | Reliable regression signal | Fixing expected behavior without product-owner review could alter rules | High | No new target backlog approved in this reverse-only run |
+| MOD-CAND-001 | CUR-RISK-001, CUR-RISK-002 | Test | Earlier API failures and UI timeouts are resolved for local regression: API 197/197 and UI 101/101 pass with capped workers | Retain API error-mapping coverage and the two-worker UI test cap | Stable current-source regression signal | Live CI/deployment test evidence remains unknown | Medium | No new target backlog approved in this reverse-only run |
 | MOD-CAND-002 | CUR-RUN-005 | Deployment | No checked-in cloud/CI deployment configuration was found | Confirm whether deployment assets are maintained outside this repository | Traceable build/release process | Do not assume AWS target architecture is implemented | Medium | No new target backlog approved in this reverse-only run |
 
 ## As-Is Constraints Risks And Open Questions
@@ -190,7 +194,7 @@ Not Applicable — Domain=Software; no data pipeline, warehouse/lakehouse, or BI
 |---|---|---|---|---|---|---|---|
 | ASIS-RISK-001 | Open_Question | Which environment/database is authoritative, and which of migrations 0001–0010 are applied there? | SRC-020; SRC-014, SRC-016 | Current deployed schema and data lifecycle cannot be confirmed | Operations_Owner (not verified) | Yes for deployment claims | CUR-CMP-008, CUR-DATA-001 |
 | ASIS-RISK-002 | Open_Question | Are CI, Terraform, container, monitoring and cloud-deployment assets maintained outside this repository? | SRC-021 | Repository-only current-state view may omit operational components | Release_Owner (not verified) | No | CUR-RUN-005 |
-| ASIS-RISK-003 | Open_Question | What is the approved disposition for the ten failing tests in the latest API/UI verification runs? | CSA-EV-007–008 | Test readiness and release evidence | QA_Owner (not verified) | Yes for release readiness | CUR-CMP-009 |
+| ASIS-RISK-003 | Resolution | UI test timeouts occurred under unrestricted parallel workers; all 101 tests pass with the standard two-worker cap | CSA-EV-008, CSA-EV-012 | Regression tests are reliable using the configured command; no live/release evidence implied | QA_Owner / Developer | No | CUR-CMP-009 |
 | ASIS-RISK-004 | Constraint | Current implementation docs describe intended behavior, but no production environment or telemetry was inspected | SRC-012–SRC-017, CSA-EV-005 | No claims about real-world availability, current DB state or operational usage | Operations_Owner (not verified) | No | CUR-RUN-001–005 |
 
 ## As-Is To Target Candidate Mapping
@@ -198,7 +202,7 @@ Not Applicable — Domain=Software; no data pipeline, warehouse/lakehouse, or BI
 | Mapping_ID | Current_State_ID | Current_Behavior_or_Component | Target_Treatment | Rationale | Target_Artifact_Owner | Status |
 |---|---|---|---|---|---|---|
 | MAP-CUR-001 | CUR-CMP-001–009 | Repository contains working API/UI modules, migrations and automated tests | Retain | No modernization, migration, rewrite or feature-change request was provided in this run | Not assigned | Proposed; no target decision |
-| MAP-CUR-002 | CUR-RISK-001–002 | API and UI tests have failures/timeouts in this local run | Investigate | Failures need QA/product review; do not silently change behavior | QA_Owner (not verified) | Open |
+| MAP-CUR-002 | CUR-RISK-001–002 | Category API fixes and UI worker-cap stabilization are verified; API/UI test suites pass | Retain fixes and capped UI test execution | Full local automated regression is green; live deployment/release evidence remains separate | QA_Owner / Developer | Resolved for local tests; deployment evidence remains open |
 | MAP-CUR-003 | CUR-RUN-005 | Cloud/CI deployment behavior is undocumented in this checkout | Assess | Existing target-state deployment descriptions are not evidence of deployed infrastructure | Release_Owner (not verified) | Open |
 
 ## Traceability Instructions

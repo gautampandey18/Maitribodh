@@ -7,7 +7,7 @@
 - Domain: Software
 - Data_Analytics_Subtype: Not_Applicable
 - Source_Baseline_ID: SRC-BL-006
-- Document_Version: 3.6
+- Document_Version: 3.8
 - Date: 2026-10-27
 - Owner: Aditya Sharma, QA_Owner (RACI-001, SRC-011)
 
@@ -30,7 +30,7 @@ Record repository test structure and observed local test outcomes separately fro
 
 | Execution_Mode | Required_Test_Types | Required_Evidence | Missing_Test_Impact |
 |---|---|---|---|
-| Reverse_Engineering_Only | Source inventory, existing automated suite execution, and evidence/gap assessment; target/release tests are not authorized by this run | Local test command/results, source inventory and explicit unknowns | Failed tests are recorded as current-state risks; no build authorization is issued |
+| Reverse_Engineering_Only | Source inventory, existing automated suite execution, and evidence/gap assessment; target/release tests are not authorized by this mode | Local test command/results, source inventory and explicit unknowns | Failures remain current-state risks; local build/test authorization is separately recorded and does not authorize deployment |
 
 ## Implementation Unit And Test Strategy
 - UI: Vitest/React Testing Library for form schemas, role-aware routes, state transitions, loading/error/empty states and responsive gate interactions.
@@ -46,11 +46,18 @@ Record repository test structure and observed local test outcomes separately fro
 |---|---|---|---|---|---|
 | RUN-TEST-API-001 | API | `npm test` from `Maitribodh-API` | Fail | 193 passed, 2 failed: `invalid lookup references become a validation response`; `category create route validates and forwards normalized fields` | Local automated suite only; no PostgreSQL-backed deployment or production test. |
 | RUN-TEST-UI-001 | UI | `npm test` from `Maitribodh-UI` | Fail | 98 passed, 3 timed out at the configured 30-second limit in Blacklist, Register, and Users screen tests | Test command exited non-zero; investigate timeouts before relying on suite as a release gate. |
-| RUN-TEST-API-002 | API | `npm test` from `Maitribodh-API` | Fail | 193 passed, 2 failed: `invalid lookup references become a validation response`; `category create route validates and forwards normalized fields` | Latest local verification; no PostgreSQL-backed deployment or production test. |
-| RUN-TEST-UI-002 | UI | `npm test` from `Maitribodh-UI` (isolated rerun) | Fail | 93 passed, 8 timed out across Blacklist, Gate, Register, and Users screens; time limits were 5 and 30 seconds | Latest isolated local verification; investigate test/runtime slowness before using as release evidence. |
+| RUN-TEST-API-002 | API | `npm test` from `Maitribodh-API` before scoped category fixes | Fail; superseded by RUN-TEST-API-003 | 193 passed, 2 failed: `invalid lookup references become a validation response`; `category create route validates and forwards normalized fields` | Historical pre-fix run; no PostgreSQL-backed deployment or production test. |
+| RUN-TEST-UI-002 | UI | `npm test` from `Maitribodh-UI` before worker cap | Fail; superseded by RUN-TEST-UI-003 | 93 passed, 8 timed out across Blacklist, Gate, Register, and Users screens; time limits were 5 and 30 seconds | Historical unrestricted-worker run; capped standard command passes all 101 UI tests. |
 | RUN-BUILD-UI-001 | UI | `npm run build` from `Maitribodh-UI` | Pass with warnings | Vite production build and PWA service worker generated successfully; dependency annotation and large-chunk warnings were emitted | UI build only; API has no `build` script. This does not authorize implementation or deployment. |
+| RUN-TEST-API-003 | API | `npm test` after scoped category API fixes | Pass | 195 Node tests and 2 Jest tests passed; 0 failed | Local API verification only; no PostgreSQL-backed deployment or production test. |
+| RUN-LINT-API-001 | API | `npm run lint` after scoped category API fixes | Pass | ESLint completed with zero warnings/errors | API lint only; no deployment or release approval. |
+| RUN-TEST-UI-003 | UI | `npm test` (`vitest run --pool=forks --maxWorkers=2 --minWorkers=1`) | Pass | 19 test files; 101 passed, 0 failed | The worker cap is part of the package test script to avoid timeouts caused by unrestricted worker parallelism. |
+| RUN-LINT-UI-001 | UI | `npm run lint` | Pass | ESLint completed with zero warnings/errors | UI lint only; no deployment or release approval. |
 
-- The verification-only request and runs were completed on 2026-10-27; they did not authorize implementation changes.
+- The requester subsequently authorized only the two failing category API cases: map invalid foreign-key references to a safe validation response, and align the route test with the documented removal of `overstayCutoff`. No broader implementation or deployment was authorized.
+- RUN-TEST-API-003 verifies the scoped fixes; both authorized API issues are resolved.
+- The UI suite's earlier timeouts were worker-contention related in this environment. With Vitest capped at two workers, the ordinary `npm test` command passes all 101 tests.
+- API and UI automated tests and lint pass; the UI production build succeeds with dependency annotation and large-chunk warnings. Live deployment evidence is not required for local build readiness and remains unverified for release readiness.
 - These results are current-state evidence from 2026-10-27, not approval of any test failure or waiver.
 - The prior TEP-001, G2/G3, and test requirements below remain historical target-release evidence from SRC-BL-005; they are not evidence that the present repository passes those gates.
 
@@ -189,11 +196,11 @@ Record repository test structure and observed local test outcomes separately fro
 | DevSecOps | Yes | npm scripts/manifests and locks present; no CI workflow or scan results found | Gap | Establish/locate pipeline and capture dependency, secrets, SAST/SBOM/image evidence | Security_Owner (not verified) |
 | Operations | Yes | Local development/migration/backup/reset scripts documented; no cloud runtime proof | Gap | Confirm real environment, owner, monitoring, restore and release evidence | Operations_Owner (not verified) |
 | Governance_Approvals | Yes | Historical SRC-011 decisions and G1 approval belong to SRC-BL-005 | Not_Current_Baseline | Approve a new target baseline before any future build; do not carry prior G1 forward | Business_Sponsor |
-| Data_Quality | Software core integrity | Latest API/UI verification has 2 API failures and 8 UI timeouts | Fail | Investigate ten failing tests; no release readiness claim | QA_Owner (not verified) |
+| Data_Quality | Software core integrity | API 197/197 and UI 101/101 tests pass; API/UI lint passes | Pass for local regression | Live DB, deployment and operational evidence remain unverified; do not claim release readiness | QA_Owner |
 | MDM_Stewardship | Data & Analytics subtype only | Not_Applicable | NA | Domain=Software; no MDM scope | Not_Applicable |
 
 ## Quality Gate Decision
-- Quality_Gate_Result: Current_State_Assessment_Only; test evidence is not green
-- Blocking_Gaps: API tests (2) and UI tests (3) failed in the local run; live database, production, CI, security, performance and recovery evidence are unavailable. These gaps block a release-readiness conclusion.
-- Build_Authorization: None. This reverse-engineering run is not a build handoff. Historical G1/waivers from SRC-BL-005 do not authorize a future build from SRC-BL-006.
+- Quality_Gate_Result: Pass for local current-source build and regression verification; not a release/deployment approval
+- Blocking_Gaps: None for local build and automated regression. Live database, production, CI, security, performance and recovery evidence remain unavailable and block release-readiness claims.
+- Build_Authorization: Current-source local UI build, API/UI lint, and API/UI test verification are authorized. New features, deployment, and release are not authorized by this check. Historical G1/waivers from SRC-BL-005 do not authorize work beyond the current-source verification scope.
 - Data Quality Validation Matrix: Not Applicable — Domain=Software; data-integrity cases are covered in the NFR and regression matrices above.

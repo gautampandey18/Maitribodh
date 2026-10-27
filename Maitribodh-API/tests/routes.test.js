@@ -195,7 +195,7 @@ test('category create route validates and forwards normalized fields', async () 
   assert.equal(response.status, 201);
   assert.equal(response.body.category_id, 4);
   assert.equal(receivedInput.formType, 'GENERIC');
-  assert.equal(receivedInput.overstayCutoff, null);
+  assert.equal('overstayCutoff' in receivedInput, false);
 });
 
 test('category delete route forwards actor and returns no content', async () => {

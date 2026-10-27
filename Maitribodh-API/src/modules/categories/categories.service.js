@@ -28,6 +28,9 @@ export function createCategoriesService({ repository }) {
         if (error.code === '23505') {
           throw new ApiError(409, 'CATEGORY_ALREADY_EXISTS', 'A category with this name already exists');
         }
+        if (error.code === '23503') {
+          throw new ApiError(400, 'INVALID_MASTER_REFERENCE', 'The selected master data reference is invalid');
+        }
         throw error;
       }
     },

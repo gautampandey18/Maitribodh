@@ -7,7 +7,7 @@
 - Domain: Software
 - Data_Analytics_Subtype: Not_Applicable
 - Source_Baseline_ID: SRC-BL-006
-- Document_Version: 3.7
+- Document_Version: 3.8
 - Date: 2026-10-27
 - Owner: Gaurav Sharma, Release_Owner (RACI-001, SRC-011)
 
@@ -16,8 +16,8 @@ Record operational evidence and change governance for the current repository bas
 
 ## Release Notes
 - Current repository baseline: API, React/Vite UI, PostgreSQL migrations 0001–0010, local operating scripts and automated tests are present.
-- Current run: Reverse_Engineering_Only; no feature build or release is authorized by this artifact update.
-- Test run on 2026-10-27: API suite 193 passed/2 failed; UI suite 98 passed/3 timed out. See 07 and 03 for details.
+- Current run: Local current-source build and regression verification authorized; no new feature implementation, deployment, or release is authorized.
+- Latest verification on 2026-10-27: API 197/197 tests pass; UI 101/101 tests pass with Vitest capped at two workers; API/UI lint pass; UI production build succeeds with warnings. See 07 and 03 for details.
 - No live database, applied migration state, cloud deployment, CI pipeline, monitoring, backup/restore execution or production approval evidence was inspected.
 - The AWS/ECS/RDS topology and prior G0/G1 approval below belong to SRC-BL-005 target-state history only; they do not establish that the current application is deployed or authorize work from SRC-BL-006.
 - DEC-001–004, POL-001, RACI-001, RB-001–006, TEP-001, WVR-001/005/006 and CR-001–003 are approved in SRC-011.
