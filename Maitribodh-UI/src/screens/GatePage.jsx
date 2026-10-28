@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
-import { Alert, Autocomplete, Avatar, Box, Button, Checkbox, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, TextField, Typography } from '@mui/material';
+import { Alert, Autocomplete, Box, Button, Checkbox, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, TextField, Typography } from '@mui/material';
 import CameraAltOutlinedIcon from '@mui/icons-material/CameraAltOutlined';
 import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined';
 import LoginOutlinedIcon from '@mui/icons-material/LoginOutlined';
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import { api } from '../api.js';
 import { blobRequestMessage, requestMessage, useResource } from '../utils/resources.js';
+import PersonIdentityCard from '../components/PersonIdentityCard.jsx';
 
 const profilePhotoDimension = 600;
 
@@ -326,7 +327,39 @@ export default function GatePage() {
     {notice && <Alert severity="success" role="status" sx={{ mb: 2 }}>{notice}</Alert>}
     {route.state?.registered && <Alert severity="success" sx={{ mb: 2 }}>Visitor registered. Find the profile and verify the photograph before check-in.</Alert>}
       <Box className="gate-layout">
-      <Box className="gate-scanner"><Typography color="text.secondary" sx={{ mb: 1 }}>Point the camera at the QR code. Person information appears automatically when detected; no Find Person click is needed.</Typography><Box id="gate-camera" sx={{ width: '100%', minHeight: 240 }} />
+    {selected && <Box component="section" className="gate-person-panel" aria-label="Selected person details">
+      <PersonIdentityCard
+        personId={selected.personId}
+        personCode={selected.personCode}
+        name={selected.name}
+        category={selected.category}
+        status={selected.status}
+        photoSrc={photoUrl}
+        mobile={selected.mobileMasked}
+        fields={[
+          ['Gate', gates.find((item) => String(item.location_id) === String(selectedGate))?.name],
+          ['Area', areas.find((item) => String(item.location_id) === String(selectedArea))?.name],
+          ['Entry status', selected.outcome?.replaceAll('_', ' ').toLowerCase() ?? 'Ready to verify'],
+          ['Additional people', selected.accompanyingCount ?? 0],
+          ...(selected.insideSince ? [['Inside since', new Date(selected.insideSince).toLocaleString()]] : []),
+        ]}
+      />
+      {photoLoading && <Typography role="status">Loading profile photo...</Typography>}
+      {photoError && <Alert severity="error" sx={{ my: 1 }}>{photoError}{!photoMissing && <Button onClick={() => setPhotoRevision((value) => value + 1)} disabled={!online || photoLoading}>Retry profile photo</Button>}</Alert>}
+      {(!selected.photoKey || photoMissing) && <Box sx={{ my: 1 }}>
+        <Typography color="text.secondary">{photoMissing ? 'The stored profile photo is missing. Capture or upload a real photo before check-in.' : 'No profile photo. Capture one before check-in.'}</Typography>
+        {canRecoverPhoto && (!selected.hasPhoto || photoMissing) && <>
+          <Button startIcon={<CameraAltOutlinedIcon />} onClick={() => setPhotoCameraOpen(true)} disabled={!online || photoCaptureBusy}>{photoCaptureBusy ? 'Saving photo' : 'Open camera'}</Button>
+          <input ref={profilePhotoInput} aria-label="Upload profile photo" type="file" accept="image/jpeg,image/png" hidden onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ''; if (file) uploadProfilePhoto(file); }} />
+          <Button onClick={() => profilePhotoInput.current?.click()} disabled={!online || photoCaptureBusy}>Upload profile photo</Button>
+        </>}
+        {!canRecoverPhoto && <Alert severity="warning">Photo recovery is unavailable for this profile state. Ask an administrator to restore the actual profile photo and resolve the profile status or QR issue.</Alert>}
+        {selected.hasPhoto && !photoMissing && <Alert severity="warning">The profile photo reference is missing. Ask an administrator to correct this profile, then scan again.</Alert>}
+      </Box>}
+      <FormControlLabel control={<Checkbox checked={verified} disabled={!photoUrl || photoLoading} onChange={(event) => setVerified(event.target.checked)} />} label="I verified the person against the profile photo" />
+      {selected.locationWarning && <FormControlLabel control={<Checkbox checked={locationAcknowledged} onChange={(event) => setLocationAcknowledged(event.target.checked)} />} label="I acknowledge this person is not assigned to the selected restricted area" />}
+    </Box>}
+    <Box className="gate-scanner"><Typography color="text.secondary" sx={{ mb: 1 }}>Point the camera at the QR code. Person information appears automatically when detected; no Find Person click is needed.</Typography><Box id="gate-camera" sx={{ width: '100%', minHeight: 240 }} />
         <Button startIcon={<CameraAltOutlinedIcon />} onClick={scanning ? stopCamera : startCamera} disabled={!online || !selectedArea || busy || cameraStarting}>{scanning ? 'Stop camera scan' : 'Start camera scan'}</Button>
         <input ref={qrImageInput} aria-label="Upload QR image" type="file" accept="image/jpeg,image/png" hidden onChange={scanCapturedQr} />
         <Button onClick={() => qrImageInput.current?.click()} disabled={!online || !selectedArea || busy || scanning}>Upload QR image</Button>
@@ -342,35 +375,6 @@ export default function GatePage() {
         <Box sx={{ display: 'flex', gap: 2 }}><Button variant="contained" startIcon={busy ? <CircularProgress size={18} /> : <LoginOutlinedIcon />} onClick={() => movement(true)} disabled={busy || !online || !['ELIGIBLE', 'LOCATION_WARNING'].includes(selected?.outcome) || !verified || !photoUrl || (selected?.locationWarning && !locationAcknowledged) || !selectedGate}>Check-In</Button><Button variant="outlined" startIcon={<LogoutOutlinedIcon />} onClick={() => movement(false)} disabled={busy || !online || !selected?.openVisitId || !selectedGate}>Check-Out</Button></Box>
         {items?.length === 0 && <Button sx={{ mt: 3 }} component={Link} to={`/register?from=gate&gate=${selectedGate}&area=${selectedArea}`} disabled={!online}>Register Visitor</Button>}
       </Box>
-      {selected && <Box component="section" className="gate-person-panel" aria-label="Selected person details">
-        <Box className="gate-person-header">
-          <Avatar src={photoUrl} className="gate-person-avatar">{selected.name?.split(' ').map((part) => part[0]).join('').slice(0, 2)}</Avatar>
-          <Box className="gate-person-summary">
-            <Typography variant="h3" className="gate-person-name">{selected.name}</Typography>
-            <Typography className="gate-person-category">{selected.category}</Typography>
-            <Typography className="gate-person-code">{selected.personCode}</Typography>
-          </Box>
-        </Box>
-        <Box className="gate-person-details">
-          <Box className="gate-person-detail"><Typography variant="caption">Mobile</Typography><Typography>{selected.mobileMasked || '—'}</Typography></Box>
-          <Box className="gate-person-detail"><Typography variant="caption">Status</Typography><Typography>{selected.status || '—'}</Typography></Box>
-          <Box className="gate-person-detail"><Typography variant="caption">Additional people</Typography><Typography>{selected.accompanyingCount ?? 0}</Typography></Box>
-        </Box>
-        {photoLoading && <Typography role="status">Loading profile photo...</Typography>}
-        {photoError && <Alert severity="error" sx={{ my: 1 }}>{photoError}{!photoMissing && <Button onClick={() => setPhotoRevision((value) => value + 1)} disabled={!online || photoLoading}>Retry profile photo</Button>}</Alert>}
-        {(!selected.photoKey || photoMissing) && <Box sx={{ my: 1 }}>
-          <Typography color="text.secondary">{photoMissing ? 'The stored profile photo is missing. Capture or upload a real photo before check-in.' : 'No profile photo. Capture one before check-in.'}</Typography>
-          {canRecoverPhoto && (!selected.hasPhoto || photoMissing) && <>
-            <Button startIcon={<CameraAltOutlinedIcon />} onClick={() => setPhotoCameraOpen(true)} disabled={!online || photoCaptureBusy}>{photoCaptureBusy ? 'Saving photo' : 'Open camera'}</Button>
-            <input ref={profilePhotoInput} aria-label="Upload profile photo" type="file" accept="image/jpeg,image/png" hidden onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ''; if (file) uploadProfilePhoto(file); }} />
-            <Button onClick={() => profilePhotoInput.current?.click()} disabled={!online || photoCaptureBusy}>Upload profile photo</Button>
-          </>}
-          {!canRecoverPhoto && <Alert severity="warning">Photo recovery is unavailable for this profile state. Ask an administrator to restore the actual profile photo and resolve the profile status or QR issue.</Alert>}
-          {selected.hasPhoto && !photoMissing && <Alert severity="warning">The profile photo reference is missing. Ask an administrator to correct this profile, then scan again.</Alert>}
-        </Box>}
-        <FormControlLabel control={<Checkbox checked={verified} disabled={!photoUrl || photoLoading} onChange={(event) => setVerified(event.target.checked)} />} label="I verified the person against the profile photo" />
-        {selected.locationWarning && <FormControlLabel control={<Checkbox checked={locationAcknowledged} onChange={(event) => setLocationAcknowledged(event.target.checked)} />} label="I acknowledge this person is not assigned to the selected restricted area" />}
-      </Box>}
     </Box>
     <Dialog open={photoCameraOpen} onClose={() => setPhotoCameraOpen(false)} fullWidth maxWidth="sm"><DialogTitle>Capture profile photo</DialogTitle><DialogContent><Box component="video" ref={profileVideo} autoPlay playsInline muted aria-label="Live profile photo camera preview" sx={{ display: 'block', width: '100%', maxHeight: '60vh', aspectRatio: '4 / 3', objectFit: 'cover', backgroundColor: '#161616' }} />{photoCameraError && <Alert severity="error" sx={{ mt: 2 }}>{photoCameraError}</Alert>}</DialogContent><DialogActions><Button onClick={() => setPhotoCameraOpen(false)} disabled={photoCaptureBusy}>Cancel</Button><Button startIcon={<CameraAltOutlinedIcon />} onClick={captureProfilePhoto} variant="contained" disabled={photoCaptureBusy || Boolean(photoCameraError)}>Capture photo</Button></DialogActions></Dialog>
   </Box>;

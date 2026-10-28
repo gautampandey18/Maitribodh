@@ -65,8 +65,13 @@ it('requires lookup and photo confirmation before check-in', async () => {
   expect(await screen.findByText('PROFILE FOUND')).toBeInTheDocument();
   const personCard = screen.getByRole('region', { name: 'Selected person details' });
   expect(personCard).toHaveClass('gate-person-panel');
+  expect(personCard).toBe(personCard.parentElement.firstElementChild);
   expect(personCard).toHaveTextContent('Asha Patel');
   expect(personCard).toHaveTextContent('MB-000008');
+  expect(personCard).toHaveTextContent('Scan at gate');
+  expect(personCard.querySelector('.idc-main')).toBeInTheDocument();
+  expect(personCard.querySelector('.idc-details')).toHaveTextContent('Gate');
+  expect(personCard.querySelector('.idc-back')).not.toBeInTheDocument();
   expect(post).toHaveBeenCalledWith('/gate/lookups', { query: 'MB-000008', locationId: 2 });
   expect(screen.getByRole('button', { name: 'Check-In' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Check-Out' })).toBeDisabled();
@@ -195,7 +200,7 @@ it('automatically displays the detected person and photo before camera shutdown 
   vi.stubGlobal('URL', { createObjectURL: vi.fn(() => 'blob:person-photo'), revokeObjectURL: vi.fn() });
   let finishStop;
   scannerMocks.stop.mockImplementation(() => new Promise((resolve) => { finishStop = resolve; }));
-  vi.spyOn(api, 'get').mockImplementation((path) => Promise.resolve({ data: path === '/persons/registration/options' ? options : new Blob(['photo'], { type: 'image/jpeg' }) }));
+  vi.spyOn(api, 'get').mockImplementation((path) => Promise.resolve({ data: path === '/persons/registration/options' ? options : new Blob([path.endsWith('/qr') ? 'qr' : 'photo'], { type: path.endsWith('/qr') ? 'image/png' : 'image/jpeg' }) }));
   const post = vi.spyOn(api, 'post').mockResolvedValue({ data: { items: [{ personId: 8, personCode: 'MB-000008', name: 'Asha Patel', category: 'Visitor', mobileMasked: '******3210', status: 'ACTIVE', outcome: 'ELIGIBLE', photoKey: 'asha.jpg' }] } });
   const user = userEvent.setup();
   render(<MemoryRouter><GatePage /></MemoryRouter>);
@@ -210,7 +215,7 @@ it('automatically displays the detected person and photo before camera shutdown 
   expect(screen.getByText('Visitor')).toBeInTheDocument();
   expect(screen.getByRole('textbox', { name: 'Mobile number, name or Person ID' })).toHaveValue('');
   expect(post).toHaveBeenCalledExactlyOnceWith('/gate/lookups', { qrPayload: 'signed-qr-payload', locationId: 2 });
-  await waitFor(() => expect(screen.getByRole('img')).toHaveAttribute('src', 'blob:person-photo'));
+  await waitFor(() => expect(screen.getByRole('img', { name: 'Asha Patel profile' })).toHaveAttribute('src', 'blob:person-photo'));
   expect(screen.getByRole('button', { name: 'Check-In' })).toBeDisabled();
   await act(async () => { finishStop(); await detection; });
 });
@@ -351,6 +356,7 @@ it('explains photo loading failure and enables verification after retry succeeds
   let photoRequests = 0;
   vi.spyOn(api, 'get').mockImplementation((path) => {
     if (path === '/persons/registration/options') return Promise.resolve({ data: options });
+    if (path.endsWith('/qr')) return Promise.resolve({ data: new Blob(['qr'], { type: 'image/png' }) });
     photoRequests += 1;
     return photoRequests === 1 ? Promise.reject(photoFailure) : Promise.resolve({ data: new Blob(['photo'], { type: 'image/jpeg' }) });
   });

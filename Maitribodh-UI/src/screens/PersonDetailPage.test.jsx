@@ -58,18 +58,66 @@ it('opens profile edit mode when Update is selected from Person Management', asy
       </MemoryRouter>
     </Provider>,
   );
-  await waitFor(() => expect(document.querySelector('.idc-name')).toHaveTextContent('Asha Patel'));
-  const cardActions = screen.getByLabelText('Identity card').querySelector('.idc-actions');
-  expect(await screen.findByRole('button', { name: 'Download QR code' })).toBeInTheDocument();
-  expect(cardActions).toContainElement(screen.getByRole('button', { name: 'Download QR code' }));
-  expect(cardActions).toContainElement(screen.getByText('v1'));
+  expect(await screen.findByRole('heading', { name: 'Person details' })).toBeInTheDocument();
+  expect(await screen.findByRole('button', { name: 'Download ID card' })).toBeInTheDocument();
+  expect(screen.getByLabelText('ID card download')).toContainElement(screen.getByRole('button', { name: 'Download ID card' }));
+  expect(screen.queryByLabelText('Identity card')).not.toBeInTheDocument();
   expect(screen.queryByText(/QR active/)).not.toBeInTheDocument();
   expect(screen.queryByRole('heading', { name: 'QR code' })).not.toBeInTheDocument();
-  expect(screen.getByLabelText('Identity card').querySelector('.idc-top')).not.toHaveTextContent('asha@example.com');
-  expect(screen.getByLabelText('Identity card')).toHaveTextContent('asha@example.com');
-  expect(screen.getByLabelText('Identity card')).not.toHaveTextContent('Alternate mobile');
+  expect(screen.getByRole('heading', { name: 'Person details' })).toBeInTheDocument();
+  expect(screen.getByLabelText('ID card download').closest('[aria-labelledby="sec-details"]')).toBeInTheDocument();
+  expect(screen.getByRole('region', { name: 'Person details' })).toHaveClass('idc-sec');
   expect(await screen.findByRole('textbox', { name: 'First Name' })).toHaveValue('Asha');
-  expect(screen.getByRole('button', { name: 'Save', exact: true })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Save details' })).toBeInTheDocument();
+}, 30_000);
+
+it('downloads a PNG containing the complete identity card', async () => {
+  const person = {
+    person_id: 8,
+    person_code: 'MB-000008',
+    first_name: 'Asha',
+    last_name: 'Patel',
+    mobile: '+919820000000',
+    category: 'Visitor',
+    email: 'asha@example.com',
+    form_type: 'VISITOR',
+    status: 'ACTIVE',
+    documents: [],
+    category_details: {},
+    location_ids: [],
+    qr_version: 1,
+  };
+  mockPersonApi(person);
+  const user = userEvent.setup();
+  render(<Provider store={store}><MemoryRouter initialEntries={['/persons/8']}><Routes><Route path="/persons/:personId" element={<PersonDetailPage />} /></Routes></MemoryRouter></Provider>);
+
+  const download = await screen.findByRole('button', { name: 'Download ID card' });
+  await waitFor(() => expect(download).toBeEnabled());
+  const drawImage = vi.fn();
+  const createElement = document.createElement.bind(document);
+  vi.spyOn(document, 'createElement').mockImplementation((tagName, ...args) => {
+    const element = createElement(tagName, ...args);
+    if (tagName === 'canvas') {
+      element.getContext = () => ({ drawImage });
+      element.toBlob = (callback) => callback(new Blob(['png'], { type: 'image/png' }));
+    }
+    return element;
+  });
+  vi.stubGlobal('Image', class {
+    naturalWidth = 1200;
+    naturalHeight = 610;
+    set src(value) {
+      this.source = value;
+      queueMicrotask(() => this.onload?.());
+    }
+  });
+  const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function clickDownload() {
+    expect(this.download).toBe('Maitribodh-ID-Card-MB-000008.png');
+  });
+
+  await user.click(download);
+  await waitFor(() => expect(click).toHaveBeenCalledOnce());
+  expect(drawImage).toHaveBeenCalledOnce();
 }, 30_000);
 
 it('edits profile inline and renders access details as readable fields', async () => {
@@ -96,32 +144,36 @@ it('edits profile inline and renders access details as readable fields', async (
 
   render(<Provider store={store}><MemoryRouter initialEntries={['/persons/8']}><Routes><Route path="/persons/:personId" element={<PersonDetailPage />} /></Routes></MemoryRouter></Provider>);
 
-  await waitFor(() => expect(document.querySelector('.idc-name')).toHaveTextContent('Asha Patel'));
-  const cardActions = screen.getByLabelText('Identity card').querySelector('.idc-actions');
-  await screen.findByRole('button', { name: 'Download QR code' });
-  expect(cardActions).toContainElement(screen.getByRole('button', { name: 'Download QR code' }));
-  expect(cardActions).toContainElement(screen.getByText('v1'));
-  expect(cardActions).toContainElement(screen.getByRole('button', { name: 'Deactivate' }));
-  await user.click(screen.getByRole('button', { name: 'Edit profile' }));
+  expect(await screen.findByRole('heading', { name: 'Person details' })).toBeInTheDocument();
+  await screen.findByRole('button', { name: 'Download ID card' });
+  expect(screen.getByLabelText('ID card download')).toContainElement(screen.getByRole('button', { name: 'Download ID card' }));
+  expect(screen.getByLabelText('ID card download')).toContainElement(screen.getByRole('button', { name: 'Deactivate' }));
+  expect(screen.queryByLabelText('Identity card')).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Edit details' }));
   const firstName = screen.getByRole('textbox', { name: 'First Name' });
-  const profileActions = firstName.closest('form').querySelector('.person-form-actions');
-  expect(profileActions).toContainElement(screen.getByRole('button', { name: 'Cancel' }));
-  expect(profileActions).toContainElement(screen.getByRole('button', { name: 'Save', exact: true }));
+  const form = firstName.closest('form');
+  const formActions = form.querySelector('.person-form-actions');
+  expect(form).toHaveAttribute('id', 'person-details-form');
+  expect(form).toContainElement(screen.getByRole('combobox', { name: 'Assigned areas' }));
+  expect(form).toContainElement(screen.getByLabelText('Access valid until'));
+  expect(formActions).toContainElement(screen.getByRole('button', { name: 'Cancel' }));
+  expect(formActions).toContainElement(screen.getByRole('button', { name: 'Save details' }));
   await user.clear(firstName);
   await user.type(firstName, 'Anya');
-  await user.click(screen.getByRole('button', { name: 'Save', exact: true }));
+  await user.click(screen.getByRole('button', { name: 'Save details' }));
   await waitFor(() => expect(patch).toHaveBeenCalledWith('/persons/8', expect.objectContaining({ firstName: 'Anya' })));
+  expect(patch).toHaveBeenCalledWith('/persons/8/access', expect.objectContaining({ locationIds: [], expiresOn: '' }));
   expect(post).not.toHaveBeenCalled();
 
-  expect(screen.getByRole('heading', { name: 'Access details' })).toBeInTheDocument();
+  const detailsBox = screen.getByRole('region', { name: 'Person details' });
+  expect(detailsBox).toContainElement(screen.getByRole('heading', { name: 'Profile details' }));
+  expect(detailsBox).toContainElement(screen.getByRole('heading', { name: 'Access details' }));
+  expect(detailsBox).toContainElement(screen.getByRole('heading', { name: 'Documents' }));
+  expect(screen.queryByRole('button', { name: 'Edit access' })).not.toBeInTheDocument();
   expect(await screen.findByText('Purpose')).toBeInTheDocument();
   expect(screen.getByText('Meeting')).toBeInTheDocument();
   expect(screen.queryByText(/\{\s*"purpose"/)).not.toBeInTheDocument();
   expect(get).toHaveBeenCalledWith('/persons/registration/options');
-  await user.click(screen.getByRole('button', { name: 'Edit access' }));
-  const accessActions = document.getElementById('person-access-form').querySelector('.person-form-actions');
-  expect(accessActions).toContainElement(screen.getByRole('button', { name: 'Cancel' }));
-  expect(accessActions).toContainElement(screen.getByRole('button', { name: 'Save', exact: true }));
 }, 30_000);
 
 it('uploads a profile photo only when one is selected during edit', async () => {
@@ -133,11 +185,11 @@ it('uploads a profile photo only when one is selected during edit', async () => 
   store.dispatch(sessionStarted({ accessToken: 'test', user: { role: 'ADMIN' } }));
 
   render(<Provider store={store}><MemoryRouter initialEntries={['/persons/8']}><Routes><Route path="/persons/:personId" element={<PersonDetailPage />} /></Routes></MemoryRouter></Provider>);
-  await waitFor(() => expect(document.querySelector('.idc-name')).toHaveTextContent('Asha Patel'));
-  await user.click(screen.getByRole('button', { name: 'Edit profile' }));
+  expect(await screen.findByRole('heading', { name: 'Person details' })).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Edit details' }));
   const image = new File(['profile'], 'profile.png', { type: 'image/png' });
   fireEvent.change(screen.getByLabelText('Profile photo (optional)'), { target: { files: [image] } });
-  await user.click(screen.getByRole('button', { name: 'Save', exact: true }));
+  await user.click(screen.getByRole('button', { name: 'Save details' }));
 
   await waitFor(() => expect(patch).toHaveBeenCalledWith('/persons/8', expect.any(Object)));
   await waitFor(() => expect(post).toHaveBeenCalledWith('/persons/8/photo', expect.any(FormData), { headers: { 'Content-Type': undefined } }));

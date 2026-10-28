@@ -3,7 +3,7 @@ import { Alert, Box, Button, CircularProgress, Table, TableBody, TableCell, Tabl
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined';
 import { api } from '../api.js';
-import { QrPreview } from './PersonDetailPage.jsx';
+import PersonIdentityCard from '../components/PersonIdentityCard.jsx';
 import { downloadBlob, requestMessage } from '../utils/resources.js';
 
 function formatDate(value) {
@@ -97,27 +97,27 @@ export default function QrPage() {
               </TableBody>
             </Table>
           </TableContainer>
-          <Box key={selected.person_id} component="section" className="qr-preview-card" aria-label="QR preview">
-            <Box className="qr-preview-content-layout">
-              <Box className="qr-code-frame">
-                <QrPreview personId={selected.person_id} personCode={selected.person_code} onQrBlob={setQrBlob} />
-              </Box>
-              <Box className="qr-preview-info">
-                <Typography className="qr-preview-name">{selected.name}</Typography>
-                <Typography className="qr-preview-person-id">Person ID: {selected.person_code}</Typography>
-                <Box className="qr-preview-details">
-                  <Box className="qr-preview-detail"><Typography>Generated</Typography><Typography>{formatDate(selected.created_at)}</Typography></Box>
-                  <Box className="qr-preview-detail"><Typography>Encodes</Typography><Typography>Registered mobile number</Typography></Box>
-                  <Box className="qr-preview-detail"><Typography>Expiry</Typography><Typography>{selected.expires_on ? formatDate(selected.expires_on) : 'Never'}</Typography></Box>
-                  <Box className="qr-preview-detail qr-preview-status-row"><Typography>Status</Typography><Box className={`qr-preview-status${isCurrent ? ' current' : ''}`}>{isCurrent ? 'Current' : selected.status}</Box></Box>
-                </Box>
-                <Box className="qr-preview-actions">
-                  <Button variant="contained" startIcon={<DownloadOutlinedIcon />} disabled={!qrBlob} onClick={() => downloadBlob(qrBlob, `Maitribodh-QR-${selected.person_code}.png`)}>Download preview</Button>
-                  <Button variant="outlined" startIcon={<PrintOutlinedIcon />} disabled={!qrBlob} onClick={printPreview}>Print</Button>
-                </Box>
-                <Typography className="qr-preview-caption">Scannable QR · encodes the registered mobile number.</Typography>
-              </Box>
-            </Box>
+          <Box key={selected.person_id} component="section" className="qr-identity-card-section" aria-label="QR preview">
+            <PersonIdentityCard
+              personId={selected.person_id}
+              personCode={selected.person_code}
+              name={selected.name}
+              category={selected.category}
+              status={selected.status}
+              mobile={selected.mobile}
+              qrVersion={selected.qr_version}
+              onQrBlob={setQrBlob}
+              fields={[
+                ['Generated', formatDate(selected.created_at)],
+                ['Encodes', 'Registered mobile number'],
+                ['Expiry', selected.expires_on ? formatDate(selected.expires_on) : 'Never'],
+                ['QR status', isCurrent ? 'Current' : selected.status],
+              ]}
+              footer={<>
+                <Button size="small" variant="outlined" startIcon={<DownloadOutlinedIcon />} disabled={!qrBlob} onClick={() => downloadBlob(qrBlob, `Maitribodh-QR-${selected.person_code}.png`)}>Download QR</Button>
+                <Button size="small" variant="outlined" startIcon={<PrintOutlinedIcon />} disabled={!qrBlob} onClick={printPreview}>Print</Button>
+              </>}
+            />
           </Box>
         </Box>
       )}

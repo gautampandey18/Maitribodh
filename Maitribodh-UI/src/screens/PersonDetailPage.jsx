@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
-  Alert, Avatar, Box, Button, Checkbox, CircularProgress, Dialog, DialogActions,
-  DialogContent, DialogTitle, FormControl, IconButton, InputLabel, MenuItem, Select, TextField, Tooltip, Typography,
+  Alert, Box, Button, Checkbox, CircularProgress, Dialog, DialogActions,
+  DialogContent, DialogTitle, FormControl, InputLabel, MenuItem, Select, TextField, Typography,
 } from '@mui/material';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
@@ -11,35 +11,8 @@ import UploadOutlinedIcon from '@mui/icons-material/UploadOutlined';
 import { api } from '../api.js';
 import { downloadBlob, requestMessage, useResource } from '../utils/resources.js';
 import InternationalPhoneField from '../components/InternationalPhoneField.jsx';
+import PersonIdentityCard from '../components/PersonIdentityCard.jsx';
 import { formatPhoneNumber, splitPhoneNumber, toE164Phone } from '../utils/phone.js';
-
-/* ── Identity-card QR preview ───────────────────────────────────────── */
-export function QrPreview({ personId, personCode, onQrBlob }) {
-  const [image, setImage] = useState('');
-  const [error, setError] = useState('');
-  useEffect(() => {
-    let active = true; let url;
-    api.get(`/persons/${personId}/qr`, { responseType: 'blob' })
-      .then(({ data }) => { if (active) { url = URL.createObjectURL(data); setImage(url); onQrBlob?.(data); } })
-      .catch((f) => { if (active) setError(requestMessage(f, 'QR is not available for this person.')); });
-    return () => { active = false; if (url) URL.revokeObjectURL(url); };
-  }, [personId, onQrBlob]);
-  if (error) return <Alert severity="warning">{error}</Alert>;
-  if (!image) return <CircularProgress size={20} />;
-  return (
-    <Box className="idc-qr-content">
-      <Box component="img" src={image} alt={`QR code for ${personCode}`} className="idc-qr-image" />
-    </Box>
-  );
-}
-
-/* ── Status badge sx helper ─────────────────────────────────────────── */
-function statusSx(status) {
-  if (status === 'ACTIVE') return { background: '#E6F4EA', color: '#2E7D32', fontWeight: 700 };
-  if (status === 'REJECTED' || status === 'DEACTIVATED') return { background: '#FDECEA', color: '#C62828', fontWeight: 700 };
-  return { background: '#FFF3E0', color: '#E65100', fontWeight: 700 };
-}
-function statusLabel(s) { return s === 'DEACTIVATED' ? 'Inactive' : s; }
 
 /* ── Section card wrapper ───────────────────────────────────────────── */
 function SectionCard({ id, title, action, wide, children, editing }) {
@@ -64,7 +37,7 @@ function Field({ label, value }) {
   );
 }
 
-/* ── Identity Card (left column) ────────────────────────────────────── */
+/* ── Identity Card ──────────────────────────────────────────────────── */
 function usePersonPhoto(personId, photoKey) {
   const [src, setSrc] = useState('');
   useEffect(() => {
@@ -78,68 +51,33 @@ function usePersonPhoto(personId, photoKey) {
   return src;
 }
 
-function IdentityCard({ person, role, onToggleStatus }) {
-  const initials = `${person.first_name?.[0] ?? ''}${person.last_name?.[0] ?? ''}`.toUpperCase();
+function IdentityCard({ person, role, onToggleStatus, displayCard = true }) {
   const photoSrc = usePersonPhoto(person.person_id, person.photo_key);
-  const [qrBlob, setQrBlob] = useState(null);
   const st = person.status;
   return (
-    <Box component="aside" className="idc-card" aria-label="Identity card">
-      <Box className="idc-band">
-        <span className="idc-org">MAITRIBODH ASHRAM</span>
-        <span className="idc-kind">IDENTITY CARD</span>
-      </Box>
-      {/* Top */}
-      <Box className="idc-top">
-        <Box className="idc-profile">
-          {photoSrc
-            ? <Box component="img" src={photoSrc} alt={person.first_name} className="idc-photo" />
-            : <Avatar className="idc-photo" aria-hidden="true">{initials}</Avatar>}
-          <Box className="idc-profile-info">
-            <Typography className="idc-name">{person.first_name} {person.last_name}</Typography>
-            <Box className="idc-id">{person.person_code}</Box>
-            <Box className="idc-badges">
-              <Box component="span" sx={{ fontSize: '0.72rem', fontWeight: 700, px: 1, py: 0.25, borderRadius: '999px', background: 'var(--th-soft)', color: 'var(--th-primary)' }}>{person.category}</Box>
-              <Box component="span" sx={{ fontSize: '0.72rem', px: 1, py: 0.25, borderRadius: '999px', ...statusSx(st) }}>{statusLabel(st)}</Box>
-            </Box>
-          </Box>
-        </Box>
-        <Box className="idc-qr-panel">
-          <QrPreview personId={person.person_id} personCode={person.person_code} onQrBlob={setQrBlob} />
-        </Box>
-      </Box>
-      {/* Rows */}
-      <Box className="idc-rows">
-        {[
-          ['Mobile', formatPhoneNumber(person.mobile)],
-          ['Email', person.email],
-          ['Address', person.address],
-          ['Emergency contact', [person.emergency_contact_name, person.emergency_contact_mobile].filter(Boolean).join(' · ')],
-        ].map(([label, val]) => (
-          <Box className="idc-row" key={label}>
-            <Box component="span">{label}</Box>
-            <Box component="b">{val || '—'}</Box>
-          </Box>
-        ))}
-      </Box>
-      <Box className="idc-actions">
-        <Box className="idc-qr-meta">
-          <Tooltip title="Download QR code">
-            <span>
-              <IconButton aria-label="Download QR code" onClick={() => downloadBlob(qrBlob, `Maitribodh-QR-${person.person_code}.png`)} size="small" disabled={!qrBlob}>
-                <DownloadOutlinedIcon />
-              </IconButton>
-            </span>
-          </Tooltip>
-          <Typography className="idc-qr-version">v{person.qr_version ?? 1}</Typography>
-        </Box>
+    <PersonIdentityCard
+      personId={person.person_id}
+      personCode={person.person_code}
+      name={`${person.first_name} ${person.last_name}`}
+      category={person.category}
+      status={st}
+      photoSrc={photoSrc}
+      mobile={formatPhoneNumber(person.mobile)}
+      qrVersion={person.qr_version ?? 1}
+      displayCard={displayCard}
+      fields={[
+        ['Address', person.address],
+        ['Emergency contact', [person.emergency_contact_name, person.emergency_contact_mobile].filter(Boolean).join(' · ')],
+        ['Access valid until', person.expires_on ? new Date(`${String(person.expires_on).slice(0, 10)}T00:00:00`).toLocaleDateString() : 'Until revoked'],
+      ]}
+      footer={<>
         {['ADMIN', 'SUPER_ADMIN'].includes(role) && (
           <Button size="small" color="inherit" onClick={onToggleStatus} sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>
             {st === 'DEACTIVATED' ? 'Reactivate' : 'Deactivate'}
           </Button>
         )}
-      </Box>
-    </Box>
+      </>}
+    />
   );
 }
 
@@ -158,8 +96,6 @@ export default function PersonDetailPage() {
   const [failure, setFailure] = useState('');
   const [busy, setBusy] = useState(false);
   const [accessOptions, setAccessOptions] = useState(null);
-  const [accessEdit, setAccessEdit] = useState(false);
-  const [accessDraft, setAccessDraft] = useState(null);
   const [documentBusy, setDocumentBusy] = useState(false);
   const [activity, setActivity] = useState(null);
   const [audit, setAudit] = useState(null);
@@ -193,21 +129,49 @@ export default function PersonDetailPage() {
   function beginEdit() {
     setProfilePhoto(null);
     const phone = splitPhoneNumber(person.mobile);
-    setEdit({ firstName: person.first_name, lastName: person.last_name, mobile: phone.number, country: phone.country, alternateMobile: person.alternate_mobile ?? '', email: person.email ?? '', address: person.address ?? '', emergencyName: person.emergency_contact_name ?? '', emergencyMobile: person.emergency_contact_mobile ?? '' });
+    setEdit({
+      firstName: person.first_name,
+      lastName: person.last_name,
+      mobile: phone.number,
+      country: phone.country,
+      alternateMobile: person.alternate_mobile ?? '',
+      email: person.email ?? '',
+      address: person.address ?? '',
+      emergencyName: person.emergency_contact_name ?? '',
+      emergencyMobile: person.emergency_contact_mobile ?? '',
+      locationIds: person.location_ids ?? [],
+      expiresOn: person.expires_on ? String(person.expires_on).slice(0, 10) : '',
+    });
   }
 
   async function save(event) {
     event.preventDefault(); setBusy(true); setFailure('');
+    let profileSaved = false;
+    let accessSaved = false;
     try {
       const mobile = toE164Phone(edit.mobile, person.form_type === 'VISITOR' ? edit.country : 'IN');
-      if (!mobile) { setFailure('Enter a valid mobile number for the selected country.'); setBusy(false); return; }
-      await api.patch(`/persons/${personId}`, { ...edit, mobile });
+      if (!mobile) { setFailure('Enter a valid mobile number for the selected country.'); return; }
+      const { locationIds, expiresOn, ...profileChanges } = edit;
+      delete profileChanges.country;
+      await api.patch(`/persons/${personId}`, { ...profileChanges, mobile });
+      profileSaved = true;
       if (profilePhoto) {
         const form = new FormData(); form.append('photo', profilePhoto);
         await api.post(`/persons/${personId}/photo`, form, { headers: { 'Content-Type': undefined } });
       }
+      await api.patch(`/persons/${personId}/access`, { locationIds: locationIds.map(Number), expiresOn });
+      accessSaved = true;
       setEdit(null); setProfilePhoto(null); reload();
-    } catch (e) { setFailure(requestMessage(e)); } finally { setBusy(false); }
+    } catch (e) {
+      setFailure(profileSaved || accessSaved
+        ? `Some details were saved, but another update failed: ${requestMessage(e)}`
+        : requestMessage(e));
+      if (profileSaved || accessSaved) {
+        setEdit(null);
+        setProfilePhoto(null);
+        reload();
+      }
+    } finally { setBusy(false); }
   }
 
   async function saveStatus(event) {
@@ -219,14 +183,6 @@ export default function PersonDetailPage() {
   async function downloadDocument(doc) {
     try { const { data } = await api.get(`/persons/${personId}/files/${doc.key}`, { responseType: 'blob' }); downloadBlob(data, doc.name); }
     catch (e) { setFailure(requestMessage(e)); }
-  }
-
-  async function saveAccess(event) {
-    event.preventDefault(); setBusy(true); setFailure('');
-    try {
-      await api.patch(`/persons/${personId}/access`, accessDraft);
-      setAccessEdit(false); reload();
-    } catch (e) { setFailure(requestMessage(e)); } finally { setBusy(false); }
   }
 
   async function uploadDocuments(event) {
@@ -283,70 +239,62 @@ export default function PersonDetailPage() {
 
       {person && (
         <Box className="idc-layout">
-          {/* ── Left: Identity Card ── */}
-          <IdentityCard
-            person={person}
-            role={role}
-            onToggleStatus={() => setStatusTarget(person.status === 'DEACTIVATED' ? 'ACTIVE' : 'DEACTIVATED')}
-          />
-
-          {/* ── Right: Section cards ── */}
-          <Box className="idc-sections">
-
-            {/* Profile details */}
-            <SectionCard
-              id="overview" wide
-              title="Profile details"
-              editing={Boolean(edit)}
-              action={canEdit && !edit && <Button size="small" startIcon={<EditOutlinedIcon />} onClick={beginEdit}>Edit profile</Button>}
-            >
-              {edit ? (
-                <Box id="profile-edit-form" component="form" onSubmit={save} className="form-grid person-overview-grid">
-                  {editFields.map(([label, key, value]) =>
-                    key === 'mobile' && person.form_type === 'VISITOR'
-                      ? <InternationalPhoneField key={key} country={edit.country} number={edit.mobile} onCountryChange={changePhoneCountry} onNumberChange={(m) => setEdit({ ...edit, mobile: m })} required />
-                      : <TextField key={key ?? label} label={label} value={key ? edit[key] : value ?? ''} InputProps={{ readOnly: !key }} required={['firstName', 'lastName'].includes(key)} type={key === 'email' ? 'email' : 'text'} onChange={key ? (e) => setEdit({ ...edit, [key]: e.target.value }) : undefined} inputProps={{ maxLength: key?.toLowerCase().includes('mobile') ? 10 : ['firstName', 'lastName', 'emergencyName'].includes(key) ? 100 : key === 'email' ? 150 : 500, ...(key?.toLowerCase().includes('mobile') ? { pattern: '[6-9][0-9]{9}' } : {}) }} />
-                  )}
-                  <Box>
-                    <Typography component="label" htmlFor="profile-photo-edit">Profile photo (optional)</Typography>
-                    <input id="profile-photo-edit" type="file" accept="image/jpeg,image/png" capture="environment" onChange={(e) => { const f = e.target.files?.[0] ?? null; if (f && (f.size > 5 * 1024 * 1024 || !['image/jpeg', 'image/png'].includes(f.type))) { setFailure('Choose a JPG or PNG photograph no larger than 5 MB.'); setProfilePhoto(null); e.target.value = ''; return; } setFailure(''); setProfilePhoto(f); }} />
-                    <Typography variant="caption">{profilePhoto?.name ?? (person.photo_key ? 'Leave empty to keep the current photo.' : 'Leave empty; Security will capture a photo at first check-in.')}</Typography>
-                  </Box>
-                  <Box className="person-form-actions">
-                    <Button size="small" onClick={() => { setEdit(null); setProfilePhoto(null); }} disabled={busy}>Cancel</Button>
-                    <Button size="small" variant="contained" type="submit" disabled={busy}>Save</Button>
-                  </Box>
-                </Box>
-              ) : (
-                <Box className="person-readonly-grid">
-                  {profileReadFields.map(([label, value]) => <Field key={label} label={label} value={value} />)}
-                </Box>
+          <SectionCard
+            id="details"
+            title="Person details"
+            editing={Boolean(edit)}
+            action={<Box className="person-detail-header-actions">
+              <IdentityCard
+                person={person}
+                role={role}
+                displayCard={false}
+                onToggleStatus={() => setStatusTarget(person.status === 'DEACTIVATED' ? 'ACTIVE' : 'DEACTIVATED')}
+              />
+              {canEdit && !edit && <Button size="small" startIcon={<EditOutlinedIcon />} onClick={beginEdit}>Edit details</Button>}
+              {canEdit && (person.documents?.length ?? 0) < 12 && (
+                <Button size="small" component="label" startIcon={<UploadOutlinedIcon />} disabled={documentBusy}>
+                  {documentBusy ? 'Uploading…' : 'Add documents'}
+                  <input hidden type="file" multiple accept="application/pdf,image/jpeg,image/png" onChange={uploadDocuments} />
+                </Button>
               )}
-            </SectionCard>
-
-            {/* Access details */}
-            <SectionCard
-              id="access" wide
-              title="Access details"
-              editing={accessEdit}
-              action={canEdit && !accessEdit && <Button size="small" startIcon={<EditOutlinedIcon />} onClick={() => { setAccessDraft({ locationIds: person.location_ids ?? [], expiresOn: person.expires_on ? String(person.expires_on).slice(0, 10) : '' }); setAccessEdit(true); }}>Edit access</Button>}
-            >
-              {accessEdit ? (
-                <Box id="person-access-form" component="form" onSubmit={saveAccess} className="form-grid person-overview-grid">
-                  <FormControl>
-                    <InputLabel id="assigned-areas-label">Assigned areas</InputLabel>
-                    <Select labelId="assigned-areas-label" multiple value={accessDraft.locationIds.map(Number)} label="Assigned areas" onChange={(e) => setAccessDraft({ ...accessDraft, locationIds: e.target.value.map(Number) })} renderValue={(sel) => sel.map((id) => locationNames.get(String(id)) ?? id).join(', ')}>
-                      {areas.map((a) => <MenuItem key={a.location_id} value={a.location_id}><Checkbox checked={accessDraft.locationIds.map(Number).includes(a.location_id)} />{a.name}</MenuItem>)}
-                    </Select>
-                  </FormControl>
-                  <TextField label="Access valid until" type="date" value={accessDraft.expiresOn} onChange={(e) => setAccessDraft({ ...accessDraft, expiresOn: e.target.value })} InputLabelProps={{ shrink: true }} />
-                  <Box className="person-form-actions">
-                    <Button size="small" onClick={() => setAccessEdit(false)} disabled={busy}>Cancel</Button>
-                    <Button size="small" variant="contained" type="submit" disabled={busy}>Save</Button>
+            </Box>}
+          >
+            {edit ? (
+              <Box id="person-details-form" component="form" onSubmit={save} className="form-grid person-overview-grid">
+                <Typography className="person-detail-subheading">Profile details</Typography>
+                {editFields.map(([label, key, value]) =>
+                  key === 'mobile' && person.form_type === 'VISITOR'
+                    ? <InternationalPhoneField key={key} country={edit.country} number={edit.mobile} onCountryChange={changePhoneCountry} onNumberChange={(m) => setEdit({ ...edit, mobile: m })} required />
+                    : <TextField key={key ?? label} label={label} value={key ? edit[key] : value ?? ''} InputProps={{ readOnly: !key }} required={['firstName', 'lastName'].includes(key)} type={key === 'email' ? 'email' : 'text'} onChange={key ? (e) => setEdit({ ...edit, [key]: e.target.value }) : undefined} inputProps={{ maxLength: key?.toLowerCase().includes('mobile') ? 10 : ['firstName', 'lastName', 'emergencyName'].includes(key) ? 100 : key === 'email' ? 150 : 500, ...(key?.toLowerCase().includes('mobile') ? { pattern: '[6-9][0-9]{9}' } : {}) }} />
+                )}
+                <Box>
+                  <Typography component="label" htmlFor="profile-photo-edit">Profile photo (optional)</Typography>
+                  <input id="profile-photo-edit" type="file" accept="image/jpeg,image/png" capture="environment" onChange={(e) => { const f = e.target.files?.[0] ?? null; if (f && (f.size > 5 * 1024 * 1024 || !['image/jpeg', 'image/png'].includes(f.type))) { setFailure('Choose a JPG or PNG photograph no larger than 5 MB.'); setProfilePhoto(null); e.target.value = ''; return; } setFailure(''); setProfilePhoto(f); }} />
+                  <Typography variant="caption">{profilePhoto?.name ?? (person.photo_key ? 'Leave empty to keep the current photo.' : 'Leave empty; Security will capture a photo at first check-in.')}</Typography>
+                </Box>
+                <Typography className="person-detail-subheading">Access details</Typography>
+                <FormControl>
+                  <InputLabel id="assigned-areas-label">Assigned areas</InputLabel>
+                  <Select labelId="assigned-areas-label" multiple value={edit.locationIds.map(Number)} label="Assigned areas" onChange={(e) => setEdit({ ...edit, locationIds: e.target.value.map(Number) })} renderValue={(sel) => sel.map((id) => locationNames.get(String(id)) ?? id).join(', ')}>
+                    {areas.map((a) => <MenuItem key={a.location_id} value={a.location_id}><Checkbox checked={edit.locationIds.map(Number).includes(a.location_id)} />{a.name}</MenuItem>)}
+                  </Select>
+                </FormControl>
+                <TextField label="Access valid until" type="date" value={edit.expiresOn} onChange={(e) => setEdit({ ...edit, expiresOn: e.target.value })} InputLabelProps={{ shrink: true }} />
+                <Box className="person-form-actions">
+                  <Button size="small" onClick={() => { setEdit(null); setProfilePhoto(null); }} disabled={busy}>Cancel</Button>
+                  <Button size="small" variant="contained" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save details'}</Button>
+                </Box>
+              </Box>
+            ) : (
+              <>
+                <Box component="section" className="person-detail-subsection">
+                  <Typography component="h3" className="person-detail-subheading">Profile details</Typography>
+                  <Box className="person-readonly-grid">
+                    {profileReadFields.map(([label, value]) => <Field key={label} label={label} value={value} />)}
                   </Box>
                 </Box>
-              ) : (
-                <>
+                <Box component="section" className="person-detail-subsection">
+                  <Typography component="h3" className="person-detail-subheading">Access details</Typography>
                   <Box className="person-readonly-grid">
                     <Field label="Assigned areas" value={person.location_ids?.length ? person.location_ids.map((id) => locationNames.get(String(id)) ?? id).join(', ') : 'None assigned'} />
                     <Field label="Access valid until" value={person.expires_on ? new Date(`${String(person.expires_on).slice(0, 10)}T00:00:00`).toLocaleDateString() : 'Until revoked'} />
@@ -365,21 +313,12 @@ export default function PersonDetailPage() {
                       </Box>
                     </>
                   )}
-                </>
-              )}
-            </SectionCard>
+                </Box>
+              </>
+            )}
 
-            {/* Documents */}
-            <SectionCard
-              id="documents"
-              title="Documents"
-              action={canEdit && (person.documents?.length ?? 0) < 12 && (
-                <Button size="small" component="label" startIcon={<UploadOutlinedIcon />} disabled={documentBusy}>
-                  {documentBusy ? 'Uploading…' : 'Add documents'}
-                  <input hidden type="file" multiple accept="application/pdf,image/jpeg,image/png" onChange={uploadDocuments} />
-                </Button>
-              )}
-            >
+            <Box component="section" className="person-detail-subsection">
+              <Typography component="h3" className="person-detail-subheading">Documents</Typography>
               {person.documents?.length
                 ? <Box className="person-document-list">
                     {person.documents.map((doc) => (
@@ -390,10 +329,10 @@ export default function PersonDetailPage() {
                     ))}
                   </Box>
                 : <Typography color="text.secondary">No documents uploaded.</Typography>}
-            </SectionCard>
+            </Box>
 
-            {/* Visit activity */}
-            <SectionCard id="activity" title="Visit activity">
+            <Box component="section" className="person-detail-subsection">
+              <Typography component="h3" className="person-detail-subheading">Visit activity</Typography>
               {activity === null
                 ? <CircularProgress size={20} />
                 : activity.length
@@ -407,11 +346,11 @@ export default function PersonDetailPage() {
                       </Box>
                     ))
                   : <Typography color="text.secondary">No activity.</Typography>}
-            </SectionCard>
+            </Box>
 
-            {/* Audit trail */}
             {['ADMIN', 'SUPER_ADMIN'].includes(role) && (
-              <SectionCard id="audit" title="Audit trail">
+              <Box component="section" className="person-detail-subsection">
+                <Typography component="h3" className="person-detail-subheading">Audit trail</Typography>
                 {audit === null
                   ? <CircularProgress size={20} />
                   : audit.length
@@ -425,10 +364,9 @@ export default function PersonDetailPage() {
                         </Box>
                       ))
                     : <Typography color="text.secondary">No audit records.</Typography>}
-              </SectionCard>
+              </Box>
             )}
-
-          </Box>
+          </SectionCard>
         </Box>
       )}
 

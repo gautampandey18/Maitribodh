@@ -44,14 +44,16 @@ it('shows one identity when the search uniquely matches an active user', async (
 
   expect(await screen.findByRole('table', { name: 'QR identity' })).toBeInTheDocument();
   expect(screen.getAllByText('Asha Patel')).toHaveLength(2);
-  expect(screen.getByText('Person ID: MB-000005')).toBeInTheDocument();
   expect(screen.getByRole('region', { name: 'QR preview' })).toBeInTheDocument();
+  expect(screen.getByLabelText('Identity card')).toBeInTheDocument();
+  expect(screen.getByText('MB-000005')).toBeInTheDocument();
   expect(screen.getByText('Generated')).toBeInTheDocument();
   expect(screen.getByText('13 Jul 2026')).toBeInTheDocument();
   expect(screen.getByText('Registered mobile number')).toBeInTheDocument();
   expect(screen.getByText('Never')).toBeInTheDocument();
   expect(within(screen.getByRole('region', { name: 'QR preview' })).getByText('Current')).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Download preview' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Download ID card' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Download QR' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Print' })).toBeInTheDocument();
   expect(screen.queryByText(/rows per page/i)).not.toBeInTheDocument();
   expect(get).toHaveBeenCalledWith('/persons', {
