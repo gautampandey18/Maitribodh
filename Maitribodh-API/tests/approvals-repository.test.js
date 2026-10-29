@@ -16,6 +16,7 @@ test('pending queue sorts by submission and returns no object storage key', asyn
 
   assert.equal(rows[0].has_photo, true);
   assert.match(sql, /WHERE p\.status = 'PENDING'/);
+  assert.match(sql, /c\.approval_required = true/);
   assert.match(sql, /concat_ws\(' ', p\.first_name, p\.last_name\) ILIKE '%' \|\| \$1 \|\| '%'/);
   assert.match(sql, /c\.name ILIKE '%' \|\| \$2 \|\| '%'/);
   assert.match(sql, /ORDER BY h\.acted_at/);
@@ -39,6 +40,7 @@ test('status queue lists paginated registrations for the requested state', async
 
   assert.equal(rows[0].status, 'ACTIVE');
   assert.match(sql, /WHERE p\.status = \$1/);
+  assert.match(sql, /c\.approval_required = true/);
   assert.match(sql, /concat_ws\(' ', p\.first_name, p\.last_name\) ILIKE '%' \|\| \$2 \|\| '%'/);
   assert.match(sql, /c\.name ILIKE '%' \|\| \$3 \|\| '%'/);
   assert.match(sql, /LEFT JOIN LATERAL/);
@@ -249,4 +251,47 @@ test('resubmitting a category without approval returns it to the pending queue',
   assert.match(calls[2].sql, /SET status = 'PENDING'/);
   assert.equal(calls[2].values[1], 7);
   assert.deepEqual(JSON.parse(calls[4].values[4]), { status: 'PENDING' });
+});
+
+test('approval cannot decide on a registration that does not require approval', async () => {
+  const client = {
+    async query(sql) {
+      if (sql === 'BEGIN' || sql === 'ROLLBACK') return { rows: [] };
+      if (sql.includes('FROM mams.person')) return { rows: [{ person_id: 10, status: 'PENDING', approval_required: false }] };
+      throw new Error('Should not reach write');
+    },
+    release() {},
+  };
+  const repository = createApprovalsRepository({ async connect() { return client; } });
+
+  await assert.rejects(
+    repository.decide({ personId: 10, decision: 'APPROVE', actorUserId: 7, actorRole: 'APPROVER' }),
+    (error) => error.code === 'APPROVAL_NOT_REQUIRED',
+  );
+});
+
+test('resubmitting a person in a non-approval category activates directly', async () => {
+  const calls = [];
+  const client = {
+    async query(sql, values = []) {
+      calls.push({ sql, values });
+      if (sql === 'BEGIN' || sql === 'ROLLBACK') return { rows: [] };
+      if (sql.includes('FROM mams.person')) {
+        return { rows: [{ person_id: 10, status: 'REJECTED', registered_by: 7, approval_required: false }] };
+      }
+      if (sql.includes('UPDATE mams.person')) {
+        return { rows: [{ person_id: 10, person_code: 'MB-000010', status: 'ACTIVE', qr_version: 1 }] };
+      }
+      return { rows: [], rowCount: 1 };
+    },
+    release() {},
+  };
+  const repository = createApprovalsRepository({ async connect() { return client; } });
+
+  const result = await repository.resubmit({ personId: 10, actorUserId: 7, actorRole: 'REG_OFFICER' });
+
+  assert.equal(result.status, 'ACTIVE');
+  assert.match(calls[2].sql, /SET status = 'ACTIVE'/);
+  assert.equal(calls[2].values[1], 7);
+  assert.equal(calls[5].sql, 'COMMIT');
 });

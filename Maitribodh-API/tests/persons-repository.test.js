@@ -22,3 +22,18 @@ test('person search uses the documented filters, preserves duplicates, and accep
   assert.doesNotMatch(queryInput.sql, /photo_key/);
   assert.deepEqual(queryInput.values, ['MB-000001', 4, 'ACTIVE', 25, 50]);
 });
+
+test('person search with pending status requires category approval', async () => {
+  let queryInput;
+  const repository = createPersonsRepository({
+    async query(sql, values) {
+      queryInput = { sql, values };
+      return { rows: [] };
+    },
+  });
+
+  await repository.search({ query: '', categoryId: null, status: 'PENDING', offset: 0, pageSize: 10 });
+
+  assert.match(queryInput.sql, /c\.approval_required = true/);
+  assert.match(queryInput.sql, /CASE WHEN c\.approval_required = false AND p\.status = 'PENDING' THEN 'ACTIVE'/);
+});

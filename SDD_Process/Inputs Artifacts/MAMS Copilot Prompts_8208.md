@@ -314,7 +314,7 @@ Implement the Dashboard (spec §3, F-DASH-01 to F-DASH-06) with real API data.
 
 - Header "Dashboard" + "Last sync: Xs ago · Live monitoring" (auto-refresh every 30s).
 - Six KPI cards with deltas: Active Members (% vs last month), Registrations Today (vs yesterday), Check-Ins Today, Check-Outs Today, Pending Approvals ("Needs review"), Blacklist Alerts (blocked attempts today, "Action required").
-- Current Occupancy table (open visits): Person, Category, Location, Checked In, Checked By, Device, Action. Sys Admin sees "Review / Close", which shows the confirm "Manually close the open visit for X? Confirm only after checking the person is no longer on site." and then closes the visit with closed_by_reconciliation + audit "Manual Visit Reconciliation". Other roles see the text "Admin review". Empty state: "No open check-ins."
+- Current Occupancy table (open visits): Person, Category, Location, Checked In, Checked By, Device, Action. Sys Admin sees "Review / Checkout", which shows the confirm "Manually close the open visit for X? Confirm only after checking the person is no longer on site." and then closes the visit with closed_by_reconciliation + audit "Manual Visit Reconciliation". Other roles see the text "Admin review". Empty state: "No open check-ins."
 - Daily Check-In Trend (last 7 days, line/area) and Category Mix (this week, donut) using Recharts with the brand palette.
 - Recent Activity table, Pending Approval Queue (top 5), Security Alerts (recent blacklist attempts).
 - One aggregated endpoint GET /dashboard/summary.

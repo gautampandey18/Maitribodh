@@ -61,8 +61,9 @@ export default function ApprovalsPage() {
         ...(nextFilters.category ? { category: nextFilters.category } : {}),
       } });
       if (currentRequestId !== requestId.current) return;
-      setItems(response.data.items);
-      setTotal(response.data.total ?? response.data.items.length);
+      const approvalEntries = (response.data.items || []).filter((item) => item.approval_required !== false);
+      setItems(approvalEntries);
+      setTotal(response.data.total ?? approvalEntries.length);
     } catch (requestError) {
       if (currentRequestId !== requestId.current) return;
       setError(requestError.response?.data?.error?.message ?? 'Approval queue could not be loaded.');

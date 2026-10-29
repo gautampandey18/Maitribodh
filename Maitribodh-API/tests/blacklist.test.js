@@ -57,10 +57,11 @@ test('blacklist add writes the entry and audit atomically after validating perso
   assert.equal(calls[0].sql, 'BEGIN');
   assert.match(calls[1].sql, /FOR UPDATE/);
   assert.match(calls[2].sql, /lookup_type = 'BLACKLIST_REASON'/);
-  assert.match(calls[3].sql, /INSERT INTO mams.blacklist/);
-  assert.match(calls[4].sql, /INSERT INTO mams.audit_log/);
-  assert.equal(calls[4].values[5].length, 100);
-  assert.equal(calls[5].sql, 'COMMIT');
+  assert.match(calls[3].sql, /UPDATE mams\.blacklist/);
+  assert.match(calls[4].sql, /INSERT INTO mams\.blacklist/);
+  assert.match(calls[5].sql, /INSERT INTO mams\.audit_log/);
+  assert.equal(calls[5].values[5].length, 100);
+  assert.equal(calls[6].sql, 'COMMIT');
 });
 
 test('blacklist lift can close an expired unlifted entry and records audit atomically', async () => {

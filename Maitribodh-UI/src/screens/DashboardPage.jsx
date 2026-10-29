@@ -107,7 +107,7 @@ export default function DashboardPage() {
     if (canReviewApprovals) {
       api.get('/approvals')
         .then((response) => { if (active) setPendingApprovals(response.data.items.slice(0, 3)); })
-        .catch(() => {});
+        .catch(() => { });
     }
     return () => {
       active = false;
@@ -182,8 +182,8 @@ export default function DashboardPage() {
           <Paper className="table-panel dashboard-inside" elevation={0}>
             <Box className="table-panel-heading">
               <Box>
-                  <Typography variant="h3">Current Occupancy <Box component="span" className="occupancy-count">{insideTotal} inside</Box></Typography>
-                  <Typography variant="body2" color="text.secondary">Open check-ins require manual review before reconciliation.</Typography>
+                <Typography variant="h3">Current Occupancy <Box component="span" className="occupancy-count">{insideTotal} inside</Box></Typography>
+                <Typography variant="body2" color="text.secondary">Open check-ins require manual review before reconciliation.</Typography>
               </Box>
             </Box>
             <TableContainer>
@@ -215,7 +215,7 @@ export default function DashboardPage() {
                       <TableCell>{visit.accompanying_count}</TableCell>
                       <TableCell>{visit.checked_in_by}</TableCell>
                       <TableCell>{visit.checkin_device ?? '—'}</TableCell>
-                      <TableCell>{user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN' ? <Button className="dashboard-admin-review" size="small" onClick={() => { setReconciliationError(''); setReconciliationTarget(visit); }}>Review / Close</Button> : <Typography variant="caption">Admin review</Typography>}</TableCell>
+                      <TableCell>{user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN' ? <Button className="dashboard-admin-review" size="small" onClick={() => { setReconciliationError(''); setReconciliationTarget(visit); }}>Review / Checkout</Button> : <Typography variant="caption">Admin review</Typography>}</TableCell>
                     </TableRow>
                   ))}
                   {!inside.length && <TableRow><TableCell colSpan={9} className="empty-table occupancy-empty-state">No open check-ins.</TableCell></TableRow>}

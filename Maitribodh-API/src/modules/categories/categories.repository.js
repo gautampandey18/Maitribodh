@@ -139,6 +139,19 @@ export function createCategoriesRepository(pool) {
           RETURNING *`,
           values,
         );
+
+        if (changes.approvalRequired === false && current.approval_required !== false) {
+          await client.query(
+            `UPDATE mams.person
+                SET status = 'ACTIVE',
+                    qr_version = CASE WHEN qr_version = 0 THEN 1 ELSE qr_version END,
+                    updated_by = $2,
+                    updated_at = now()
+              WHERE category_id = $1
+                AND status = 'PENDING'`,
+            [categoryId, actorUserId],
+          );
+        }
         await client.query(
           `INSERT INTO mams.audit_log
              (user_id, user_role, module, activity, entity_type, entity_id,

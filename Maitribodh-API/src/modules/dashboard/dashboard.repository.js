@@ -15,7 +15,7 @@ export function createDashboardRepository(pool) {
              WHERE checkout_at IS NOT NULL
                AND (checkout_at AT TIME ZONE 'Asia/Kolkata')::date = (now() AT TIME ZONE 'Asia/Kolkata')::date
            ) AS checkouts_today,
-           (SELECT count(*)::int FROM mams.person WHERE status = 'PENDING') AS pending_approvals,
+           (SELECT count(*)::int FROM mams.person AS p JOIN mams.category AS c ON c.category_id = p.category_id WHERE p.status = 'PENDING' AND c.approval_required = true) AS pending_approvals,
            (SELECT count(*)::int FROM mams.audit_log
              WHERE module = 'GATE' AND activity = 'GATE_BLOCKED_BLACKLIST'
                AND (occurred_at AT TIME ZONE 'Asia/Kolkata')::date = (now() AT TIME ZONE 'Asia/Kolkata')::date
