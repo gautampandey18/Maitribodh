@@ -33,7 +33,7 @@ export default function MasterDataPage() {
   }
   return <Box className="master-data-page">
     <Box className="page-heading"><Typography component="h1" variant="h1">Master Data</Typography></Box>
-    <Tabs value={type} onChange={(_event, value) => selectType(value)} variant="scrollable" scrollButtons="auto">
+    <Tabs className="section-nav-tabs" aria-label="Master data sections" value={type} onChange={(_event, value) => selectType(value)} variant="scrollable" scrollButtons="auto">
       <Tab value="CATEGORIES" label="Categories" />
       <Tab value="LOCATIONS" label="Areas & Gates" />
       {types.map((item) => <Tab key={item.key} value={item.key} label={item.label} />)}

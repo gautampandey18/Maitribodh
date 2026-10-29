@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import { api } from '../api.js';
@@ -65,6 +65,12 @@ it('summarizes audit values in the table and preserves full values in the detail
   expect(screen.getByText('9876543210')).toBeInTheDocument();
   expect(screen.getByText('+1 more fields')).toBeInTheDocument();
   expect(screen.queryByText('{"status":"PENDING"}')).not.toBeInTheDocument();
+  const panel = screen.getByRole('region', { name: 'Audit records' });
+  expect(panel).toHaveClass('table-panel', 'audit-panel');
+  expect(panel).toContainElement(screen.getByRole('group', { name: 'Audit filters' }));
+  expect(within(panel).getByRole('table', { name: 'Audit log' })).toHaveClass('audit-table');
+  expect(screen.getByText('APPROVED')).toHaveClass('audit-action-badge');
+  expect(screen.getByText('APPROVAL')).toHaveClass('audit-module-badge');
 
   await userEvent.click(screen.getByText(summaryText('Status: PENDING')));
   expect(screen.getByText('Audit Detail')).toBeInTheDocument();
@@ -93,4 +99,7 @@ it('sends free-text search changes to the audit API', async () => {
   expect(await screen.findByText('CHECK_IN')).toBeInTheDocument();
   expect(screen.getByText('9876543210')).toBeInTheDocument();
   await waitFor(() => expect(get).toHaveBeenLastCalledWith('/audit?page=1&pageSize=5&query=9876543210', expect.objectContaining({ signal: expect.any(AbortSignal) })));
+  await user.click(screen.getByRole('button', { name: 'Clear filters' }));
+  expect(screen.getByRole('textbox', { name: 'Search entry or mobile number' })).toHaveValue('');
+  expect(await screen.findByText('No audit records match the selected filters.')).toBeInTheDocument();
 });

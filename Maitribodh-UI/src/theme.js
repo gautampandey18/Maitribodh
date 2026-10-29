@@ -83,6 +83,10 @@ export const theme = createTheme({
           borderColor: '#DADDE1',
           fontSize: '0.8125rem',
           color: '#1C1E21',
+          verticalAlign: 'middle',
+          lineHeight: 1.5,
+          overflowWrap: 'anywhere',
+          fontVariantNumeric: 'tabular-nums',
         },
         head: {
           fontSize: '0.6875rem',
@@ -92,14 +96,28 @@ export const theme = createTheme({
           textTransform: 'uppercase',
           letterSpacing: '0.3px',
           borderBottomColor: '#F5C9A6',
+          padding: '12px 14px',
+          whiteSpace: 'nowrap',
         },
       },
     },
     MuiTableRow: {
       styleOverrides: {
         root: {
-          '&:hover': { backgroundColor: '#FFF8F2' },
-          transition: 'background-color 150ms ease',
+          '&.MuiTableRow-hover:hover': { backgroundColor: '#FFF1E5' },
+          '&.Mui-selected': { backgroundColor: '#FADFC9' },
+          '&.Mui-selected:hover': { backgroundColor: '#F9D3B4' },
+          '&:focus-visible': { outline: '2px solid #B55A12', outlineOffset: -2 },
+          transition: 'background-color 180ms ease',
+        },
+      },
+    },
+    MuiTableContainer: {
+      styleOverrides: {
+        root: {
+          width: '100%',
+          overflowX: 'auto',
+          overscrollBehaviorX: 'contain',
         },
       },
     },

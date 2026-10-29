@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Badge, Box, Button, Drawer, IconButton, List, ListItem, MenuItem, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow, TextField, Tooltip, Typography } from '@mui/material';
+import { Alert, Badge, Box, Button, Drawer, IconButton, List, ListItem, MenuItem, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow, TextField, Tooltip, Typography } from '@mui/material';
 import NotificationsOutlinedIcon from '@mui/icons-material/NotificationsOutlined';
 import CloseOutlinedIcon from '@mui/icons-material/CloseOutlined';
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
@@ -131,9 +131,39 @@ export default function ActivityPage() {
   return <Box className="audit-page">
     <Box className="page-heading"><Typography variant="h1" component="h1">Audit &amp; Compliance</Typography><Button startIcon={<DownloadOutlinedIcon />} disabled={!data?.items?.length} onClick={() => downloadBlob(csvBlob(data.items), 'maitribodh-audit-page.csv')}>Export Page CSV</Button></Box>
     {error && <Alert severity="error">{error}</Alert>}
-    <Box className="filter-toolbar"><TextField label="Search entry or mobile number" value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} /><TextField label="User" select value={userId} onChange={(event) => { setUserId(event.target.value); setPage(1); }}><MenuItem value="">All users</MenuItem>{data?.users?.map((item) => <MenuItem key={item.user_id} value={item.user_id}>{item.username}</MenuItem>)}</TextField><TextField label="Action" select value={action} onChange={(event) => { setAction(event.target.value); setPage(1); }}><MenuItem value="">All actions</MenuItem>{data?.actions?.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}</TextField></Box>
-    <TableContainer><Table aria-label="Audit log"><TableHead><TableRow>{['Timestamp', 'User', 'Action', 'Module', 'Entity', 'Mobile', 'Old Value', 'New Value'].map((label) => <TableCell key={label}>{label}</TableCell>)}</TableRow></TableHead><TableBody>{data?.items?.map((item) => <TableRow hover key={item.audit_id} onClick={() => setSelected(item)} tabIndex={0} onKeyDown={(event) => { if (event.key === 'Enter') setSelected(item); }} sx={{ cursor: 'pointer' }}><TableCell>{new Date(item.occurred_at).toLocaleString()}</TableCell><TableCell>{item.actor ?? 'System'}</TableCell><TableCell>{item.activity}</TableCell><TableCell>{item.module}</TableCell><TableCell>{item.entity}</TableCell><TableCell>{item.person_mobile ?? '—'}</TableCell><TableCell><AuditValueSummary value={item.old_value} /></TableCell><TableCell><AuditValueSummary value={item.new_value} /></TableCell></TableRow>)}</TableBody></Table></TableContainer>
-    <TablePagination component="div" count={data?.total ?? 0} page={page - 1} rowsPerPage={pageSize} rowsPerPageOptions={[5, 10, 25, 50, 100]} onPageChange={(_event, nextPage) => setPage(nextPage + 1)} onRowsPerPageChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }} />
+    <Paper component="section" className="table-panel audit-panel" aria-labelledby="audit-records-title" elevation={0}>
+      <Box className="table-panel-heading">
+        <Typography id="audit-records-title" component="h2" variant="h3">Audit records</Typography>
+        <Typography variant="body2" color="text.secondary">{data ? `${data.total ?? 0} records` : 'Loading records…'}</Typography>
+      </Box>
+      <Box className="filter-toolbar audit-filters" role="group" aria-label="Audit filters">
+        <TextField label="Search entry or mobile number" value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} />
+        <TextField label="User" select value={userId} onChange={(event) => { setUserId(event.target.value); setPage(1); }}><MenuItem value="">All users</MenuItem>{data?.users?.map((item) => <MenuItem key={item.user_id} value={item.user_id}>{item.username}</MenuItem>)}</TextField>
+        <TextField label="Action" select value={action} onChange={(event) => { setAction(event.target.value); setPage(1); }}><MenuItem value="">All actions</MenuItem>{data?.actions?.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}</TextField>
+        <Button variant="outlined" disabled={!query && !userId && !action} onClick={() => { setQuery(''); setUserId(''); setAction(''); setPage(1); }}>Clear filters</Button>
+      </Box>
+      <TableContainer className="audit-table-container">
+        <Table className="audit-table" aria-label="Audit log">
+          <TableHead><TableRow>{['Timestamp', 'User', 'Action', 'Module', 'Entity', 'Mobile', 'Old Value', 'New Value'].map((label) => <TableCell key={label}>{label}</TableCell>)}</TableRow></TableHead>
+          <TableBody>
+            {data?.items?.map((item) => (
+              <TableRow hover key={item.audit_id} onClick={() => setSelected(item)} tabIndex={0} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelected(item); } }} aria-label={`View audit detail: ${item.activity}, ${item.entity}`}>
+                <TableCell className="audit-timestamp">{new Date(item.occurred_at).toLocaleString()}</TableCell>
+                <TableCell>{item.actor ?? 'System'}</TableCell>
+                <TableCell><Box component="span" className="audit-action-badge">{item.activity}</Box></TableCell>
+                <TableCell><Box component="span" className="audit-module-badge">{item.module}</Box></TableCell>
+                <TableCell>{item.entity}</TableCell>
+                <TableCell className="audit-mobile">{item.person_mobile ?? '—'}</TableCell>
+                <TableCell className="audit-before"><AuditValueSummary value={item.old_value} /></TableCell>
+                <TableCell className="audit-after"><AuditValueSummary value={item.new_value} /></TableCell>
+              </TableRow>
+            ))}
+            {!data?.items?.length && <TableRow><TableCell colSpan={8} className="empty-table">{error ? 'Audit records could not be loaded.' : data ? 'No audit records match the selected filters.' : 'Loading audit records…'}</TableCell></TableRow>}
+          </TableBody>
+        </Table>
+      </TableContainer>
+      <TablePagination component="div" count={data?.total ?? 0} page={page - 1} rowsPerPage={pageSize} rowsPerPageOptions={[5, 10, 25, 50, 100]} onPageChange={(_event, nextPage) => setPage(nextPage + 1)} onRowsPerPageChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }} />
+    </Paper>
     <Drawer anchor="right" open={Boolean(selected)} onClose={() => setSelected(null)}><Box sx={{ width: 'min(480px, 100vw)', p: 3 }}><IconButton aria-label="Close audit detail" onClick={() => setSelected(null)} sx={{ float: 'right' }}><CloseOutlinedIcon /></IconButton><Typography variant="h2">Audit Detail</Typography><Typography>{selected?.activity} · {selected?.entity}</Typography>{['old_value', 'new_value'].map((key) => <Box key={key} sx={{ mt: 3 }}><Typography variant="h3">{key === 'old_value' ? 'Before' : 'After'}</Typography><Box component="pre" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{JSON.stringify(selected?.[key], null, 2)}</Box></Box>)}<Typography>Actor: {selected?.actor ?? 'System'}</Typography></Box></Drawer>
   </Box>;
 }
