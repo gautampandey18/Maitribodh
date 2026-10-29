@@ -180,8 +180,8 @@ body.notifications-panel-open .top-bar .top-toolbar > .MuiIconButton-root { poin
 .top-user-role .MuiTypography-caption { color: var(--th-muted); font-size: .6rem; font-weight: 700; }
 .top-user-role-name { color: var(--th-text); font-size: .72rem !important; font-weight: 700 !important; }
 .main-content { min-height: 100vh; }
-.page-container { max-width: 1420px; padding: 18px 24px 42px; margin: 0 auto; }
-.page-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 8px 0 22px; }
+.page-container { max-width: 1420px; padding: 10px 24px 42px; margin: 0 auto; }
+.page-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; margin: 0 0 10px; }
 .eyebrow { color: var(--th-muted); font-size: .625rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
 .table-panel { border: 1px solid var(--th-card-border); border-radius: var(--th-r); overflow: hidden; box-shadow: var(--th-shadow-card); }
 .table-panel-heading { min-height: 66px; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--th-card-border); }
@@ -395,7 +395,7 @@ body.notifications-panel-open .top-bar .top-toolbar > .MuiIconButton-root { poin
   .top-user-role { display: none; }
   .logout-button { min-width: 0; font-size: 0; padding: 8px; }
   .logout-button .MuiButton-startIcon { margin: 0; }
-  .page-container { padding: 24px 14px 36px; }
+  .page-container { padding: 12px 14px 36px; }
   .page-heading { align-items: flex-start; flex-direction: column; }
   .category-form-grid { grid-template-columns: 1fr; }
   .category-form-grid > * { grid-column: 1 !important; }
