@@ -3,7 +3,7 @@ export function createApprovalsRepository(pool) {
     async listPending({ pageSize, offset, name = '', category = '' }) {
       const result = await pool.query(
         `SELECT p.person_id, p.person_code, p.first_name || ' ' || p.last_name AS name,
-                c.name AS category, p.photo_key IS NOT NULL AS has_photo,
+                c.name AS category, c.approval_required, p.photo_key IS NOT NULL AS has_photo,
                 h.acted_by AS submitted_by, h.acted_at AS submitted_at,
                 count(*) OVER()::int AS total
            FROM mams.person AS p
@@ -17,6 +17,7 @@ export function createApprovalsRepository(pool) {
               LIMIT 1
            ) AS h ON true
           WHERE p.status = 'PENDING'
+            AND c.approval_required = true
             AND ($1 = '' OR concat_ws(' ', p.first_name, p.last_name) ILIKE '%' || $1 || '%')
             AND ($2 = '' OR c.name ILIKE '%' || $2 || '%')
           ORDER BY h.acted_at
@@ -29,7 +30,7 @@ export function createApprovalsRepository(pool) {
     async listByStatus({ status, pageSize, offset, name = '', category = '' }) {
       const result = await pool.query(
         `SELECT p.person_id, p.person_code, p.first_name || ' ' || p.last_name AS name,
-                c.name AS category, p.photo_key IS NOT NULL AS has_photo,
+                c.name AS category, c.approval_required, p.photo_key IS NOT NULL AS has_photo,
                 COALESCE(h.acted_at, p.created_at) AS submitted_at,
                 count(*) OVER()::int AS total
            FROM mams.person AS p
@@ -42,6 +43,7 @@ export function createApprovalsRepository(pool) {
               LIMIT 1
            ) AS h ON true
           WHERE p.status = $1
+            AND c.approval_required = true
             AND ($2 = '' OR concat_ws(' ', p.first_name, p.last_name) ILIKE '%' || $2 || '%')
             AND ($3 = '' OR c.name ILIKE '%' || $3 || '%')
           ORDER BY COALESCE(h.acted_at, p.created_at) DESC, p.person_id DESC
@@ -56,16 +58,20 @@ export function createApprovalsRepository(pool) {
       try {
         await client.query('BEGIN');
         const personResult = await client.query(
-           `SELECT person_id, status, registered_by
-             FROM mams.person
-            WHERE person_id = $1
-            FOR UPDATE`,
+          `SELECT p.person_id, p.status, p.registered_by, c.approval_required
+             FROM mams.person AS p
+             JOIN mams.category AS c ON c.category_id = p.category_id
+            WHERE p.person_id = $1
+            FOR UPDATE OF p`,
           [personId],
         );
         const person = personResult.rows[0];
         if (!person) {
           await client.query('ROLLBACK');
           return null;
+        }
+        if (person.approval_required === false) {
+          throw repositoryError('APPROVAL_NOT_REQUIRED', 'Approval is not required for this person');
         }
         const isPending = person.status === 'PENDING';
         const canRejectActive = decision === 'REJECT' && person.status === 'ACTIVE';
@@ -144,7 +150,7 @@ export function createApprovalsRepository(pool) {
         await client.query('COMMIT');
         return updatedPerson;
       } catch (error) {
-        await client.query('ROLLBACK').catch(() => {});
+        await client.query('ROLLBACK').catch(() => { });
         throw error;
       } finally {
         client.release();
@@ -156,10 +162,11 @@ export function createApprovalsRepository(pool) {
       try {
         await client.query('BEGIN');
         const personResult = await client.query(
-           `SELECT person_id, status, registered_by
-             FROM mams.person
-            WHERE person_id = $1
-            FOR UPDATE`,
+          `SELECT p.person_id, p.status, p.registered_by, c.approval_required
+             FROM mams.person AS p
+             JOIN mams.category AS c ON c.category_id = p.category_id
+            WHERE p.person_id = $1
+            FOR UPDATE OF p`,
           [personId],
         );
         const person = personResult.rows[0];
@@ -177,12 +184,20 @@ export function createApprovalsRepository(pool) {
           throw repositoryError('RESUBMISSION_FORBIDDEN', 'Only the original submitter or an Admin can resubmit this record');
         }
 
+        const isNonApproval = person.approval_required === false;
         const updateResult = await client.query(
-          `UPDATE mams.person
-              SET status = 'PENDING',
-                  updated_by = $2, updated_at = now()
-            WHERE person_id = $1 AND status = 'REJECTED'
-          RETURNING person_id, person_code, status, qr_version, updated_at`,
+          isNonApproval
+            ? `UPDATE mams.person
+                  SET status = 'ACTIVE',
+                      qr_version = CASE WHEN qr_version = 0 THEN 1 ELSE qr_version END,
+                      updated_by = $2, updated_at = now()
+                WHERE person_id = $1 AND status = 'REJECTED'
+              RETURNING person_id, person_code, status, qr_version, updated_at`
+            : `UPDATE mams.person
+                  SET status = 'PENDING',
+                      updated_by = $2, updated_at = now()
+                WHERE person_id = $1 AND status = 'REJECTED'
+              RETURNING person_id, person_code, status, qr_version, updated_at`,
           [personId, actorUserId],
         );
         const updatedPerson = updateResult.rows[0];
@@ -214,7 +229,7 @@ export function createApprovalsRepository(pool) {
         await client.query('COMMIT');
         return updatedPerson;
       } catch (error) {
-        await client.query('ROLLBACK').catch(() => {});
+        await client.query('ROLLBACK').catch(() => { });
         throw error;
       } finally {
         client.release();

@@ -29,12 +29,14 @@ export function createReportsRepository(pool) {
     async registrations({ categoryId, status, pagination }) {
       const result = await pool.query(
         `SELECT p.person_code, p.first_name || ' ' || p.last_name AS name,
-                c.name AS category, p.mobile, p.status, p.created_at${pagination ? ', count(*) OVER()::int AS total' : ''}
+                c.name AS category, c.approval_required, p.mobile,
+                CASE WHEN c.approval_required = false AND p.status = 'PENDING' THEN 'ACTIVE' ELSE p.status END AS status,
+                p.created_at${pagination ? ', count(*) OVER()::int AS total' : ''}
            FROM mams.person AS p
            JOIN mams.category AS c ON c.category_id = p.category_id
           WHERE p.status <> 'DRAFT'
             AND ($1::smallint IS NULL OR p.category_id = $1)
-            AND ($2::varchar IS NULL OR p.status = $2)
+            AND ($2::varchar IS NULL OR ($2 = 'PENDING' AND p.status = 'PENDING' AND c.approval_required = true) OR ($2 = 'ACTIVE' AND (p.status = 'ACTIVE' OR (p.status = 'PENDING' AND c.approval_required = false))) OR ($2 NOT IN ('PENDING', 'ACTIVE') AND p.status = $2))
           ORDER BY p.created_at DESC, p.person_id${pagination ? ' LIMIT $3 OFFSET $4' : ''}`,
         pagination
           ? [categoryId ?? null, status ?? null, pagination.pageSize, pagination.offset]

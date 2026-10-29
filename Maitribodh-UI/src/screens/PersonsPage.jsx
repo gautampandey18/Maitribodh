@@ -155,6 +155,20 @@ export default function PersonsPage() {
     }
   }
 
+  function handleCategoryChange(event) {
+    const nextCategory = event.target.value;
+    setCategoryId(nextCategory);
+    const cat = categories.find((c) => String(c.category_id) === String(nextCategory));
+    if (cat?.approval_required === false && status === 'PENDING') {
+      setStatus('');
+    }
+  }
+
+  const selectedCategory = categories.find((c) => String(c.category_id) === String(categoryId));
+  const availableStatuses = selectedCategory?.approval_required === false
+    ? statuses.filter((item) => item !== 'PENDING')
+    : statuses;
+
   return (
     <Box className="persons-page">
       <Box className="page-heading">
@@ -176,7 +190,7 @@ export default function PersonsPage() {
             inputProps={{ maxLength: 100 }}
             fullWidth
           />
-          <TextField label="Category" value={categoryId} onChange={(event) => setCategoryId(event.target.value)} select sx={{ minWidth: 180 }}>
+          <TextField label="Category" value={categoryId} onChange={handleCategoryChange} select sx={{ minWidth: 180 }}>
             <MenuItem value="">All categories</MenuItem>
             {categories.map((category) => <MenuItem key={category.category_id} value={category.category_id}>{category.name}</MenuItem>)}
           </TextField>
@@ -188,7 +202,7 @@ export default function PersonsPage() {
             sx={{ minWidth: 170 }}
           >
             <MenuItem value="">All statuses</MenuItem>
-            {statuses.map((item) => <MenuItem key={item} value={item}>{statusLabel(item)}</MenuItem>)}
+            {availableStatuses.map((item) => <MenuItem key={item} value={item}>{statusLabel(item)}</MenuItem>)}
           </TextField>
           <Button type="submit" variant="contained" color="secondary" startIcon={<SearchOutlinedIcon />} disabled={loading}>
             Search
