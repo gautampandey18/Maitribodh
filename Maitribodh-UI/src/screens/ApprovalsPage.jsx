@@ -157,7 +157,7 @@ export default function ApprovalsPage() {
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       <Paper className="table-panel" elevation={0}>
-        <Tabs value={tab} onChange={changeTab} aria-label="Approval registration status">
+        <Tabs className="section-nav-tabs" value={tab} onChange={changeTab} variant="scrollable" scrollButtons="auto" aria-label="Approval registration status">
           <Tab value="PENDING" label="Pending Registration" />
           <Tab value="ACTIVE" label="Approved" />
           <Tab value="REJECTED" label="Rejected" />
