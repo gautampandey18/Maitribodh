@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Box, Button, CircularProgress, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from '@mui/material';
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined';
@@ -17,12 +17,36 @@ export default function QrPage() {
   const [query, setQuery] = useState('');
   const [items, setItems] = useState([]);
   const [selected, setSelected] = useState(null);
+  const [photoSrc, setPhotoSrc] = useState('');
   const [qrBlob, setQrBlob] = useState(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [emptyMessage, setEmptyMessage] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const requestId = useRef(0);
+
+  useEffect(() => {
+    let active = true;
+    let url = '';
+    setPhotoSrc('');
+    const photoKey = selected?.photo_key || selected?.photoKey;
+    const personId = selected?.person_id || selected?.personId;
+    if (personId && photoKey) {
+      api.get(`/persons/${personId}/files/${encodeURIComponent(photoKey)}`, { responseType: 'blob' })
+        .then(({ data }) => {
+          if (active && data instanceof Blob) {
+            url = URL.createObjectURL(data);
+            setPhotoSrc(url);
+          }
+        })
+        .catch(() => {});
+    }
+    return () => {
+      active = false;
+      if (url && typeof URL.revokeObjectURL === 'function') URL.revokeObjectURL(url);
+    };
+  }, [selected?.person_id, selected?.personId, selected?.photo_key, selected?.photoKey]);
+
   async function search(event) {
     event?.preventDefault();
     const normalizedQuery = query.trim();
@@ -31,6 +55,7 @@ export default function QrPage() {
     setHasSearched(true);
     setItems([]);
     setSelected(null);
+    setPhotoSrc('');
     setQrBlob(null);
     setEmptyMessage('');
     setBusy(true);
@@ -40,8 +65,20 @@ export default function QrPage() {
       if (currentRequestId !== requestId.current) return;
       const matchCount = data.total ?? data.items.length;
       if (matchCount === 1) {
+        const item = data.items[0];
         setItems(data.items.slice(0, 1));
-        setSelected(data.items[0]);
+        setSelected(item);
+        if (item.person_id) {
+          try {
+            const detailRes = await api.get(`/persons/${item.person_id}`);
+            if (currentRequestId !== requestId.current) return;
+            if (detailRes?.data && typeof detailRes.data === 'object' && !(detailRes.data instanceof Blob)) {
+              setSelected((prev) => (prev ? { ...prev, ...detailRes.data } : prev));
+            }
+          } catch {
+            // retain item summary
+          }
+        }
       } else {
         setEmptyMessage(matchCount === 0
           ? 'No user found.'
@@ -104,6 +141,7 @@ export default function QrPage() {
               name={selected.name}
               category={selected.category}
               status={selected.status}
+              photoSrc={photoSrc}
               mobile={selected.mobile}
               qrVersion={selected.qr_version}
               onQrBlob={setQrBlob}

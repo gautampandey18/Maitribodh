@@ -112,4 +112,19 @@ it('requires and submits a photograph with a valid registration', async () => {
   await waitFor(() => expect(post).toHaveBeenCalledWith('/persons', expect.any(FormData), expect.any(Object)));
   expect(post.mock.calls.at(-1)[1].get('photo')).toBe(photo);
   expect(JSON.parse(post.mock.calls.at(-1)[1].get('metadata')).mobile).toBe('+14155552671');
+}, 60_000);
+
+it('opens live camera capture dialog and shows Click Live Photo button', async () => {
+  const user = userEvent.setup();
+  renderPage('ADMIN');
+
+  await user.click(await screen.findByRole('button', { name: /^Visitor/ }));
+  expect(screen.getByRole('button', { name: 'Click Live Photo' })).toBeInTheDocument();
+
+  await user.click(screen.getByRole('button', { name: 'Click Live Photo' }));
+  expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Capture live photo' })).toBeInTheDocument();
+
+  await user.click(screen.getByRole('button', { name: 'Cancel' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 }, 30_000);

@@ -16,8 +16,8 @@ export function createGateRepository(pool) {
                 c.name AS category, p.status, p.qr_version, p.photo_key, p.mobile,
                 p.expires_on < (now() AT TIME ZONE 'Asia/Kolkata')::date AS access_expired,
                 p.photo_key IS NOT NULL AS has_photo,
-                  p.accompanying_count, p.accompanying,
-                  ARRAY(SELECT pl.location_id FROM mams.person_location AS pl
+                COALESCE(v.accompanying_count, p.accompanying_count) AS accompanying_count, p.accompanying,
+                ARRAY(SELECT pl.location_id FROM mams.person_location AS pl
                     WHERE pl.person_id = p.person_id ORDER BY pl.location_id) AS assigned_area_ids,
                 EXISTS (
                   SELECT 1 FROM mams.blacklist AS b

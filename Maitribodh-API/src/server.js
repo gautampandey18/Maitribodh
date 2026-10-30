@@ -66,7 +66,9 @@ const qrService = createQrService({
   publicRepository: publicQrRepository,
   hmacSecret: qrConfig.hmacSecret,
 });
-const approvalsService = createApprovalsService({ repository: createApprovalsRepository(databasePool) });
+const approvalsRepository = createApprovalsRepository(databasePool);
+approvalsRepository.syncNonApprovalPersons?.().catch((err) => console.warn('Could not sync non-approval persons', err));
+const approvalsService = createApprovalsService({ repository: approvalsRepository });
 const gateService = createGateService({ repository: createGateRepository(databasePool), qrService });
 const visitsService = createVisitsService({ repository: createVisitsRepository(databasePool) });
 const blacklistService = createBlacklistService({ repository: createBlacklistRepository(databasePool) });

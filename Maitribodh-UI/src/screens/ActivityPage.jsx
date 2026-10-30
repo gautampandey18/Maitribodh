@@ -41,7 +41,8 @@ export function NotificationsBell() {
   const [failure, setFailure] = useState('');
   const [busy, setBusy] = useState(false);
   const [showAll, setShowAll] = useState(false);
-  const [panelRight, setPanelRight] = useState(12);
+  const [panelRight, setPanelRight] = useState(16);
+  const [arrowRight, setArrowRight] = useState(32);
   const triggerRef = useRef(null);
   useEffect(() => {
     document.body.classList.toggle('notifications-panel-open', open);
@@ -50,11 +51,18 @@ export function NotificationsBell() {
   useEffect(() => {
     if (!open) return undefined;
     function alignPanel() {
+      const isMobile = window.innerWidth <= 600;
+      const rightMargin = isMobile ? 12 : 16;
+      setPanelRight(rightMargin);
+
       const bounds = triggerRef.current?.getBoundingClientRect();
-      if (!bounds) return;
-      const panelWidth = Math.min(420, window.innerWidth - 24);
-      const panelRightEdge = Math.max(panelWidth + 12, Math.min(window.innerWidth - 12, bounds.left + bounds.width / 2 + 76));
-      setPanelRight(Math.max(12, window.innerWidth - panelRightEdge));
+      if (bounds) {
+        const panelWidth = Math.min(420, window.innerWidth - 24);
+        const bellCenterFromRight = window.innerWidth - (bounds.left + bounds.width / 2);
+        const calculatedArrow = bellCenterFromRight - rightMargin;
+        const clamped = Math.max(24, Math.min(panelWidth - 28, Math.round(calculatedArrow)));
+        setArrowRight(clamped);
+      }
     }
     alignPanel();
     window.addEventListener('resize', alignPanel);
@@ -84,9 +92,24 @@ export function NotificationsBell() {
       onClose={() => setOpen(false)}
       transitionDuration={{ enter: 280, exit: 220 }}
       ModalProps={{ keepMounted: true }}
-      slotProps={{ paper: { 'aria-labelledby': 'notification-panel-title' } }}
+      slotProps={{
+        paper: {
+          'aria-labelledby': 'notification-panel-title',
+          style: {
+            '--notification-panel-right': `${panelRight}px`,
+            '--notification-panel-arrow-right': `${arrowRight}px`,
+          },
+        },
+      }}
     >
-      <Box id="notification-panel" className="notification-panel" style={{ '--notification-panel-right': `${panelRight}px` }}>
+      <Box
+        id="notification-panel"
+        className="notification-panel"
+        style={{
+          '--notification-panel-right': `${panelRight}px`,
+          '--notification-panel-arrow-right': `${arrowRight}px`,
+        }}
+      >
         <Box className="notification-panel-header">
           <Box>
             <Typography id="notification-panel-title" variant="h2">Notification</Typography>

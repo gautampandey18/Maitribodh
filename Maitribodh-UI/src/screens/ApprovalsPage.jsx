@@ -29,6 +29,18 @@ import CloseOutlinedIcon from '@mui/icons-material/CloseOutlined';
 import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined';
 import { api } from '../api.js';
 
+const NON_APPROVAL_NAMES = new Set(['visitor', 'vendor', 'contractor', 'participant']);
+const NON_APPROVAL_TYPES = new Set(['VISITOR', 'VENDOR', 'CONTRACTOR', 'PARTICIPANT']);
+
+function isApprovalRequiredPerson(item) {
+  if (!item || item.approval_required === false) return false;
+  const catName = item.category?.trim().toLowerCase() || '';
+  if (Array.from(NON_APPROVAL_NAMES).some((name) => catName === name || catName.includes(name))) return false;
+  const formType = item.form_type?.trim().toUpperCase() || '';
+  if (NON_APPROVAL_TYPES.has(formType)) return false;
+  return true;
+}
+
 export default function ApprovalsPage() {
   const [tab, setTab] = useState('PENDING');
   const [items, setItems] = useState([]);
@@ -61,8 +73,10 @@ export default function ApprovalsPage() {
         ...(nextFilters.category ? { category: nextFilters.category } : {}),
       } });
       if (currentRequestId !== requestId.current) return;
-      setItems(response.data.items);
-      setTotal(response.data.total ?? response.data.items.length);
+      const rawItems = response.data.items || [];
+      const approvalEntries = rawItems.filter(isApprovalRequiredPerson);
+      setItems(approvalEntries);
+      setTotal(approvalEntries.length !== rawItems.length ? approvalEntries.length : (response.data.total ?? approvalEntries.length));
     } catch (requestError) {
       if (currentRequestId !== requestId.current) return;
       setError(requestError.response?.data?.error?.message ?? 'Approval queue could not be loaded.');

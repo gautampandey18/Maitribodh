@@ -14,7 +14,9 @@ export function createPersonsRepository(pool) {
       const result = await pool.query(
         `SELECT p.person_id, p.person_code,
                 p.first_name || ' ' || p.last_name AS name,
-          c.name AS category, p.mobile, p.status, p.created_at, p.expires_on, p.qr_version,
+          c.name AS category, c.approval_required, p.mobile,
+          CASE WHEN c.approval_required = false AND p.status = 'PENDING' THEN 'ACTIVE' ELSE p.status END AS status,
+          p.created_at, p.expires_on, p.qr_version,
                 count(*) OVER () AS total
            FROM mams.person AS p
            JOIN mams.category AS c ON c.category_id = p.category_id
@@ -24,7 +26,7 @@ export function createPersonsRepository(pool) {
               OR ($1 ~ '^[0-9]{10}$' AND p.mobile = '+91' || $1)
               OR lower(p.first_name || ' ' || p.last_name) LIKE '%' || lower($1) || '%')
             AND ($2::smallint IS NULL OR p.category_id = $2)
-            AND ($3::varchar IS NULL OR p.status = $3)
+            AND ($3::varchar IS NULL OR ($3 = 'PENDING' AND p.status = 'PENDING' AND c.approval_required = true) OR ($3 = 'ACTIVE' AND (p.status = 'ACTIVE' OR (p.status = 'PENDING' AND c.approval_required = false))) OR ($3 NOT IN ('PENDING', 'ACTIVE') AND p.status = $3))
           ORDER BY p.created_at DESC
           LIMIT $5 OFFSET $4`,
         [query, categoryId ?? null, status ?? null, offset, pageSize],

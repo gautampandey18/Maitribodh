@@ -20,7 +20,8 @@ it('loads pending registrations and submits an approval after confirmation', asy
         person_id: 12,
         person_code: 'MB-000012',
         name: 'Asha Patel',
-        category: 'Visitor',
+        category: 'Staff',
+        approval_required: true,
         has_photo: true,
         submitted_at: '2026-10-09T09:30:00Z',
       }],
@@ -127,7 +128,7 @@ it('resubmits a rejected registration and shows it in Pending Registration', asy
     .mockResolvedValueOnce({ data: { items: [], total: 0, page: 1, pageSize: 5 } })
     .mockResolvedValueOnce({
       data: {
-        items: [{ person_id: 31, person_code: 'MB-000031', name: 'Nita Rao', category: 'Visitor', has_photo: true, submitted_at: '2026-10-09T09:30:00Z' }],
+        items: [{ person_id: 31, person_code: 'MB-000031', name: 'Nita Rao', category: 'Staff', approval_required: true, has_photo: true, submitted_at: '2026-10-09T09:30:00Z' }],
         total: 1,
         page: 1,
         pageSize: 5,
@@ -136,7 +137,7 @@ it('resubmits a rejected registration and shows it in Pending Registration', asy
     .mockResolvedValueOnce({ data: { items: [], total: 0, page: 1, pageSize: 5 } })
     .mockResolvedValueOnce({
       data: {
-        items: [{ person_id: 31, person_code: 'MB-000031', name: 'Nita Rao', category: 'Visitor', has_photo: true, submitted_at: '2026-10-12T09:30:00Z' }],
+        items: [{ person_id: 31, person_code: 'MB-000031', name: 'Nita Rao', category: 'Staff', approval_required: true, has_photo: true, submitted_at: '2026-10-12T09:30:00Z' }],
         total: 1,
         page: 1,
         pageSize: 5,
@@ -195,4 +196,43 @@ it('filters pending, approved, and rejected registrations by name and category',
   await waitFor(() => expect(get).toHaveBeenLastCalledWith('/approvals', {
     params: { status: 'REJECTED', page: 1, pageSize: 5, name: 'Asha', category: 'Staff' },
   }));
-}, 30_000);
+});
+
+it('does not display non-approval categories like Visitor, Vendor, Contractor, Participant in any tab', async () => {
+  const mixedData = {
+    items: [
+      { person_id: 1, person_code: 'MB-001', name: 'Visitor Person', category: 'Visitor', approval_required: false, submitted_at: '2026-10-09T09:30:00Z' },
+      { person_id: 2, person_code: 'MB-002', name: 'Vendor Person', category: 'Vendor', approval_required: false, submitted_at: '2026-10-09T09:30:00Z' },
+      { person_id: 3, person_code: 'MB-003', name: 'Contractor Person', category: 'Contractor', approval_required: false, submitted_at: '2026-10-09T09:30:00Z' },
+      { person_id: 4, person_code: 'MB-004', name: 'Participant Person', category: 'Participant', approval_required: false, submitted_at: '2026-10-09T09:30:00Z' },
+      { person_id: 5, person_code: 'MB-005', name: 'Staff Person', category: 'Staff', approval_required: true, has_photo: true, submitted_at: '2026-10-09T09:30:00Z' },
+    ],
+    total: 5,
+  };
+  vi.spyOn(api, 'get').mockResolvedValue({ data: mixedData });
+  const user = userEvent.setup();
+
+  render(
+    <Provider store={store}>
+      <MemoryRouter>
+        <ApprovalsPage />
+      </MemoryRouter>
+    </Provider>,
+  );
+
+  expect(await screen.findByText('Staff Person')).toBeInTheDocument();
+  expect(screen.queryByText('Visitor Person')).not.toBeInTheDocument();
+  expect(screen.queryByText('Vendor Person')).not.toBeInTheDocument();
+  expect(screen.queryByText('Contractor Person')).not.toBeInTheDocument();
+  expect(screen.queryByText('Participant Person')).not.toBeInTheDocument();
+
+  await user.click(screen.getByRole('tab', { name: 'Approved' }));
+  expect(await screen.findByText('Staff Person')).toBeInTheDocument();
+  expect(screen.queryByText('Visitor Person')).not.toBeInTheDocument();
+  expect(screen.queryByText('Vendor Person')).not.toBeInTheDocument();
+
+  await user.click(screen.getByRole('tab', { name: 'Rejected' }));
+  expect(await screen.findByText('Staff Person')).toBeInTheDocument();
+  expect(screen.queryByText('Visitor Person')).not.toBeInTheDocument();
+  expect(screen.queryByText('Vendor Person')).not.toBeInTheDocument();
+});

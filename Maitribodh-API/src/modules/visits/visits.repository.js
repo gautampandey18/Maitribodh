@@ -4,7 +4,7 @@ const deviceValue = (device) => device?.slice(0, 100) ?? null;
 
 export function createVisitsRepository(pool) {
   return {
-    async checkIn({ personId, checkinGateId, checkinLocationId, actorUserId, actorRole, device, ipAddress }) {
+    async checkIn({ personId, checkinGateId, checkinLocationId, accompanyingCount, actorUserId, actorRole, device, ipAddress }) {
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
@@ -53,6 +53,9 @@ export function createVisitsRepository(pool) {
         if (person.already_inside) {
           throw new ApiError(409, 'ALREADY_INSIDE', 'Person already has an open visit');
         }
+        const count = accompanyingCount !== undefined && accompanyingCount !== null
+          ? Number(accompanyingCount)
+          : (person.accompanying_count ?? 0);
         const insertedResult = await client.query(
           `INSERT INTO mams.visit
              (person_id, checkin_gate_id, checkin_location_id, checkin_by,
@@ -67,8 +70,8 @@ export function createVisitsRepository(pool) {
             checkinLocationId,
             actorUserId,
             deviceValue(device),
-            person.accompanying_count,
-            JSON.stringify(person.accompanying),
+            count,
+            JSON.stringify(person.accompanying ?? []),
             person.location_warning === true,
           ],
         );

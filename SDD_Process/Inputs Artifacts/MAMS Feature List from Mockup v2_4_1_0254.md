@@ -192,7 +192,7 @@ Header: "Dashboard" + "Last sync: Xs ago · Live monitoring".
 ### F-DASH-02 Current Occupancy table
 - Title "Current Occupancy" + badge "`N` inside". Sub-text "Open check-ins require manual review before reconciliation."
 - Columns: Person, Category, Location, Checked In (time), Checked By (guard), Device, Action.
-- Action: Sys Admin → **Review / Close** button (§F-DASH-06); others → text "Admin review".
+- Action: Sys Admin → **Review / Checkout** button (§F-DASH-06); others → text "Admin review".
 - Empty state: "No open check-ins."
 
 ### F-DASH-03 Daily Check-In Trend — line/area chart, last 7 days.

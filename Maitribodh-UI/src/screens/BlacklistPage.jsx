@@ -3,7 +3,6 @@ import {
   Alert,
   Box,
   Button,
-  Chip,
   CircularProgress,
   Dialog,
   DialogActions,
@@ -135,7 +134,8 @@ export default function BlacklistPage() {
       setFormError('Select a person and reason, and enter remarks.');
       return;
     }
-    const effectiveStartDate = startDate || new Date().toISOString().slice(0, 10);
+    const today = new Date().toLocaleDateString('en-CA');
+    const effectiveStartDate = startDate || today;
     if (endDate && endDate < effectiveStartDate) {
       setFormError('End date cannot be before start date.');
       return;
@@ -228,7 +228,6 @@ export default function BlacklistPage() {
                   <TableCell>Category</TableCell>
                   <TableCell>Reason</TableCell>
                   <TableCell>Period</TableCell>
-                  <TableCell>Status</TableCell>
                   <TableCell>Remarks</TableCell>
                   <TableCell align="right">Action</TableCell>
                 </TableRow>
@@ -243,7 +242,6 @@ export default function BlacklistPage() {
                     <TableCell>{entry.category}</TableCell>
                     <TableCell>{entry.reason}</TableCell>
                     <TableCell>{formatDate(entry.start_date)} – {entry.end_date ? formatDate(entry.end_date) : 'Indefinite'}</TableCell>
-                    <TableCell><Chip size="small" label={entry.status} color={statusColor(entry.status)} /></TableCell>
                     <TableCell>{entry.remarks}</TableCell>
                     <TableCell align="right">
                       {entry.status !== 'LIFTED' && (
@@ -255,7 +253,7 @@ export default function BlacklistPage() {
                   </TableRow>
                 ))}
                 {!entries.length && (
-                  <TableRow><TableCell colSpan={7} className="empty-table">No active blacklist entries.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={6} className="empty-table">No active blacklist entries.</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
@@ -344,13 +342,6 @@ export default function BlacklistPage() {
       <Snackbar open={Boolean(notice)} autoHideDuration={3000} onClose={() => setNotice('')} message={notice} />
     </Box>
   );
-}
-
-function statusColor(status) {
-  if (status === 'ACTIVE') return 'error';
-  if (status === 'LIFTED') return 'success';
-  if (status === 'EXPIRED') return 'default';
-  return 'warning';
 }
 
 function formatDate(value) {

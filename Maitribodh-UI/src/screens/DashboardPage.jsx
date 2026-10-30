@@ -24,12 +24,12 @@ import { useSelector } from 'react-redux';
 import { api } from '../api.js';
 
 const metrics = [
+  ['total_users', 'Total Users', '#4F46E5', '#EEF2FF', '#C7D2FE'],
   ['active_persons', 'Active Members', '#E17324', '#FFF6EF', '#F6D5BA'],
   ['registrations_today', 'Registrations Today', '#2E9E6B', '#F0FAF5', '#C3E7D4'],
   ['checkins_today', 'Check-Ins Today', '#0E8C99', '#EDF8F9', '#C0E4E8'],
   ['checkouts_today', 'Check-Outs Today', '#5B6B7A', '#F4F6F8', '#D6DDE3'],
   ['pending_approvals', 'Pending Approvals', '#C98A0B', '#FFF9EA', '#F1DFAC'],
-  ['blacklist_attempts_today', 'Blacklist Alerts', '#D0293B', '#FFF2F3', '#F4C5CB'],
 ];
 const mixColors = ['#E17324', '#0E8C99', '#8E5BD8'];
 
@@ -38,6 +38,7 @@ export default function DashboardPage() {
   const [summary, setSummary] = useState(null);
   const [inside, setInside] = useState([]);
   const [insideTotal, setInsideTotal] = useState(0);
+  const [accompanyingTotal, setAccompanyingTotal] = useState(0);
   const [insidePage, setInsidePage] = useState(0);
   const [insideRowsPerPage, setInsideRowsPerPage] = useState(5);
   const [recentActivity, setRecentActivity] = useState([]);
@@ -68,6 +69,7 @@ export default function DashboardPage() {
     if (currentRequestId !== insideRequestId.current) return;
     setInside(response.data.items);
     setInsideTotal(response.data.total ?? response.data.items.length);
+    setAccompanyingTotal(response.data.accompanyingTotal ?? response.data.items.reduce((sum, item) => sum + (Number(item.accompanying_count) || 0), 0));
     setInsidePage(response.data.page - 1);
     setInsideRowsPerPage(response.data.pageSize ?? nextRowsPerPage);
     setOccupancyByLocation(response.data.byLocation ?? []);
@@ -107,7 +109,7 @@ export default function DashboardPage() {
     if (canReviewApprovals) {
       api.get('/approvals')
         .then((response) => { if (active) setPendingApprovals(response.data.items.slice(0, 3)); })
-        .catch(() => {});
+        .catch(() => { });
     }
     return () => {
       active = false;
@@ -150,9 +152,9 @@ export default function DashboardPage() {
               <Box key={key} className="dashboard-metric" sx={{ background: bg, borderColor: border, borderTopColor: accent }}>
                 <Box className="dashboard-metric-circle" sx={{ background: accent, opacity: .12 }} />
                 <Typography className="dashboard-metric-label">{label}</Typography>
-                <Typography component="p" className="dashboard-metric-value" sx={{ color: 'var(--th-text)', fontSize: '1.5rem', fontWeight: 800, lineHeight: 1 }}>{summary?.[key] ?? 0}</Typography>
+                <Typography component="p" className="dashboard-metric-value" sx={{ color: 'var(--th-text)', fontSize: '1.5rem', fontWeight: 800, lineHeight: 1 }}>{summary?.[key] ?? (key === 'total_users' ? (summary ? (summary.active_persons ?? 0) + (summary.pending_approvals ?? 0) : 0) : 0)}</Typography>
                 <Typography className={`dashboard-metric-note dashboard-note-${key}`}>
-                  {key === 'pending_approvals' ? 'Needs review' : key === 'blacklist_attempts_today' ? 'Action required' : key === 'checkouts_today' ? 'On pace' : key === 'checkins_today' ? 'This shift' : ''}
+                  {key === 'pending_approvals' ? 'Needs review' : key === 'total_users' ? 'Active & pending' : key === 'checkouts_today' ? 'On pace' : key === 'checkins_today' ? 'This shift' : ''}
                 </Typography>
               </Box>
             ))}
@@ -182,55 +184,77 @@ export default function DashboardPage() {
           <Paper className="table-panel dashboard-inside" elevation={0}>
             <Box className="table-panel-heading">
               <Box>
-                  <Typography variant="h3">Current Occupancy <Box component="span" className="occupancy-count">{insideTotal} inside</Box></Typography>
-                  <Typography variant="body2" color="text.secondary">Open check-ins require manual review before reconciliation.</Typography>
+                <Typography variant="h3">
+                  Current Occupancy{' '}
+                  {accompanyingTotal > 0 ? (
+                    <>
+                      <Box component="span" className="occupancy-count">
+                        (total {insideTotal + accompanyingTotal} inside)
+                      </Box>
+                      <Box component="span" sx={{ fontSize: '0.85rem', fontWeight: 500, color: 'text.secondary', mx: 0.5 }}>
+                        and
+                      </Box>
+                      <Box component="span" className="occupancy-count">
+                        (total {accompanyingTotal} accompany inside)
+                      </Box>
+                    </>
+                  ) : (
+                    <Box component="span" className="occupancy-count">
+                      (total {insideTotal} inside)
+                    </Box>
+                  )}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">Open check-ins require manual review before reconciliation.</Typography>
               </Box>
             </Box>
-            <TableContainer>
-              <Table size="medium" aria-label="People currently inside">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Person</TableCell>
-                    <TableCell>Category</TableCell>
-                    <TableCell>Gate</TableCell>
-                    <TableCell>Area</TableCell>
-                    <TableCell>Checked in</TableCell>
-                    <TableCell>Additional people</TableCell>
-                    <TableCell>Checked by</TableCell>
-                    <TableCell>Device</TableCell>
-                    <TableCell>Action</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {inside.map((visit) => (
-                    <TableRow key={visit.visit_id} hover>
-                      <TableCell>
-                        <Typography fontWeight={600}>{visit.name}</Typography>
-                        <Typography variant="caption" color="text.secondary">{visit.person_code}</Typography>
-                      </TableCell>
-                      <TableCell>{visit.category}</TableCell>
-                      <TableCell>{visit.gate}</TableCell>
-                      <TableCell>{visit.location}</TableCell>
-                      <TableCell>{formatDate(visit.checkin_at)}</TableCell>
-                      <TableCell>{visit.accompanying_count}</TableCell>
-                      <TableCell>{visit.checked_in_by}</TableCell>
-                      <TableCell>{visit.checkin_device ?? '—'}</TableCell>
-                      <TableCell>{user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN' ? <Button className="dashboard-admin-review" size="small" onClick={() => { setReconciliationError(''); setReconciliationTarget(visit); }}>Review / Close</Button> : <Typography variant="caption">Admin review</Typography>}</TableCell>
-                    </TableRow>
-                  ))}
-                  {!inside.length && <TableRow><TableCell colSpan={9} className="empty-table occupancy-empty-state">No open check-ins.</TableCell></TableRow>}
-                </TableBody>
-              </Table>
-            </TableContainer>
-            <TablePagination
-              component="div"
-              count={insideTotal}
-              page={insidePage}
-              rowsPerPage={insideRowsPerPage}
-              rowsPerPageOptions={[5, 10, 25, 50, 100]}
-              onPageChange={(_event, nextPage) => loadInside(nextPage, insideRowsPerPage).catch(() => setError('Occupancy data could not be loaded.'))}
-              onRowsPerPageChange={(event) => loadInside(0, Number(event.target.value)).catch(() => setError('Occupancy data could not be loaded.'))}
-            />
+            {insideTotal > 0 && inside.length > 0 && (
+              <>
+                <TableContainer>
+                  <Table size="medium" aria-label="People currently inside">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Person</TableCell>
+                        <TableCell>Category</TableCell>
+                        <TableCell>Gate</TableCell>
+                        <TableCell>Area</TableCell>
+                        <TableCell>Checked in</TableCell>
+                        <TableCell>Additional people</TableCell>
+                        <TableCell>Checked by</TableCell>
+                        <TableCell>Device</TableCell>
+                        <TableCell>Action</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {inside.map((visit) => (
+                        <TableRow key={visit.visit_id} hover>
+                          <TableCell>
+                            <Typography fontWeight={600}>{visit.name}</Typography>
+                            <Typography variant="caption" color="text.secondary">{visit.person_code}</Typography>
+                          </TableCell>
+                          <TableCell>{visit.category}</TableCell>
+                          <TableCell>{visit.gate}</TableCell>
+                          <TableCell>{visit.location}</TableCell>
+                          <TableCell>{formatDate(visit.checkin_at)}</TableCell>
+                          <TableCell>{visit.accompanying_count}</TableCell>
+                          <TableCell>{visit.checked_in_by}</TableCell>
+                          <TableCell>{visit.checkin_device ?? '—'}</TableCell>
+                          <TableCell>{user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN' ? <Button className="dashboard-admin-review" size="small" onClick={() => { setReconciliationError(''); setReconciliationTarget(visit); }}>Review / Checkout</Button> : <Typography variant="caption">Admin review</Typography>}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+                <TablePagination
+                  component="div"
+                  count={insideTotal}
+                  page={insidePage}
+                  rowsPerPage={insideRowsPerPage}
+                  rowsPerPageOptions={[5, 10, 25, 50, 100]}
+                  onPageChange={(_event, nextPage) => loadInside(nextPage, insideRowsPerPage).catch(() => setError('Occupancy data could not be loaded.'))}
+                  onRowsPerPageChange={(event) => loadInside(0, Number(event.target.value)).catch(() => setError('Occupancy data could not be loaded.'))}
+                />
+              </>
+            )}
           </Paper>
           <Paper className="table-panel dashboard-occupancy-breakdown-panel" elevation={0}>
             <Box className="table-panel-heading">

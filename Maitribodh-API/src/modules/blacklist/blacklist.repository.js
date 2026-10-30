@@ -58,10 +58,22 @@ export function createBlacklistRepository(pool) {
           throw new ApiError(400, 'INVALID_BLACKLIST_REASON', 'Select an active blacklist reason');
         }
 
+        await client.query(
+          `UPDATE mams.blacklist
+              SET lifted_by = $2,
+                  lifted_at = now(),
+                  lift_note = 'Automatically closed on expiration'
+            WHERE person_id = $1
+              AND lifted_at IS NULL
+              AND end_date IS NOT NULL
+              AND end_date < (now() AT TIME ZONE 'Asia/Kolkata')::date`,
+          [personId, actorUserId],
+        );
+
         const result = await client.query(
           `INSERT INTO mams.blacklist
              (person_id, reason_id, remarks, start_date, end_date, added_by)
-           VALUES ($1, $2, $3, COALESCE($4::date, CURRENT_DATE), $5::date, $6)
+           VALUES ($1, $2, $3, COALESCE($4::date, (now() AT TIME ZONE 'Asia/Kolkata')::date), $5::date, $6)
            RETURNING blacklist_id, person_id, reason_id, remarks, start_date,
                      end_date, added_by, added_at, lifted_at`,
           [personId, reasonId, remarks, startDate ?? null, endDate ?? null, actorUserId],
