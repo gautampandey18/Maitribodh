@@ -26,10 +26,10 @@ import { api } from '../api.js';
 const metrics = [
   ['total_users', 'Total Users', '#4F46E5', '#EEF2FF', '#C7D2FE'],
   ['active_persons', 'Active Members', '#E17324', '#FFF6EF', '#F6D5BA'],
+  ['pending_approvals', 'Pending Approvals', '#C98A0B', '#FFF9EA', '#F1DFAC'],
   ['registrations_today', 'Registrations Today', '#2E9E6B', '#F0FAF5', '#C3E7D4'],
   ['checkins_today', 'Check-Ins Today', '#0E8C99', '#EDF8F9', '#C0E4E8'],
   ['checkouts_today', 'Check-Outs Today', '#5B6B7A', '#F4F6F8', '#D6DDE3'],
-  ['pending_approvals', 'Pending Approvals', '#C98A0B', '#FFF9EA', '#F1DFAC'],
 ];
 const mixColors = ['#E17324', '#0E8C99', '#8E5BD8'];
 
@@ -134,6 +134,11 @@ export default function DashboardPage() {
     } finally { setReconciling(false); }
   }
 
+  const validLocationOccupancy = occupancyByLocation.filter((item) => Number(item?.count) > 0);
+  const validCategoryOccupancy = occupancyByCategory.filter((item) => Number(item?.count) > 0);
+  const hasLocationBreakdown = validLocationOccupancy.length > 0;
+  const hasCategoryBreakdown = validCategoryOccupancy.length > 0;
+
   return (
     <Box className="dashboard-page">
       <Box className="page-heading">
@@ -184,23 +189,14 @@ export default function DashboardPage() {
           <Paper className="table-panel dashboard-inside" elevation={0}>
             <Box className="table-panel-heading">
               <Box>
-                <Typography variant="h3">
-                  Current Occupancy{' '}
-                  {accompanyingTotal > 0 ? (
-                    <>
-                      <Box component="span" className="occupancy-count">
-                        (total {insideTotal + accompanyingTotal} inside)
-                      </Box>
-                      <Box component="span" sx={{ fontSize: '0.85rem', fontWeight: 500, color: 'text.secondary', mx: 0.5 }}>
-                        and
-                      </Box>
-                      <Box component="span" className="occupancy-count">
-                        (total {accompanyingTotal} accompany inside)
-                      </Box>
-                    </>
-                  ) : (
-                    <Box component="span" className="occupancy-count">
-                      (total {insideTotal} inside)
+                <Typography variant="h3" sx={{ display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.5 }}>
+                  Current Occupancy
+                  <Box component="span" className="occupancy-count">
+                    {accompanyingTotal > 0 ? `Total ${insideTotal + accompanyingTotal} inside` : `${insideTotal} inside`}
+                  </Box>
+                  {accompanyingTotal > 0 && (
+                    <Box component="span" sx={{ fontSize: '0.85rem', fontWeight: 500, color: 'text.secondary', ml: 0.5 }}>
+                      ({insideTotal} checked in + {accompanyingTotal} accompanying)
                     </Box>
                   )}
                 </Typography>
@@ -256,25 +252,30 @@ export default function DashboardPage() {
               </>
             )}
           </Paper>
-          <Paper className="table-panel dashboard-occupancy-breakdown-panel" elevation={0}>
-            <Box className="table-panel-heading">
-              <Typography variant="h3">Occupancy Breakdown</Typography>
-            </Box>
-            <Box className="dashboard-occupancy-breakdown">
-              <Box>
-                <Typography className="dashboard-breakdown-title">Occupancy by Location</Typography>
-                {occupancyByLocation.length
-                  ? <OccupancyBarChart data={occupancyByLocation} color="#E17324" />
-                  : <Typography variant="caption">No open check-ins.</Typography>}
+          {(hasLocationBreakdown || hasCategoryBreakdown) && (
+            <Paper className="table-panel dashboard-occupancy-breakdown-panel" elevation={0}>
+              <Box className="table-panel-heading">
+                <Typography variant="h3">Occupancy Breakdown</Typography>
               </Box>
-              <Box>
-                <Typography className="dashboard-breakdown-title">Occupancy by Category</Typography>
-                {occupancyByCategory.length
-                  ? <OccupancyBarChart data={occupancyByCategory} color="#2E9E6B" />
-                  : <Typography variant="caption">No open check-ins.</Typography>}
+              <Box
+                className="dashboard-occupancy-breakdown"
+                sx={(!hasLocationBreakdown || !hasCategoryBreakdown) ? { gridTemplateColumns: '1fr' } : undefined}
+              >
+                {hasLocationBreakdown && (
+                  <Box>
+                    <Typography className="dashboard-breakdown-title">Occupancy by Location</Typography>
+                    <OccupancyBarChart data={validLocationOccupancy} color="#E17324" />
+                  </Box>
+                )}
+                {hasCategoryBreakdown && (
+                  <Box>
+                    <Typography className="dashboard-breakdown-title">Occupancy by Category</Typography>
+                    <OccupancyBarChart data={validCategoryOccupancy} color="#2E9E6B" />
+                  </Box>
+                )}
               </Box>
-            </Box>
-          </Paper>
+            </Paper>
+          )}
           <Box className="dashboard-lower">
             <Paper className="table-panel" elevation={0}>
               <Box className="table-panel-heading">

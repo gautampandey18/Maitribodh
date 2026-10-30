@@ -24,6 +24,7 @@ export default function QrPage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const requestId = useRef(0);
+  const selectionId = useRef(0);
 
   useEffect(() => {
     let active = true;
@@ -47,6 +48,24 @@ export default function QrPage() {
     };
   }, [selected?.person_id, selected?.personId, selected?.photo_key, selected?.photoKey]);
 
+  async function selectPerson(item) {
+    if (!item) return;
+    const currentSelectionId = ++selectionId.current;
+    setSelected(item);
+    setQrBlob(null);
+    if (item.person_id) {
+      try {
+        const detailRes = await api.get(`/persons/${item.person_id}`);
+        if (currentSelectionId !== selectionId.current) return;
+        if (detailRes?.data && typeof detailRes.data === 'object' && !(detailRes.data instanceof Blob)) {
+          setSelected((prev) => (prev && prev.person_id === item.person_id ? { ...prev, ...detailRes.data } : prev));
+        }
+      } catch {
+        // retain item summary
+      }
+    }
+  }
+
   async function search(event) {
     event?.preventDefault();
     const normalizedQuery = query.trim();
@@ -61,28 +80,14 @@ export default function QrPage() {
     setBusy(true);
     setError('');
     try {
-      const { data } = await api.get('/persons', { params: { q: normalizedQuery, status: 'ACTIVE', page: 1, pageSize: 2 } });
+      const { data } = await api.get('/persons', { params: { q: normalizedQuery, status: 'ACTIVE', page: 1, pageSize: 50 } });
       if (currentRequestId !== requestId.current) return;
-      const matchCount = data.total ?? data.items.length;
-      if (matchCount === 1) {
-        const item = data.items[0];
-        setItems(data.items.slice(0, 1));
-        setSelected(item);
-        if (item.person_id) {
-          try {
-            const detailRes = await api.get(`/persons/${item.person_id}`);
-            if (currentRequestId !== requestId.current) return;
-            if (detailRes?.data && typeof detailRes.data === 'object' && !(detailRes.data instanceof Blob)) {
-              setSelected((prev) => (prev ? { ...prev, ...detailRes.data } : prev));
-            }
-          } catch {
-            // retain item summary
-          }
-        }
+      const matchCount = data.total ?? data.items?.length ?? 0;
+      if (matchCount > 0 && data.items?.length) {
+        setItems(data.items);
+        selectPerson(data.items[0]);
       } else {
-        setEmptyMessage(matchCount === 0
-          ? 'No user found.'
-          : 'Multiple users found. Refine your search to identify one user.');
+        setEmptyMessage('No user found.');
       }
     } catch (failure) {
       if (currentRequestId === requestId.current) {
@@ -93,8 +98,9 @@ export default function QrPage() {
       if (currentRequestId === requestId.current) setBusy(false);
     }
   }
+
   function printPreview() {
-    if (!qrBlob) return;
+    if (!qrBlob || !selected) return;
     const url = URL.createObjectURL(qrBlob);
     const previewWindow = window.open('', '_blank');
     if (!previewWindow) { URL.revokeObjectURL(url); return; }
@@ -106,7 +112,9 @@ export default function QrPage() {
     image.onload = () => previewWindow.print();
     previewWindow.document.body.append(image);
   }
+
   const isCurrent = selected?.status === 'ACTIVE' && (selected?.qr_version ?? 0) > 0;
+
   return (
     <Box>
       <Box className="page-heading"><Typography component="h1" variant="h1">QR / Identity Management</Typography></Box>
@@ -123,14 +131,44 @@ export default function QrPage() {
             <Table className="qr-identity-table" aria-label="QR identity">
               <TableHead><TableRow>{['Name', 'Category', 'Mobile', 'QR Status'].map((label) => <TableCell key={label}>{label}</TableCell>)}</TableRow></TableHead>
               <TableBody>
-                {items.map((item) => (
-                  <TableRow key={item.person_id}>
-                    <TableCell>{item.name}</TableCell>
-                    <TableCell>{item.category}</TableCell>
-                    <TableCell>{item.mobile}</TableCell>
-                    <TableCell>Current</TableCell>
-                  </TableRow>
-                ))}
+                {items.map((item) => {
+                  const isSelected = selected?.person_id === item.person_id;
+                  return (
+                    <TableRow
+                      key={item.person_id}
+                      hover
+                      selected={isSelected}
+                      onClick={() => {
+                        if (selected?.person_id !== item.person_id) selectPerson(item);
+                      }}
+                      sx={{ cursor: 'pointer' }}
+                    >
+                      <TableCell>
+                        <Button
+                          variant="text"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            if (selected?.person_id !== item.person_id) selectPerson(item);
+                          }}
+                          sx={{
+                            textTransform: 'none',
+                            p: 0,
+                            minWidth: 0,
+                            textAlign: 'left',
+                            fontWeight: isSelected ? 700 : 500,
+                            color: isSelected ? 'primary.main' : 'inherit',
+                            '&:hover': { textDecoration: 'underline' },
+                          }}
+                        >
+                          {item.name}
+                        </Button>
+                      </TableCell>
+                      <TableCell>{item.category}</TableCell>
+                      <TableCell>{item.mobile}</TableCell>
+                      <TableCell>{item.status === 'ACTIVE' && (item.qr_version ?? 0) > 0 ? 'Current' : item.status}</TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </TableContainer>

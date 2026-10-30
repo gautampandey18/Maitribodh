@@ -128,3 +128,46 @@ it('opens live camera capture dialog and shows Click Live Photo button', async (
   await user.click(screen.getByRole('button', { name: 'Cancel' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 }, 30_000);
+
+it('validates mobile number in real time on blur and prevents advancing to next step if duplicate', async () => {
+  const user = userEvent.setup();
+  store.dispatch(sessionStarted({ accessToken: 'test', user: { role: 'ADMIN' } }));
+  vi.spyOn(api, 'get').mockImplementation((path, config) => {
+    if (path === '/persons/registration/options') return Promise.resolve({ data: options });
+    if (path === '/persons/registration/check-mobile') {
+      if (config?.params?.mobile === '+919820000000') {
+        return Promise.resolve({
+          data: { available: false, message: 'This mobile number is already registered under this category.' },
+        });
+      }
+      return Promise.resolve({ data: { available: true } });
+    }
+    return Promise.resolve({ data: { items: [] } });
+  });
+
+  render(<Provider store={store}><MemoryRouter initialEntries={['/register']}><RegisterPage /></MemoryRouter></Provider>);
+
+  await user.click(await screen.findByRole('button', { name: /^Staff/ }));
+  expect(screen.getByText('Category: Staff')).toBeInTheDocument();
+
+  const mobileInput = screen.getByRole('textbox', { name: 'Mobile Number' });
+  await user.type(mobileInput, '9820000000');
+
+  fireEvent.blur(mobileInput);
+
+  expect(await screen.findByText('This mobile number is already registered under this category.')).toBeInTheDocument();
+
+  // Navigation to next step is blocked
+  await user.click(screen.getByRole('button', { name: 'Continue' }));
+  expect(screen.getByRole('textbox', { name: 'Mobile Number' })).toBeInTheDocument();
+  expect(screen.queryByRole('combobox', { name: 'Assigned Areas' })).not.toBeInTheDocument();
+
+  // Changing to a non-duplicate number clears the error
+  await user.clear(mobileInput);
+  await user.type(mobileInput, '9821111111');
+  fireEvent.blur(mobileInput);
+
+  await waitFor(() => {
+    expect(screen.queryByText('This mobile number is already registered under this category.')).not.toBeInTheDocument();
+  });
+}, 30_000);

@@ -168,3 +168,28 @@ test('person document upload rejects invalid file bytes before saving', async ()
     .attach('documents', Buffer.from('not a document'), { filename: 'scan.jpg', contentType: 'image/jpeg' }).expect(400);
   assert.equal(saved, false);
 });
+
+
+test('check-mobile route forwards mobile and categoryId and returns availability result', async () => {
+  let captured;
+  const repository = {
+    async checkMobile(args) {
+      captured = args;
+      return { available: false, message: 'This mobile number is already registered under this category.' };
+    },
+  };
+  const response = await request(appFor('ADMIN', repository))
+    .get('/api/v1/persons/registration/check-mobile')
+    .query({ mobile: '9820000000', categoryId: '1' })
+    .expect(200);
+  assert.equal(response.body.available, false);
+  assert.equal(captured.mobile, '9820000000');
+  assert.equal(captured.categoryId, 1);
+});
+
+test('check-mobile route validates required query parameters', async () => {
+  const repository = { async checkMobile() {} };
+  await request(appFor('ADMIN', repository))
+    .get('/api/v1/persons/registration/check-mobile')
+    .expect(400);
+});

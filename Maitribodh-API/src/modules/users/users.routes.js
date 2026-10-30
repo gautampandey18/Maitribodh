@@ -1,5 +1,6 @@
 import express from 'express';
 import { z } from 'zod';
+import { isValidPhoneNumber } from 'libphonenumber-js';
 import { ApiError } from '../../errors/ApiError.js';
 import { asyncHandler } from '../../middleware/asyncHandler.js';
 import { authorize } from '../../middleware/authorize.js';
@@ -7,10 +8,15 @@ import { ROLES } from '../../constants/roles.js';
 import { parsePagination } from '../../utils/pagination.js';
 
 const userIdSchema = z.coerce.number().int().positive();
+const userMobile = z.union([
+  z.string().regex(/^[6-9]\d{9}$/),
+  z.string().regex(/^\+[1-9]\d{7,14}$/),
+]).refine((value) => isValidPhoneNumber(value.startsWith('+') ? value : `+91${value}`), 'Enter a valid mobile number');
+
 const createUserSchema = z.object({
   firstName: z.string().trim().min(1).max(100),
   lastName: z.string().trim().min(1).max(100),
-  mobile: z.string().trim().min(1).max(10),
+  mobile: userMobile,
   email: z.union([z.string().trim().email().max(150), z.literal('')]).optional(),
   username: z.string().trim().min(1).max(50),
   role: z.enum(Object.values(ROLES)),
@@ -20,7 +26,7 @@ const createUserSchema = z.object({
 const updateUserSchema = z.object({
   firstName: z.string().trim().min(1).max(100).optional(),
   lastName: z.string().trim().min(1).max(100).optional(),
-  mobile: z.string().trim().min(1).max(10).optional(),
+  mobile: userMobile.optional(),
   email: z.union([z.string().trim().email().max(150), z.literal('')]).optional(),
   username: z.string().trim().min(1).max(50).optional(),
   role: z.enum(Object.values(ROLES)).optional(),

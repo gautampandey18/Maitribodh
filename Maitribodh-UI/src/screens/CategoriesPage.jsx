@@ -196,7 +196,7 @@ export default function CategoriesPage() {
           </TextField>
           <Button type="submit" variant="contained" color="secondary" startIcon={<SearchOutlinedIcon />} disabled={loading}>Apply</Button>
           <Button type="button" onClick={clearFilters} disabled={loading || (!activeFilters.query && !activeFilters.formType && !activeFilters.status && !query && !formTypeFilter && !statusFilter)}>Clear</Button>
-          <Button className="master-data-add-action" type="button" variant="contained" color="secondary" startIcon={<AddIcon />} onClick={openCreate}>
+          <Button className="master-data-add-action" type="button" variant="contained" color="primary" startIcon={<AddIcon />} onClick={openCreate}>
             Add category
           </Button>
         </Box>
@@ -215,7 +215,7 @@ export default function CategoriesPage() {
               </TableHead>
               <TableBody>
                 {categories.map((category) => (
-                  <TableRow key={category.category_id} hover>
+                  <TableRow key={category.category_id ?? category.name} hover>
                     <TableCell align="center">
                       <Typography fontWeight={600}>{category.name}</Typography>
                     </TableCell>

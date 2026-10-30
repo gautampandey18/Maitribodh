@@ -5,7 +5,7 @@ import { createApp } from '../src/app.js';
 import { createActivityRouter } from '../src/modules/activity/activity.routes.js';
 
 function appFor(role, calls) {
-  const pool = { async query(sql, values) { calls.push({ sql, values }); return { rows: sql.includes('AS count') ? [{ count: 2 }] : [] }; } };
+  const pool = { async query(sql, values) { calls.push({ sql, values }); return { rowCount: Array.isArray(values?.[0]) ? values[0].length : 1, rows: sql.includes('AS count') ? [{ count: 2 }] : [] }; } };
   const authenticate = (req, _res, next) => { req.auth = { role, userId: 9 }; next(); };
   return createApp({ activityRouter: createActivityRouter({ pool, authenticate }) });
 }
@@ -54,4 +54,41 @@ test('audit free-text search covers visible actor, action, module, entity and pe
   assert.match(calls[0].sql, /p\.first_name \|\| ' ' \|\| p\.last_name ILIKE/);
   assert.equal(calls[0].values[0], 'security');
   assert.equal(response.body.total, 0);
+});
+
+test('viewers cannot delete audit logs', async () => {
+  const calls = [];
+  await request(appFor('VIEWER', calls)).delete('/api/v1/audit').send({ auditIds: [1] }).expect(403);
+  assert.equal(calls.length, 0);
+});
+
+test('audit deletion rejects empty or invalid auditIds', async () => {
+  const calls = [];
+  await request(appFor('ADMIN', calls)).delete('/api/v1/audit').send({ auditIds: [] }).expect(400);
+  await request(appFor('ADMIN', calls)).delete('/api/v1/audit').send({ auditIds: ['abc'] }).expect(400);
+});
+
+test('admin can bulk delete audit logs by IDs', async () => {
+  const calls = [];
+  const response = await request(appFor('ADMIN', calls))
+    .delete('/api/v1/audit')
+    .send({ auditIds: [10, 11, 12] })
+    .expect(200);
+
+  assert.equal(response.body.deletedCount, 3);
+  const deleteCall = calls.find((c) => c.sql.includes('DELETE FROM mams.audit_log WHERE audit_id = ANY'));
+  assert.ok(deleteCall);
+  assert.deepEqual(deleteCall.values, [[10, 11, 12]]);
+});
+
+test('admin can delete all matching audit logs', async () => {
+  const calls = [];
+  await request(appFor('ADMIN', calls))
+    .delete('/api/v1/audit')
+    .send({ allMatching: true, query: 'test' })
+    .expect(200);
+
+  const deleteCall = calls.find((c) => c.sql.includes('DELETE FROM mams.audit_log WHERE audit_id IN'));
+  assert.ok(deleteCall);
+  assert.equal(deleteCall.values[0], 'test');
 });

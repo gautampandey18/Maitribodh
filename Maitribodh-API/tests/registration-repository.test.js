@@ -242,3 +242,140 @@ test('access updates replace area links and write an audit record', async () => 
   assert.ok(calls.some((call) => call.sql.includes('INSERT INTO mams.audit_log')));
   assert.equal(calls.at(-1).sql, 'COMMIT');
 });
+
+
+test('registration rejects duplicate mobile within the same category', async () => {
+  const client = {
+    async query(sql) {
+      if (sql.includes('FOR SHARE')) return { rows: [category] };
+      if (sql.includes('SELECT person_id FROM mams.person')) {
+        return { rows: [{ person_id: 101 }] };
+      }
+      return { rows: [], rowCount: 1 };
+    },
+    release() {},
+  };
+  const repository = createRegistrationRepository({ async connect() { return client; } });
+  await assert.rejects(
+    repository.create({
+      input,
+      category,
+      photoKey: 'photo.jpg',
+      documents: [],
+      actor: { userId: 9, role: 'ADMIN' },
+    }),
+    (error) => error.code === 'DUPLICATE_REGISTRATION' && error.statusCode === 409 && error.message.includes('already registered under this category'),
+  );
+});
+
+test('registration allows the same mobile number in a different category', async () => {
+  const calls = [];
+  const client = {
+    async query(sql, values) {
+      calls.push({ sql, values });
+      if (sql.includes('FOR SHARE')) return { rows: [category] };
+      if (sql.includes('SELECT person_id FROM mams.person')) {
+        return { rows: [] };
+      }
+      if (sql.includes('INSERT INTO mams.person')) {
+        return { rows: [{ person_id: 8, person_code: 'MB-000008', status: 'ACTIVE', qr_version: 1 }] };
+      }
+      return { rows: [], rowCount: 1 };
+    },
+    release() {},
+  };
+  const repository = createRegistrationRepository({ async connect() { return client; } });
+  const result = await repository.create({
+    input,
+    category,
+    photoKey: 'photo.jpg',
+    documents: [],
+    actor: { userId: 9, role: 'ADMIN' },
+  });
+  assert.equal(result.person_id, 8);
+  const duplicateQuery = calls.find((c) => c.sql.includes('SELECT person_id FROM mams.person'));
+  assert.ok(duplicateQuery);
+  assert.deepEqual(duplicateQuery.values, [input.categoryId, input.mobile]);
+});
+
+test('registration catches database unique constraint violation and returns DUPLICATE_REGISTRATION', async () => {
+  const client = {
+    async query(sql) {
+      if (sql.includes('FOR SHARE')) return { rows: [category] };
+      if (sql.includes('SELECT person_id FROM mams.person')) return { rows: [] };
+      if (sql.includes('INSERT INTO mams.person')) {
+        const error = new Error('duplicate key value violates unique constraint "ux_person_mobile_category"');
+        error.code = '23505';
+        error.constraint = 'ux_person_mobile_category';
+        throw error;
+      }
+      return { rows: [], rowCount: 1 };
+    },
+    release() {},
+  };
+  const repository = createRegistrationRepository({ async connect() { return client; } });
+  await assert.rejects(
+    repository.create({
+      input,
+      category,
+      photoKey: 'photo.jpg',
+      documents: [],
+      actor: { userId: 9, role: 'ADMIN' },
+    }),
+    (error) => error.code === 'DUPLICATE_REGISTRATION' && error.statusCode === 409,
+  );
+});
+
+test('profile update rejects duplicate mobile number within the same category', async () => {
+  const client = {
+    async query(sql) {
+      if (sql.includes('SELECT p.*, c.form_type')) {
+        return { rows: [{ person_id: 8, category_id: 1, mobile: '+919820000000', form_type: 'VISITOR', status: 'ACTIVE', qr_version: 1 }] };
+      }
+      if (sql.includes('SELECT person_id FROM mams.person')) {
+        return { rows: [{ person_id: 99 }] };
+      }
+      return { rows: [], rowCount: 1 };
+    },
+    release() {},
+  };
+  const repository = createRegistrationRepository({ async connect() { return client; } });
+  await assert.rejects(
+    repository.update({
+      personId: 8,
+      changes: { firstName: 'Asha', lastName: 'Patel', mobile: '+919876543210' },
+      actor: { userId: 9, role: 'ADMIN' },
+    }),
+    (error) => error.code === 'DUPLICATE_REGISTRATION' && error.statusCode === 409,
+  );
+});
+
+
+test('checkMobile identifies existing registration in same category as unavailable', async () => {
+  const client = {
+    async query(sql) {
+      if (sql.includes('SELECT person_id, person_code')) {
+        return { rows: [{ person_id: 101, person_code: 'MB-000101', name: 'Asha Patel', status: 'ACTIVE' }] };
+      }
+      return { rows: [], rowCount: 1 };
+    },
+    release() {},
+  };
+  const repository = createRegistrationRepository(client);
+  const result = await repository.checkMobile({ mobile: '9820000000', categoryId: 1 });
+  assert.equal(result.available, false);
+  assert.match(result.message, /already registered under this category/);
+  assert.equal(result.existingPerson.personId, 101);
+});
+
+test('checkMobile returns available true when no person has that mobile in the category', async () => {
+  const client = {
+    async query() {
+      return { rows: [] };
+    },
+    release() {},
+  };
+  const repository = createRegistrationRepository(client);
+  const result = await repository.checkMobile({ mobile: '9820000000', categoryId: 1 });
+  assert.equal(result.available, true);
+});

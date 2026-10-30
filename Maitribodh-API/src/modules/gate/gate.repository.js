@@ -38,9 +38,9 @@ export function createGateRepository(pool) {
           WHERE p.status <> 'DRAFT'
             AND (($1::varchar IS NOT NULL AND p.person_code = upper($1))
                 OR ($2::varchar IS NOT NULL AND (p.mobile = $2 OR ($2 ~ '^[0-9]{10}$' AND p.mobile = '+91' || $2)))
-                OR ($4::varchar IS NOT NULL AND (lower(p.person_code) = lower($4) OR p.mobile = $4 OR ($4 ~ '^[0-9]{10}$' AND p.mobile = '+91' || $4) OR lower(p.first_name || ' ' || p.last_name) = lower($4))))
+                OR ($4::varchar IS NOT NULL AND (lower(p.person_code) = lower($4) OR p.mobile = $4 OR ($4 ~ '^[0-9]{10}$' AND p.mobile = '+91' || $4))))
           ORDER BY p.created_at DESC`,
-              [personCode ?? null, mobile ?? null, locationId, query ?? null],
+        [personCode ?? null, mobile ?? null, locationId, query ?? null],
       );
       return result.rows;
     },

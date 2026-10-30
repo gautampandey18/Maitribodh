@@ -38,13 +38,15 @@ import {
 } from '@mui/material';
 import { z } from 'zod';
 import { api } from '../api.js';
+import InternationalPhoneField from '../components/InternationalPhoneField.jsx';
+import { splitPhoneNumber, toE164Phone } from '../utils/phone.js';
 
 const roles = ['SUPER_ADMIN', 'ADMIN', 'APPROVER', 'REG_OFFICER', 'SECURITY_GUARD', 'VIEWER'];
 const userStatuses = ['ACTIVE', 'INACTIVE'];
 const userSchema = z.object({
   firstName: z.string().trim().min(1, 'Enter a first name').max(100),
   lastName: z.string().trim().min(1, 'Enter a last name').max(100),
-  mobile: z.string().regex(/^\d{10}$/, 'Enter a 10-digit mobile number'),
+  mobile: z.string().trim().min(1, 'Enter a mobile number'),
   email: z.union([z.string().trim().email('Enter a valid email').max(150), z.literal('')]),
   username: z.string().trim().min(1, 'Enter a username').max(50),
   role: z.enum(roles),
@@ -56,6 +58,7 @@ const emptyUser = {
   firstName: '',
   lastName: '',
   mobile: '',
+  mobileCountry: 'IN',
   email: '',
   username: '',
   role: 'REG_OFFICER',
@@ -142,12 +145,21 @@ export default function UsersPage() {
       return;
     }
 
+    const e164 = toE164Phone(userForm.mobile, userForm.mobileCountry || 'IN');
+    if (!e164) {
+      setFormError('Enter a valid mobile number for the selected country');
+      return;
+    }
+    const payloadMobile = userForm.mobileCountry === 'IN' && /^\d{10}$/.test(userForm.mobile)
+      ? userForm.mobile
+      : e164;
+
     setSaving(true);
     setFormError('');
     setError('');
     let createdUser;
     try {
-      const response = await api.post('/users', parsed.data);
+      const response = await api.post('/users', { ...parsed.data, mobile: payloadMobile });
       createdUser = response.data;
       const passwordResponse = await api.post(`/users/${response.data.user_id}/password-reset`);
       setCreateOpen(false);
@@ -214,10 +226,12 @@ export default function UsersPage() {
 
   function openEditUser(user) {
     setEditTarget(user);
+    const phone = splitPhoneNumber(user.mobile);
     setUserForm({
       firstName: user.first_name,
       lastName: user.last_name,
-      mobile: user.mobile,
+      mobile: phone.number,
+      mobileCountry: phone.country || 'IN',
       email: user.email ?? '',
       username: user.username,
       role: user.role,
@@ -236,11 +250,19 @@ export default function UsersPage() {
       setFormError(parsed.error.issues[0].message);
       return;
     }
+    const e164 = toE164Phone(userForm.mobile, userForm.mobileCountry || 'IN');
+    if (!e164) {
+      setFormError('Enter a valid mobile number for the selected country');
+      return;
+    }
+    const payloadMobile = userForm.mobileCountry === 'IN' && /^\d{10}$/.test(userForm.mobile)
+      ? userForm.mobile
+      : e164;
     setSaving(true);
     setFormError('');
     setError('');
     try {
-      await api.patch(`/users/${editTarget.user_id}`, parsed.data);
+      await api.patch(`/users/${editTarget.user_id}`, { ...parsed.data, mobile: payloadMobile });
       setCreateOpen(false);
       setEditTarget(null);
       setUserForm(emptyUser);
@@ -430,7 +452,15 @@ export default function UsersPage() {
             {formError && <Alert severity="error" sx={{ gridColumn: '1 / -1' }}>{formError}</Alert>}
             <TextField name="firstName" label="First name" value={userForm.firstName} onChange={updateForm} required fullWidth />
             <TextField name="lastName" label="Last name" value={userForm.lastName} onChange={updateForm} required fullWidth />
-            <TextField name="mobile" label="Mobile" value={userForm.mobile} onChange={updateForm} required fullWidth inputProps={{ inputMode: 'numeric', maxLength: 10 }} />
+            <InternationalPhoneField
+              label="Mobile"
+              country={userForm.mobileCountry || 'IN'}
+              number={userForm.mobile}
+              onCountryChange={(country) => setUserForm((previous) => ({ ...previous, mobileCountry: country }))}
+              onNumberChange={(value) => setUserForm((previous) => ({ ...previous, mobile: value }))}
+              required
+              sx={{ gridColumn: '1 / -1' }}
+            />
             <TextField name="email" label="Email" value={userForm.email} onChange={updateForm} fullWidth />
             <TextField name="username" label="Username" value={userForm.username} onChange={updateForm} required fullWidth />
             <TextField name="role" label="Role" value={userForm.role} onChange={updateForm} select fullWidth>
