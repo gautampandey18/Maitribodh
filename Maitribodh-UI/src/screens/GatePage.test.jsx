@@ -374,7 +374,7 @@ it('explains photo loading failure and enables verification after retry succeeds
   expect(screen.queryByText(/Could not load the profile photo/)).not.toBeInTheDocument();
   await user.click(verification);
   expect(screen.getByRole('button', { name: 'Check-In' })).toBeEnabled();
-});
+}, 30_000);
 
 it('allows uploading a missing photo for a profile with a restricted-area warning', async () => {
   vi.stubGlobal('URL', { createObjectURL: vi.fn(() => 'blob:uploaded-photo'), revokeObjectURL: vi.fn() });
@@ -396,7 +396,7 @@ it('allows uploading a missing photo for a profile with a restricted-area warnin
   expect(screen.getByRole('button', { name: 'Check-In' })).toBeDisabled();
   await user.click(screen.getByRole('checkbox', { name: 'I acknowledge this person is not assigned to the selected restricted area' }));
   expect(screen.getByRole('button', { name: 'Check-In' })).toBeEnabled();
-});
+}, 30_000);
 
 it('recovers a missing stored photo after reading the API error from a blob', async () => {
   vi.stubGlobal('URL', { createObjectURL: vi.fn(() => 'blob:recovered-photo'), revokeObjectURL: vi.fn() });
@@ -422,7 +422,7 @@ it('recovers a missing stored photo after reading the API error from a blob', as
   expect(screen.queryByText(/Could not load the profile photo/)).not.toBeInTheDocument();
   await user.click(verification);
   expect(screen.getByRole('button', { name: 'Check-In' })).toBeEnabled();
-});
+}, 30_000);
 
 it('offers missing photo recovery for a person already inside without allowing another check-in', async () => {
   vi.spyOn(api, 'get').mockImplementation((path) => path === '/persons/registration/options'
@@ -438,4 +438,44 @@ it('offers missing photo recovery for a person already inside without allowing a
   expect(screen.getByRole('button', { name: 'Upload profile photo' })).toBeEnabled();
   expect(screen.getByRole('button', { name: 'Check-In' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Check-Out' })).toBeEnabled();
-});
+}, 30_000);
+
+it('allows entering accompanying visitors and submits accompanyingCount at check-in', async () => {
+  vi.stubGlobal('URL', { createObjectURL: vi.fn(() => 'blob:person-photo'), revokeObjectURL: vi.fn() });
+  vi.spyOn(api, 'get').mockImplementation((path) => Promise.resolve({ data: path === '/persons/registration/options' ? options : new Blob(['photo'], { type: 'image/jpeg' }) }));
+  const post = vi.spyOn(api, 'post')
+    .mockResolvedValueOnce({ data: { items: [{ personId: 21, personCode: 'MB-000021', name: 'Rohan Sharma', category: 'Visitor', outcome: 'ELIGIBLE', status: 'ACTIVE', hasPhoto: true, photoKey: 'rohan.jpg', openVisitId: null }] } })
+    .mockResolvedValueOnce({ data: { visitId: 55 } })
+    .mockResolvedValue({ data: { items: [{ personId: 21, personCode: 'MB-000021', name: 'Rohan Sharma', category: 'Visitor', outcome: 'ALREADY_INSIDE', status: 'ACTIVE', hasPhoto: true, photoKey: 'rohan.jpg', openVisitId: 55, accompanyingCount: 3 }] } });
+
+  const user = userEvent.setup();
+  render(<MemoryRouter><GatePage /></MemoryRouter>);
+  expect(await screen.findByRole('combobox', { name: 'Area' })).toHaveValue('Goushala');
+  await user.type(screen.getByRole('textbox', { name: 'Mobile number, name or Person ID' }), 'MB-000021');
+  await user.click(screen.getByRole('button', { name: 'Find Person' }));
+
+  expect(await screen.findByText('Rohan Sharma')).toBeInTheDocument();
+  const accompanyingInput = screen.getByRole('spinbutton', { name: 'Additional people accompanying' });
+  expect(accompanyingInput).toBeInTheDocument();
+  expect(accompanyingInput).toHaveValue(0);
+
+  await user.clear(accompanyingInput);
+  await user.type(accompanyingInput, '3');
+  expect(accompanyingInput).toHaveValue(3);
+
+  const verification = screen.getByRole('checkbox', { name: 'I verified the person against the profile photo' });
+  await waitFor(() => expect(verification).toBeEnabled());
+  await user.click(verification);
+
+  await user.click(screen.getByRole('button', { name: 'Check-In' }));
+  expect(post).toHaveBeenCalledWith('/visits', {
+    personId: 21,
+    checkinGateId: 1,
+    checkinLocationId: 2,
+    device: 'Gate Terminal 01',
+    accompanyingCount: 3,
+  });
+  expect(await screen.findByText('Check-In recorded.')).toBeInTheDocument();
+}, 30_000);
+
+

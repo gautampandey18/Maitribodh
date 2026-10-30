@@ -270,28 +270,21 @@ test('approval cannot decide on a registration that does not require approval', 
   );
 });
 
-test('resubmitting a person in a non-approval category activates directly', async () => {
-  const calls = [];
+test('resubmitting a person in a non-approval category is blocked', async () => {
   const client = {
-    async query(sql, values = []) {
-      calls.push({ sql, values });
+    async query(sql) {
       if (sql === 'BEGIN' || sql === 'ROLLBACK') return { rows: [] };
       if (sql.includes('FROM mams.person')) {
-        return { rows: [{ person_id: 10, status: 'REJECTED', registered_by: 7, approval_required: false }] };
+        return { rows: [{ person_id: 10, status: 'REJECTED', registered_by: 7, approval_required: false, form_type: 'VISITOR', category_name: 'Visitor' }] };
       }
-      if (sql.includes('UPDATE mams.person')) {
-        return { rows: [{ person_id: 10, person_code: 'MB-000010', status: 'ACTIVE', qr_version: 1 }] };
-      }
-      return { rows: [], rowCount: 1 };
+      throw new Error('Should not reach write');
     },
     release() {},
   };
   const repository = createApprovalsRepository({ async connect() { return client; } });
 
-  const result = await repository.resubmit({ personId: 10, actorUserId: 7, actorRole: 'REG_OFFICER' });
-
-  assert.equal(result.status, 'ACTIVE');
-  assert.match(calls[2].sql, /SET status = 'ACTIVE'/);
-  assert.equal(calls[2].values[1], 7);
-  assert.equal(calls[5].sql, 'COMMIT');
+  await assert.rejects(
+    repository.resubmit({ personId: 10, actorUserId: 7, actorRole: 'REG_OFFICER' }),
+    (error) => error.code === 'APPROVAL_NOT_REQUIRED',
+  );
 });

@@ -20,7 +20,23 @@ test('dashboard summary uses open visits and local-day activity counts', async (
 
   assert.match(sql, /status = 'OPEN'/);
   assert.match(sql, /AT TIME ZONE 'Asia\/Kolkata'/);
+  assert.match(sql, /status IN \('ACTIVE', 'PENDING'\)\) AS total_users/);
   assert.equal(summary.active_persons, 4);
+});
+
+test('dashboard inside counts open visits and accompanying members', async () => {
+  const repository = createDashboardRepository({
+    async query(query) {
+      if (query.includes('coalesce(sum(v.accompanying_count), 0)')) {
+        return { rows: [{ total: 2, accompanying_total: 3 }] };
+      }
+      return { rows: [] };
+    },
+  });
+
+  const result = await repository.inside({ pageSize: 10, offset: 0 });
+  assert.equal(result.total, 2);
+  assert.equal(result.accompanyingTotal, 3);
 });
 
 test('dashboard inside masks mobile for non-Admin roles', async () => {

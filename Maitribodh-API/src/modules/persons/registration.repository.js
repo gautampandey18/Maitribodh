@@ -83,7 +83,10 @@ export function createRegistrationRepository(pool) {
           if (field.source === 'JOB_ROLE' && String(selected.rows[0].parent_id) !== String(input.categoryDetails.department_id)) throw new ApiError(400, 'VALIDATION_ERROR', 'Job Role must belong to the selected Department.');
           if (field.source === 'SUBCATEGORY' && selected.rows[0].category_id && Number(selected.rows[0].category_id) !== input.categoryId) throw new ApiError(400, 'VALIDATION_ERROR', 'Select a subcategory for this category');
         }
-        const status = category.approval_required ? 'PENDING' : 'ACTIVE';
+        const isNonApproval = category.approval_required === false
+          || ['VISITOR', 'VENDOR', 'CONTRACTOR', 'PARTICIPANT'].includes(category.form_type)
+          || ['visitor', 'vendor', 'contractor', 'participant'].includes(category.name?.toLowerCase()?.trim());
+        const status = !isNonApproval && category.approval_required ? 'PENDING' : 'ACTIVE';
         const result = await client.query(`INSERT INTO mams.person
           (category_id, first_name, last_name, mobile, alternate_mobile, gender, resident_status, passport_number_enc, passport_last4, date_of_birth,
            address, email, photo_key, emergency_contact_name, emergency_contact_mobile, category_details, accompanying_count,

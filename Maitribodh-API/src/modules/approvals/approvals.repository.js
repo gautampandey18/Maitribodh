@@ -1,9 +1,29 @@
 export function createApprovalsRepository(pool) {
   return {
+    async syncNonApprovalPersons() {
+      const result = await pool.query(
+        `UPDATE mams.person AS p
+            SET status = 'ACTIVE',
+                qr_version = CASE WHEN p.qr_version = 0 THEN 1 ELSE p.qr_version END,
+                approved_at = COALESCE(p.approved_at, now()),
+                updated_at = now()
+           FROM mams.category AS c
+          WHERE p.category_id = c.category_id
+            AND p.status IN ('PENDING', 'REJECTED')
+            AND (
+              c.approval_required = false
+              OR upper(trim(c.form_type)) IN ('VISITOR', 'VENDOR', 'CONTRACTOR', 'PARTICIPANT')
+              OR lower(trim(c.name)) IN ('visitor', 'vendor', 'contractor', 'participant')
+            )
+          RETURNING p.person_id`,
+      );
+      return result.rowCount;
+    },
+
     async listPending({ pageSize, offset, name = '', category = '' }) {
       const result = await pool.query(
         `SELECT p.person_id, p.person_code, p.first_name || ' ' || p.last_name AS name,
-                c.name AS category, c.approval_required, p.photo_key IS NOT NULL AS has_photo,
+                c.name AS category, c.form_type, c.approval_required, p.photo_key IS NOT NULL AS has_photo,
                 h.acted_by AS submitted_by, h.acted_at AS submitted_at,
                 count(*) OVER()::int AS total
            FROM mams.person AS p
@@ -18,6 +38,8 @@ export function createApprovalsRepository(pool) {
            ) AS h ON true
           WHERE p.status = 'PENDING'
             AND c.approval_required = true
+            AND lower(trim(c.name)) NOT IN ('visitor', 'vendor', 'contractor', 'participant')
+            AND upper(trim(c.form_type)) NOT IN ('VISITOR', 'VENDOR', 'CONTRACTOR', 'PARTICIPANT')
             AND ($1 = '' OR concat_ws(' ', p.first_name, p.last_name) ILIKE '%' || $1 || '%')
             AND ($2 = '' OR c.name ILIKE '%' || $2 || '%')
           ORDER BY h.acted_at
@@ -30,7 +52,7 @@ export function createApprovalsRepository(pool) {
     async listByStatus({ status, pageSize, offset, name = '', category = '' }) {
       const result = await pool.query(
         `SELECT p.person_id, p.person_code, p.first_name || ' ' || p.last_name AS name,
-                c.name AS category, c.approval_required, p.photo_key IS NOT NULL AS has_photo,
+                c.name AS category, c.form_type, c.approval_required, p.photo_key IS NOT NULL AS has_photo,
                 COALESCE(h.acted_at, p.created_at) AS submitted_at,
                 count(*) OVER()::int AS total
            FROM mams.person AS p
@@ -44,6 +66,8 @@ export function createApprovalsRepository(pool) {
            ) AS h ON true
           WHERE p.status = $1
             AND c.approval_required = true
+            AND lower(trim(c.name)) NOT IN ('visitor', 'vendor', 'contractor', 'participant')
+            AND upper(trim(c.form_type)) NOT IN ('VISITOR', 'VENDOR', 'CONTRACTOR', 'PARTICIPANT')
             AND ($2 = '' OR concat_ws(' ', p.first_name, p.last_name) ILIKE '%' || $2 || '%')
             AND ($3 = '' OR c.name ILIKE '%' || $3 || '%')
           ORDER BY COALESCE(h.acted_at, p.created_at) DESC, p.person_id DESC
@@ -58,7 +82,7 @@ export function createApprovalsRepository(pool) {
       try {
         await client.query('BEGIN');
         const personResult = await client.query(
-          `SELECT p.person_id, p.status, p.registered_by, c.approval_required
+          `SELECT p.person_id, p.status, p.registered_by, c.approval_required, c.form_type, c.name AS category_name
              FROM mams.person AS p
              JOIN mams.category AS c ON c.category_id = p.category_id
             WHERE p.person_id = $1
@@ -70,8 +94,11 @@ export function createApprovalsRepository(pool) {
           await client.query('ROLLBACK');
           return null;
         }
-        if (person.approval_required === false) {
-          throw repositoryError('APPROVAL_NOT_REQUIRED', 'Approval is not required for this person');
+        const isNonApproval = person.approval_required === false
+          || ['VISITOR', 'VENDOR', 'CONTRACTOR', 'PARTICIPANT'].includes(person.form_type?.toUpperCase()?.trim())
+          || ['visitor', 'vendor', 'contractor', 'participant'].includes(person.category_name?.toLowerCase()?.trim());
+        if (isNonApproval) {
+          throw repositoryError('APPROVAL_NOT_REQUIRED', 'Approval is not required for this category');
         }
         const isPending = person.status === 'PENDING';
         const canRejectActive = decision === 'REJECT' && person.status === 'ACTIVE';
@@ -162,7 +189,7 @@ export function createApprovalsRepository(pool) {
       try {
         await client.query('BEGIN');
         const personResult = await client.query(
-          `SELECT p.person_id, p.status, p.registered_by, c.approval_required
+          `SELECT p.person_id, p.status, p.registered_by, c.approval_required, c.form_type, c.name AS category_name
              FROM mams.person AS p
              JOIN mams.category AS c ON c.category_id = p.category_id
             WHERE p.person_id = $1
@@ -174,6 +201,12 @@ export function createApprovalsRepository(pool) {
           await client.query('ROLLBACK');
           return null;
         }
+        const isNonApproval = person.approval_required === false
+          || ['VISITOR', 'VENDOR', 'CONTRACTOR', 'PARTICIPANT'].includes(person.form_type?.toUpperCase()?.trim())
+          || ['visitor', 'vendor', 'contractor', 'participant'].includes(person.category_name?.toLowerCase()?.trim());
+        if (isNonApproval) {
+          throw repositoryError('APPROVAL_NOT_REQUIRED', 'Approval is not required for this category');
+        }
         if (person.status !== 'REJECTED') {
           throw repositoryError('PERSON_NOT_REJECTED', 'Only rejected registrations can be resubmitted');
         }
@@ -184,20 +217,12 @@ export function createApprovalsRepository(pool) {
           throw repositoryError('RESUBMISSION_FORBIDDEN', 'Only the original submitter or an Admin can resubmit this record');
         }
 
-        const isNonApproval = person.approval_required === false;
         const updateResult = await client.query(
-          isNonApproval
-            ? `UPDATE mams.person
-                  SET status = 'ACTIVE',
-                      qr_version = CASE WHEN qr_version = 0 THEN 1 ELSE qr_version END,
-                      updated_by = $2, updated_at = now()
-                WHERE person_id = $1 AND status = 'REJECTED'
-              RETURNING person_id, person_code, status, qr_version, updated_at`
-            : `UPDATE mams.person
-                  SET status = 'PENDING',
-                      updated_by = $2, updated_at = now()
-                WHERE person_id = $1 AND status = 'REJECTED'
-              RETURNING person_id, person_code, status, qr_version, updated_at`,
+          `UPDATE mams.person
+              SET status = 'PENDING',
+                  updated_by = $2, updated_at = now()
+            WHERE person_id = $1 AND status = 'REJECTED'
+          RETURNING person_id, person_code, status, qr_version, updated_at`,
           [personId, actorUserId],
         );
         const updatedPerson = updateResult.rows[0];

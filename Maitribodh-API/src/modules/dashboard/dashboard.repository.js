@@ -16,6 +16,7 @@ export function createDashboardRepository(pool) {
                AND (checkout_at AT TIME ZONE 'Asia/Kolkata')::date = (now() AT TIME ZONE 'Asia/Kolkata')::date
            ) AS checkouts_today,
            (SELECT count(*)::int FROM mams.person AS p JOIN mams.category AS c ON c.category_id = p.category_id WHERE p.status = 'PENDING' AND c.approval_required = true) AS pending_approvals,
+           (SELECT count(*)::int FROM mams.person WHERE status IN ('ACTIVE', 'PENDING')) AS total_users,
            (SELECT count(*)::int FROM mams.audit_log
              WHERE module = 'GATE' AND activity = 'GATE_BLOCKED_BLACKLIST'
                AND (occurred_at AT TIME ZONE 'Asia/Kolkata')::date = (now() AT TIME ZONE 'Asia/Kolkata')::date
@@ -111,18 +112,24 @@ export function createDashboardRepository(pool) {
           LIMIT $1 OFFSET $2`,
         [pageSize, offset],
         ),
-        pool.query("SELECT count(*)::int AS total FROM mams.visit WHERE status = 'OPEN'"),
-        pool.query(`SELECT l.name AS name, count(*)::int AS count
+        pool.query(
+          `SELECT count(*)::int AS total,
+                  coalesce(sum(v.accompanying_count), 0)::int AS accompanying_total
+             FROM mams.visit AS v
+            WHERE v.status = 'OPEN'`,
+        ),
+        pool.query(`SELECT l.name AS name, (count(*) + coalesce(sum(v.accompanying_count), 0))::int AS count
           FROM mams.visit AS v JOIN mams.location AS l ON l.location_id = v.checkin_location_id
           WHERE v.status = 'OPEN' GROUP BY l.location_id, l.name ORDER BY l.name`),
-        pool.query(`SELECT c.name AS name, count(*)::int AS count
+        pool.query(`SELECT c.name AS name, (count(*) + coalesce(sum(v.accompanying_count), 0))::int AS count
           FROM mams.visit AS v JOIN mams.person AS p ON p.person_id = v.person_id
           JOIN mams.category AS c ON c.category_id = p.category_id
           WHERE v.status = 'OPEN' GROUP BY c.category_id, c.name ORDER BY c.name`),
       ]);
       return {
         items: result.rows,
-        total: count.rows[0].total,
+        total: count.rows[0]?.total ?? 0,
+        accompanyingTotal: count.rows[0]?.accompanying_total ?? 0,
         byLocation: byLocation.rows,
         byCategory: byCategory.rows,
       };

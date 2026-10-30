@@ -1,4 +1,4 @@
-﻿.registration-form {
+.registration-form {
   max-width: 960px;
   margin: 0 auto;
 }
@@ -155,30 +155,102 @@
 
 .gate-layout {
   display: grid;
-  grid-template-columns: minmax(260px, .85fr) minmax(0, 1.4fr);
-  gap: 20px;
+  grid-template-columns: minmax(360px, 1.15fr) minmax(320px, 1fr);
+  gap: 24px;
   align-items: start;
 }
 
 .gate-scanner {
-  padding: 20px;
+  grid-column: 1 / -1;
+  grid-row: 1;
+  padding: 14px 18px;
   background: var(--th-soft);
+  border: 1px solid var(--th-card-border);
   border-radius: var(--th-r);
   overflow: hidden;
 }
 
 .gate-result-panel {
-  padding: 20px;
+  grid-column: 2;
+  grid-row: 2;
+  padding: 24px;
   min-width: 0;
   background: var(--th-surface);
   border: 1px solid var(--th-card-border);
   border-radius: var(--th-r);
 }
 
-.gate-person-panel {
+.gate-layout.no-selected .gate-result-panel {
   grid-column: 1 / -1;
+}
+
+.gate-person-panel {
+  grid-column: 1;
+  grid-row: 2;
   min-width: 0;
-  overflow-wrap: anywhere;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.gate-person-panel .idc-card,
+.qr-identity-card-section .idc-card {
+  width: 100%;
+  max-width: 560px;
+}
+
+.gate-person-panel .idc-main,
+.qr-identity-card-section .idc-main {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  padding: 16px 20px;
+}
+
+.gate-person-panel .idc-profile,
+.qr-identity-card-section .idc-profile {
+  grid-template-columns: 80px minmax(0, 1fr);
+  gap: 14px;
+}
+
+.gate-person-panel .idc-photo,
+.qr-identity-card-section .idc-photo {
+  width: 80px !important;
+  height: 94px !important;
+  object-fit: cover !important;
+}
+
+.gate-person-panel .idc-qr-panel,
+.qr-identity-card-section .idc-qr-panel {
+  min-width: 110px;
+  padding: 8px 10px;
+}
+
+.gate-person-panel .idc-qr-image,
+.qr-identity-card-section .idc-qr-image {
+  width: 90px;
+  height: 90px;
+}
+
+.gate-person-panel .idc-details,
+.qr-identity-card-section .idc-details {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 18px;
+  padding: 12px 20px 14px;
+}
+
+.gate-person-panel .idc-row,
+.qr-identity-card-section .idc-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px dashed rgba(243, 210, 182, 0.6);
+  font-size: 0.825rem;
+}
+
+.gate-person-panel .idc-row:last-child,
+.qr-identity-card-section .idc-row:last-child {
+  border-bottom: none;
 }
 
 .filter-toolbar {
@@ -370,27 +442,102 @@
 
 .gate-layout {
   display: grid;
-  grid-template-columns: minmax(260px, .85fr) minmax(0, 1.4fr);
-  gap: 20px;
+  grid-template-columns: minmax(360px, 1.15fr) minmax(320px, 1fr);
+  gap: 24px;
   align-items: start;
 }
 
 .gate-scanner {
-  padding: 20px;
+  grid-column: 1 / -1;
+  grid-row: 1;
+  padding: 14px 18px;
   background: var(--th-soft);
+  border: 1px solid var(--th-card-border);
   border-radius: var(--th-r);
   overflow: hidden;
 }
 
 .gate-result-panel {
-  padding: 20px 20px;
+  grid-column: 2;
+  grid-row: 2;
+  padding: 24px;
   min-width: 0;
+  background: var(--th-surface);
+  border: 1px solid var(--th-card-border);
+  border-radius: var(--th-r);
+}
+
+.gate-layout.no-selected .gate-result-panel {
+  grid-column: 1 / -1;
 }
 
 .gate-person-panel {
-  grid-column: 1 / -1;
+  grid-column: 1;
+  grid-row: 2;
   min-width: 0;
-  overflow-wrap: anywhere;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.gate-person-panel .idc-card,
+.qr-identity-card-section .idc-card {
+  width: 100%;
+  max-width: 560px;
+}
+
+.gate-person-panel .idc-main,
+.qr-identity-card-section .idc-main {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  padding: 16px 20px;
+}
+
+.gate-person-panel .idc-profile,
+.qr-identity-card-section .idc-profile {
+  grid-template-columns: 80px minmax(0, 1fr);
+  gap: 14px;
+}
+
+.gate-person-panel .idc-photo,
+.qr-identity-card-section .idc-photo {
+  width: 80px !important;
+  height: 94px !important;
+  object-fit: cover !important;
+}
+
+.gate-person-panel .idc-qr-panel,
+.qr-identity-card-section .idc-qr-panel {
+  min-width: 110px;
+  padding: 8px 10px;
+}
+
+.gate-person-panel .idc-qr-image,
+.qr-identity-card-section .idc-qr-image {
+  width: 90px;
+  height: 90px;
+}
+
+.gate-person-panel .idc-details,
+.qr-identity-card-section .idc-details {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 18px;
+  padding: 12px 20px 14px;
+}
+
+.gate-person-panel .idc-row,
+.qr-identity-card-section .idc-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px dashed rgba(243, 210, 182, 0.6);
+  font-size: 0.825rem;
+}
+
+.gate-person-panel .idc-row:last-child,
+.qr-identity-card-section .idc-row:last-child {
+  border-bottom: none;
 }
 
 .filter-toolbar {
@@ -483,6 +630,7 @@
   border-radius: var(--th-r);
   background: var(--th-surface);
   box-shadow: var(--th-shadow-card);
+  max-width: 720px;
 }
 
 .qr-preview-card {
@@ -1627,6 +1775,10 @@ body.notifications-panel-open .top-bar .top-toolbar>.MuiIconButton-root {
   color: #D0293B;
 }
 
+.dashboard-note-total_users {
+  color: #4F46E5;
+}
+
 .occupancy-count {
   display: inline-flex;
   align-items: center;
@@ -1956,8 +2108,10 @@ body.notifications-panel-open .top-bar .top-toolbar>.MuiIconButton-root {
   width: min(50%, 640px);
 }
 
-.gate-person-panel .idc-card {
-  width: min(50%, 640px);
+.gate-person-panel .idc-card,
+.qr-identity-card-section .idc-card {
+  width: 100%;
+  max-width: 560px;
 }
 
 .idc-card {
@@ -2179,6 +2333,7 @@ body.notifications-panel-open .top-bar .top-toolbar>.MuiIconButton-root {
 
 .qr-identity-card-section {
   width: 100%;
+  max-width: 560px;
 }
 
 .idc-download-error {
@@ -2334,6 +2489,28 @@ body.notifications-panel-open .top-bar .top-toolbar>.MuiIconButton-root {
 @media (max-width: 1100px) {
   .gate-layout {
     grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .gate-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .gate-scanner {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .gate-person-panel {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .gate-result-panel {
+    grid-column: 1;
+    grid-row: 3;
   }
 }
 
@@ -2352,7 +2529,8 @@ body.notifications-panel-open .top-bar .top-toolbar>.MuiIconButton-root {
 @media (max-width: 700px) {
 
   .person-detail-page .idc-card,
-  .gate-person-panel .idc-card {
+  .gate-person-panel .idc-card,
+  .qr-identity-card-section .idc-card {
     width: 100%;
   }
 }
@@ -2766,6 +2944,7 @@ body.notifications-panel-open .top-bar .top-toolbar>.MuiIconButton-root {
   border-radius: var(--th-r);
   background: var(--th-surface);
   box-shadow: var(--th-shadow-card);
+  max-width: 720px;
 }
 
 .qr-preview-card {
@@ -3969,6 +4148,10 @@ body.notifications-panel-open .app-navigation-drawer .MuiDrawer-paper::after {
   color: #D0293B;
 }
 
+.dashboard-note-total_users {
+  color: #4F46E5;
+}
+
 .occupancy-count {
   display: inline-flex;
   align-items: center;
@@ -4298,8 +4481,10 @@ body.notifications-panel-open .app-navigation-drawer .MuiDrawer-paper::after {
   width: min(50%, 640px);
 }
 
-.gate-person-panel .idc-card {
-  width: min(50%, 640px);
+.gate-person-panel .idc-card,
+.qr-identity-card-section .idc-card {
+  width: 100%;
+  max-width: 560px;
 }
 
 .idc-card {
@@ -4521,6 +4706,7 @@ body.notifications-panel-open .app-navigation-drawer .MuiDrawer-paper::after {
 
 .qr-identity-card-section {
   width: 100%;
+  max-width: 560px;
 }
 
 .idc-download-error {
@@ -4675,6 +4861,28 @@ body.notifications-panel-open .app-navigation-drawer .MuiDrawer-paper::after {
 @media (max-width: 1100px) {
   .gate-layout {
     grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .gate-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .gate-scanner {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .gate-person-panel {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .gate-result-panel {
+    grid-column: 1;
+    grid-row: 3;
   }
 }
 
@@ -4693,7 +4901,8 @@ body.notifications-panel-open .app-navigation-drawer .MuiDrawer-paper::after {
 @media (max-width: 700px) {
 
   .person-detail-page .idc-card,
-  .gate-person-panel .idc-card {
+  .gate-person-panel .idc-card,
+  .qr-identity-card-section .idc-card {
     width: 100%;
   }
 }
@@ -5298,5 +5507,392 @@ body.notifications-panel-open .app-navigation-drawer .MuiDrawer-paper::after {
 
   .password-panel {
     padding: 24px 18px;
+  }
+}
+
+/* ==========================================================================
+   Comprehensive Responsive Overrides: Mobile Screens to Large Desktops
+   ========================================================================== */
+
+/* Tables on all responsive devices */
+.page-container .MuiTableContainer-root {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.page-container .MuiTable-root:not(.qr-identity-table) {
+  min-width: 620px;
+}
+
+/* --------------------------------------------------------------------------
+   Large Desktop & Ultra-wide Screens (>= 1440px and >= 1800px)
+   -------------------------------------------------------------------------- */
+@media (min-width: 1440px) {
+  .page-container {
+    max-width: 1560px;
+    padding: 32px 36px 56px;
+  }
+
+  .category-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 20px;
+  }
+
+  .registration-form {
+    max-width: 1140px;
+  }
+
+  .gate-layout {
+    grid-template-columns: 560px minmax(0, 1fr);
+    gap: 32px;
+    align-items: start;
+  }
+
+  .identity-layout {
+    display: grid;
+    grid-template-columns: minmax(360px, 1fr) 560px;
+    gap: 28px;
+    align-items: start;
+  }
+
+  .dashboard-metrics {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 16px;
+  }
+}
+
+@media (min-width: 1800px) {
+  .page-container {
+    max-width: 1800px;
+    padding: 36px 48px 64px;
+  }
+
+  .registration-form {
+    max-width: 1300px;
+  }
+
+  .dashboard-metrics {
+    gap: 20px;
+  }
+
+  .gate-layout {
+    grid-template-columns: 580px minmax(0, 1fr);
+    gap: 40px;
+  }
+
+  .identity-layout {
+    grid-template-columns: minmax(420px, 1fr) 580px;
+    gap: 36px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Desktop & Tablet Landscape (1101px to 1439px)
+   -------------------------------------------------------------------------- */
+@media (min-width: 1101px) and (max-width: 1439px) {
+  .identity-layout {
+    display: grid;
+    grid-template-columns: minmax(320px, 1fr) 540px;
+    gap: 24px;
+    align-items: start;
+  }
+
+  .gate-layout {
+    grid-template-columns: 520px minmax(0, 1fr);
+    gap: 24px;
+    align-items: start;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Mobile & Small Tablet Devices (<= 768px)
+   -------------------------------------------------------------------------- */
+@media (max-width: 768px) {
+  .page-container {
+    padding: 18px 14px 36px;
+  }
+
+  .dashboard-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  .dashboard-metric {
+    padding: 10px 8px !important;
+    border-top-width: 3px !important;
+  }
+
+  .dashboard-metric-label {
+    font-size: 0.68rem !important;
+    margin-bottom: 6px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  .dashboard-metric-value {
+    font-size: 1.25rem !important;
+    margin-bottom: 4px !important;
+  }
+
+  .dashboard-metric-note {
+    font-size: 0.625rem !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  .notification-drawer .notification-panel {
+    width: 100vw;
+    max-width: 100vw;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Mobile Phones (<= 600px)
+   -------------------------------------------------------------------------- */
+@media (max-width: 600px) {
+  .page-container {
+    padding: 12px 10px 32px;
+  }
+
+  .page-heading {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .page-heading > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .page-heading .MuiButton-root {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  .filter-toolbar {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .filter-toolbar .MuiTextField-root,
+  .filter-toolbar .MuiFormControl-root,
+  .filter-toolbar .MuiButton-root {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .master-data-filter-toolbar .master-data-add-action,
+  .categories-page .table-panel > .filter-toolbar .master-data-add-action {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .persons-page .person-search-form {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .persons-page .person-search-form .MuiTextField-root,
+  .persons-page .person-search-form .MuiButton-root {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .category-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .wizard-actions {
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 10px;
+    width: 100%;
+  }
+
+  .wizard-actions .MuiButton-root {
+    width: 100%;
+  }
+
+  .gate-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .gate-person-panel,
+  .gate-result-panel,
+  .gate-scanner {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .gate-scanner form {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  .gate-scanner form .MuiTextField-root,
+  .gate-scanner form .MuiButton-root {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .gate-person-panel .idc-card,
+  .qr-identity-card-section .idc-card,
+  .person-detail-page .idc-card {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .gate-person-panel .idc-main,
+  .qr-identity-card-section .idc-main,
+  .person-detail-page .idc-main {
+    grid-template-columns: minmax(0, 1fr) 80px !important;
+    gap: 10px !important;
+    padding: 12px 14px !important;
+  }
+
+  .gate-person-panel .idc-photo,
+  .qr-identity-card-section .idc-photo,
+  .person-detail-page .idc-photo {
+    width: 58px !important;
+    height: 70px !important;
+    border-radius: 8px !important;
+  }
+
+  .gate-person-panel .idc-qr-image,
+  .qr-identity-card-section .idc-qr-image,
+  .person-detail-page .idc-qr-image {
+    width: 76px !important;
+    height: 76px !important;
+  }
+
+  .gate-person-panel .idc-details,
+  .qr-identity-card-section .idc-details,
+  .person-detail-page .idc-details {
+    grid-template-columns: 1fr !important;
+    padding: 10px 14px !important;
+    gap: 8px !important;
+  }
+
+  .gate-person-panel .idc-name,
+  .qr-identity-card-section .idc-name,
+  .person-detail-page .idc-name {
+    font-size: 1.05rem !important;
+    line-height: 1.25 !important;
+  }
+
+  .MuiDialog-paper {
+    margin: 12px !important;
+    width: calc(100% - 24px) !important;
+    max-width: 100% !important;
+  }
+
+  .dialog-actions,
+  .MuiDialogActions-root {
+    flex-direction: column-reverse;
+    gap: 8px;
+    padding: 12px 16px !important;
+  }
+
+  .dialog-actions .MuiButton-root,
+  .MuiDialogActions-root .MuiButton-root {
+    width: 100%;
+    margin-left: 0 !important;
+  }
+
+  .pagination-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .pagination-bar > div {
+    justify-content: center;
+  }
+
+  .report-filter-actions {
+    width: 100%;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .report-filter-actions .MuiButton-root {
+    width: 100%;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Small Mobile Screens (<= 480px)
+   -------------------------------------------------------------------------- */
+@media (max-width: 480px) {
+  .dashboard-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+  }
+
+  .dashboard-metric {
+    padding: 8px 6px !important;
+  }
+
+  .dashboard-metric-label {
+    font-size: 0.62rem !important;
+    margin-bottom: 4px !important;
+  }
+
+  .dashboard-metric-value {
+    font-size: 1.1rem !important;
+    margin-bottom: 2px !important;
+  }
+
+  .dashboard-metric-note {
+    font-size: 0.58rem !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Extra Small Mobile Screens (<= 380px)
+   -------------------------------------------------------------------------- */
+@media (max-width: 380px) {
+  .category-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .gate-person-panel .idc-main,
+  .qr-identity-card-section .idc-main,
+  .person-detail-page .idc-main {
+    grid-template-columns: 1fr !important;
+    justify-items: center;
+    text-align: center;
+  }
+
+  .gate-person-panel .idc-profile,
+  .qr-identity-card-section .idc-profile,
+  .person-detail-page .idc-profile {
+    grid-template-columns: 1fr !important;
+    justify-items: center;
+  }
+
+  .gate-person-panel .idc-badges,
+  .qr-identity-card-section .idc-badges,
+  .person-detail-page .idc-badges {
+    justify-content: center;
   }
 }

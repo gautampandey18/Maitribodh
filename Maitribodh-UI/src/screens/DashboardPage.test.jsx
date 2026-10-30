@@ -1,6 +1,6 @@
 import { Provider } from 'react-redux';
 import { MemoryRouter } from 'react-router-dom';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import { api } from '../api.js';
@@ -46,9 +46,10 @@ it('loads live summary metrics and the inside list', async () => {
     </Provider>,
   );
 
-  expect(await screen.findByText('Active Members')).toBeInTheDocument();
+  expect(await screen.findByText('Total Users')).toBeInTheDocument();
+  expect(screen.getByText('Active Members')).toBeInTheDocument();
   expect(screen.getByText(/Last sync:.*Live monitoring/)).toBeInTheDocument();
-  expect(screen.getByText('1 inside')).toBeInTheDocument();
+  expect(screen.getByText('(total 1 inside)')).toBeInTheDocument();
   expect(screen.getByText('Asha Patel')).toBeInTheDocument();
   expect(screen.getByText('Main Gate')).toBeInTheDocument();
   expect(screen.getAllByText('Assembly Hall')).toHaveLength(2);
@@ -74,7 +75,7 @@ it('loads live summary metrics and the inside list', async () => {
   expect(get).toHaveBeenCalledWith('/approvals');
 }, 30_000);
 
-it('centers the empty Occupancy state when there are no open check-ins', async () => {
+it('hides the occupancy table and pagination when there are no open check-ins', async () => {
   vi.spyOn(api, 'get').mockImplementation((path) => Promise.resolve(
     path === '/dashboard'
       ? {
@@ -105,8 +106,10 @@ it('centers the empty Occupancy state when there are no open check-ins', async (
     </Provider>,
   );
 
-  const emptyState = await screen.findByRole('cell', { name: 'No open check-ins.' });
-  expect(emptyState).toHaveClass('empty-table', 'occupancy-empty-state');
+  expect(await screen.findByText('(total 0 inside)')).toBeInTheDocument();
+  const occupancySection = screen.getByText('Current Occupancy').closest('.dashboard-inside');
+  expect(within(occupancySection).queryByRole('table')).not.toBeInTheDocument();
+  expect(within(occupancySection).queryByText(/rows per page/i)).not.toBeInTheDocument();
 }, 30_000);
 
 it('allows security guards to view the dashboard without management actions', async () => {
@@ -121,7 +124,7 @@ it('allows security guards to view the dashboard without management actions', as
           checkouts_today: 0,
           pending_approvals: 0,
           blacklist_attempts_today: 0,
-          open_visits: 0,
+          open_visits: 1,
           checkin_trend: [],
           category_mix: [],
           recent_activity: [],
@@ -130,7 +133,7 @@ it('allows security guards to view the dashboard without management actions', as
       }
       : path === '/dashboard/recent-activity'
         ? { data: { items: [], total: 0, page: 1, pageSize: 5 } }
-        : { data: { items: [], total: 0, page: 1, pageSize: 5, byLocation: [], byCategory: [] } },
+        : { data: { items: [{ visit_id: 8, person_code: 'MB-000008', name: 'Asha Patel', category: 'Visitor', gate: 'Main Gate', location: 'Assembly Hall', checkin_at: '2026-10-09T08:30:00Z', accompanying_count: 0, checked_in_by: 'Gotam Pandey', checkin_device: 'Test device' }], total: 1, page: 1, pageSize: 5, byLocation: [], byCategory: [] } },
   ));
   const post = vi.spyOn(api, 'post');
 
@@ -142,8 +145,10 @@ it('allows security guards to view the dashboard without management actions', as
     </Provider>,
   );
 
-  expect(await screen.findByText('Active Members')).toBeInTheDocument();
+  expect(await screen.findByText('Total Users')).toBeInTheDocument();
+  expect(screen.getByText('Active Members')).toBeInTheDocument();
   expect(screen.getByRole('table', { name: 'People currently inside' })).toBeInTheDocument();
+  expect(screen.getByText('Admin review')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Manage locations' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Review / Checkout' })).not.toBeInTheDocument();
   expect(get).toHaveBeenCalledWith('/dashboard');
@@ -176,8 +181,53 @@ it('loads the requested Recent Activity page', async () => {
 
   expect(await screen.findByText('First page')).toBeInTheDocument();
   const nextPageButtons = screen.getAllByTitle('Go to next page');
-  await user.click(nextPageButtons[1]);
+  await user.click(nextPageButtons[nextPageButtons.length - 1]);
 
   expect(await screen.findByText('Second page')).toBeInTheDocument();
   expect(get).toHaveBeenCalledWith('/dashboard/recent-activity', { params: { page: 2, pageSize: 5 } });
+}, 30_000);
+
+it('displays combined total inside and accompanying count when additional people are present', async () => {
+  vi.spyOn(api, 'get').mockImplementation((path) => Promise.resolve(
+    path === '/dashboard'
+      ? { data: { active_persons: 2, checkin_trend: [], category_mix: [], recent_activity: [], security_alerts: { total_today: 0 } } }
+      : path === '/dashboard/inside'
+        ? {
+          data: {
+            items: [
+              {
+                visit_id: 1,
+                person_code: 'MB-000001',
+                name: 'Parent Visitor',
+                category: 'Visitor',
+                gate: 'Main Gate',
+                location: 'Assembly Hall',
+                checkin_at: '2026-10-09T08:30:00Z',
+                accompanying_count: 2,
+                checked_in_by: 'Guard',
+                checkin_device: 'Tab',
+              },
+            ],
+            total: 1,
+            accompanyingTotal: 2,
+            page: 1,
+            pageSize: 5,
+            byLocation: [{ name: 'Assembly Hall', count: 3 }],
+            byCategory: [{ name: 'Visitor', count: 3 }],
+          },
+        }
+        : { data: { items: [], total: 0, page: 1, pageSize: 5 } },
+  ));
+
+  render(
+    <Provider store={store}>
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>
+    </Provider>,
+  );
+
+  expect(await screen.findByText('(total 3 inside)')).toBeInTheDocument();
+  expect(screen.getByText('(total 2 accompany inside)')).toBeInTheDocument();
+  expect(screen.getByText('and')).toBeInTheDocument();
 }, 30_000);

@@ -74,3 +74,20 @@ test('resubmission rejects records that are not in a rejected state', async () =
     (error) => error.statusCode === 409 && error.code === 'PERSON_NOT_REJECTED',
   );
 });
+
+test('resubmission rejects non-approval categories with 400', async () => {
+  const service = createApprovalsService({
+    repository: {
+      async resubmit() {
+        const error = new Error('Approval is not required');
+        error.code = 'APPROVAL_NOT_REQUIRED';
+        throw error;
+      },
+    },
+  });
+
+  await assert.rejects(
+    service.resubmit({ personId: 5, actor: { userId: 8, role: 'ADMIN' } }),
+    (error) => error.statusCode === 400 && error.code === 'APPROVAL_NOT_REQUIRED',
+  );
+});

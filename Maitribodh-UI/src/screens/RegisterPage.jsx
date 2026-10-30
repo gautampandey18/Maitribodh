@@ -1,8 +1,9 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Alert, Box, Button, Checkbox, CircularProgress, FormControlLabel, MenuItem, Step, StepLabel, Stepper, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, Checkbox, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, MenuItem, Step, StepLabel, Stepper, TextField, Typography } from '@mui/material';
 import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
+import CameraAltOutlinedIcon from '@mui/icons-material/CameraAltOutlined';
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
 import ArrowForwardOutlinedIcon from '@mui/icons-material/ArrowForwardOutlined';
 import WorkOutlineIcon from '@mui/icons-material/WorkOutline';
@@ -52,6 +53,10 @@ export default function RegisterPage() {
   const [categoryId, setCategoryId] = useState('');
   const [values, setValues] = useState(initialValues);
   const [photo, setPhoto] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState('');
+  const [photoCameraOpen, setPhotoCameraOpen] = useState(false);
+  const [photoCameraError, setPhotoCameraError] = useState('');
+  const profileVideo = useRef(null);
   const [documents, setDocuments] = useState([]);
   const [step, setStep] = useState(0);
   const [draftId, setDraftId] = useState(null);
@@ -79,7 +84,82 @@ export default function RegisterPage() {
     const valid = [...files].every((file) => file.size <= maxSize && (isPhoto ? ['image/jpeg', 'image/png'] : ['application/pdf', 'image/jpeg', 'image/png']).includes(file.type));
     if (!valid) { setError(isPhoto ? 'Choose a JPG or PNG photograph no larger than 2 MB.' : 'Each document must be a PDF, JPG, or PNG no larger than 5 MB.'); return; }
     setError('');
-    if (isPhoto) setPhoto(files[0]); else setDocuments([...files]);
+    if (isPhoto) {
+      setPhoto(files[0]);
+      if (typeof URL?.createObjectURL === 'function') {
+        setPhotoPreview(URL.createObjectURL(files[0]));
+      }
+    } else setDocuments([...files]);
+  }
+
+  useEffect(() => {
+    if (!photoCameraOpen) return undefined;
+    let stream = null;
+    let active = true;
+    const getUserMedia = navigator.mediaDevices?.getUserMedia;
+    if (!getUserMedia) {
+      setPhotoCameraError('Camera access is not supported in this browser.');
+      return () => { active = false; };
+    }
+    getUserMedia.call(navigator.mediaDevices, { video: { facingMode: { ideal: 'environment' } }, audio: false })
+      .then((cameraStream) => {
+        if (!active) {
+          cameraStream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        stream = cameraStream;
+        if (profileVideo.current) {
+          profileVideo.current.srcObject = cameraStream;
+          profileVideo.current.play().catch(() => {});
+        }
+      })
+      .catch((failure) => {
+        if (!active) return;
+        const detail = failure?.name === 'NotAllowedError' || failure?.name === 'SecurityError'
+          ? `The browser denied camera access for ${window.location.origin}. Allow this address in site settings, check OS camera privacy, then reload.`
+          : failure?.name === 'NotFoundError'
+            ? 'No camera was found. Connect or enable a camera, then try again.'
+            : failure?.name === 'NotReadableError'
+              ? 'The camera is in use by another app. Close that app and try again.'
+              : 'Check camera availability and browser permissions, then try again.';
+        setPhotoCameraError(detail);
+      });
+    return () => {
+      active = false;
+      stream?.getTracks().forEach((track) => track.stop());
+      if (profileVideo.current) profileVideo.current.srcObject = null;
+    };
+  }, [photoCameraOpen]);
+
+  function captureLivePhoto() {
+    const video = profileVideo.current;
+    if (!video?.videoWidth || !video.videoHeight) {
+      setPhotoCameraError('Camera preview is not ready yet. Try again in a moment.');
+      return;
+    }
+    const canvas = document.createElement('canvas');
+    const scale = Math.min(1, 600 / Math.max(video.videoWidth, video.videoHeight));
+    canvas.width = Math.round(video.videoWidth * scale);
+    canvas.height = Math.round(video.videoHeight * scale);
+    const context = canvas.getContext('2d');
+    if (!context) {
+      setPhotoCameraError('Could not capture the camera image. Try again.');
+      return;
+    }
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        setPhotoCameraError('Could not capture the camera image. Try again.');
+        return;
+      }
+      const file = new File([blob], `live-photo-${Date.now()}.jpg`, { type: 'image/jpeg' });
+      setPhoto(file);
+      if (typeof URL?.createObjectURL === 'function') {
+        setPhotoPreview(URL.createObjectURL(file));
+      }
+      setPhotoCameraOpen(false);
+      setError('');
+    }, 'image/jpeg', 0.9);
   }
   async function saveDraft() {
     if (!category) return;
@@ -90,7 +170,7 @@ export default function RegisterPage() {
     } catch (failure) { setError(requestMessage(failure)); } finally { setBusy(false); }
   }
   function resumeDraft(draft) {
-    setCategoryId(draft.draft_data.categoryId); setValues({ ...initialValues, ...draft.draft_data, passportNumber: '', consent: false }); setDraftId(draft.person_id); setStep(1); setPhoto(null); setDocuments([]);
+    setCategoryId(draft.draft_data.categoryId); setValues({ ...initialValues, ...draft.draft_data, passportNumber: '', consent: false }); setDraftId(draft.person_id); setStep(1); setPhoto(null); setPhotoPreview(''); setDocuments([]);
   }
   async function submit(event) {
     event.preventDefault(); setError(''); setNotice('');
@@ -109,7 +189,7 @@ export default function RegisterPage() {
       setNotice(`${values.firstName} ${values.lastName} registered as ${category.name} · ${data.status} · Person ID ${data.person_code} · ${data.status === 'ACTIVE' ? 'QR generated' : 'QR will be generated after approval'}`);
       if (fromGate && data.status === 'ACTIVE') {
         navigate(`/gate?person=${encodeURIComponent(data.person_code)}&gate=${params.get('gate') ?? ''}&area=${params.get('area') ?? ''}`, { state: { registered: true } });
-      } else { setValues(initialValues); setPhoto(null); setDocuments([]); setStep(0); setCategoryId(''); setDraftId(null); }
+      } else { setValues(initialValues); setPhoto(null); setPhotoPreview(''); setDocuments([]); setStep(0); setCategoryId(''); setDraftId(null); }
     } catch (failure) { setError(requestMessage(failure)); } finally { setBusy(false); }
   }
   const textField = (field, value, onChange) => <TextField key={field.key} label={field.label} value={value ?? ''} onChange={onChange} required={field.required} type={field.type ?? 'text'} fullWidth inputProps={{ maxLength: field.maxLength ?? 500, pattern: field.pattern, ...(field.type === 'date' ? { max: new Date().toISOString().slice(0, 10) } : {}) }} InputLabelProps={field.type === 'date' ? { shrink: true } : undefined} />;
@@ -147,7 +227,52 @@ export default function RegisterPage() {
         <TextField label="Residential Address" value={values.address} onChange={(event) => change('address', event.target.value)} required={schema.addressRequired} multiline inputProps={{ maxLength: 500 }} />
         <TextField select label="ID Proof Type" value={values.idProofTypeId} onChange={(event) => change('idProofTypeId', event.target.value)}><MenuItem value="">None</MenuItem>{selectedOptions('ID_PROOF_TYPE').map((item) => <MenuItem key={item.id} value={item.id}>{item.name}</MenuItem>)}</TextField>
         <TextField label="ID Proof Number" value={values.idProofNumber} onChange={(event) => change('idProofNumber', event.target.value)} inputProps={{ maxLength: 50 }} />
-        <Box><Typography component="label" htmlFor="registration-photo">Photograph *</Typography><input id="registration-photo" type="file" accept="image/jpeg,image/png" capture="environment" onChange={(event) => pickFiles(event.target.files, true)} required={!photo} /><Typography variant="caption">{photo?.name ?? 'JPG or PNG, maximum 2 MB.'}</Typography></Box>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <Typography component="label" htmlFor="registration-photo" sx={{ fontWeight: 600 }}>
+            Photograph *
+          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+            <Button
+              variant="contained"
+              color={photo ? 'secondary' : 'primary'}
+              startIcon={<CameraAltOutlinedIcon />}
+              onClick={() => { setPhotoCameraError(''); setPhotoCameraOpen(true); }}
+            >
+              {photo ? 'Retake Live Photo' : 'Click Live Photo'}
+            </Button>
+            {photo ? (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                {photoPreview && (
+                  <Box
+                    component="img"
+                    src={photoPreview}
+                    alt="Captured preview"
+                    sx={{ width: 44, height: 44, borderRadius: 1, objectFit: 'cover', border: '1px solid var(--th-card-border, #ccc)' }}
+                  />
+                )}
+                <Typography variant="body2" color="success.main" sx={{ fontWeight: 600 }}>
+                  ✓ Photo captured
+                </Typography>
+              </Box>
+            ) : (
+              <Typography variant="caption" color="text.secondary">
+                Live photo capture required.
+              </Typography>
+            )}
+          </Box>
+          <input
+            id="registration-photo"
+            aria-label="Photograph *"
+            type="file"
+            accept="image/jpeg,image/png"
+            style={{ display: 'none' }}
+            onChange={(event) => {
+              if (event.target.files?.[0]) {
+                pickFiles(event.target.files, true);
+              }
+            }}
+          />
+        </Box>
         {category?.form_type === 'VISITOR' && <>
           <TextField
             select
@@ -192,7 +317,6 @@ export default function RegisterPage() {
       </Box>}
       {step === 2 && <Box className="form-grid">
         <TextField label="Assigned Areas" select SelectProps={{ multiple: true }} value={values.locationIds} onChange={(event) => change('locationIds', event.target.value)}>{selectedOptions('AREA').map((item) => <MenuItem key={item.id} value={Number(item.id)}>{item.name}</MenuItem>)}</TextField>
-        <TextField label="Additional people accompanying" type="number" inputProps={{ min: 0, max: 32767, step: 1 }} value={values.accompanyingCount} onChange={(event) => change('accompanyingCount', event.target.value)} />
         <TextField label="Remarks" multiline value={values.remarks} onChange={(event) => change('remarks', event.target.value)} inputProps={{ maxLength: 500 }} />
       </Box>}
       {step === 3 && <Box><Typography component="label" htmlFor="registration-documents">Documents</Typography><input id="registration-documents" type="file" multiple accept="application/pdf,image/jpeg,image/png" onChange={(event) => pickFiles(event.target.files, false)} />{documents.map((file) => <Typography key={file.name}>{file.name}</Typography>)}</Box>}
@@ -221,5 +345,31 @@ export default function RegisterPage() {
       {category && <Alert severity={category.approval_required ? 'warning' : 'success'} sx={{ mt: 3 }}>{category.approval_required ? `${category.name} registrations go to the Approval Center. Access and QR are enabled only after an Approver/Admin approves.` : `${category.name} registration is live immediately. QR is generated on submit, no approval needed.`}</Alert>}
       <Box className="wizard-actions"><Button onClick={() => setStep(Math.max(0, step - 1))} disabled={step === 0 || busy}>Back</Button>{!fromGate && <Button startIcon={<SaveOutlinedIcon />} onClick={saveDraft} disabled={!category || busy}>Save Draft</Button>}<Button type="submit" variant="contained" endIcon={busy ? <CircularProgress size={16} /> : <ArrowForwardOutlinedIcon />} disabled={!category || busy || category.approval_required === null}>{step === 4 ? 'Submit Registration' : 'Continue'}</Button></Box>
     </Box>}
+    <Dialog open={photoCameraOpen} onClose={() => setPhotoCameraOpen(false)} fullWidth maxWidth="sm">
+      <DialogTitle>Capture live photo</DialogTitle>
+      <DialogContent>
+        <Box
+          component="video"
+          ref={profileVideo}
+          autoPlay
+          playsInline
+          muted
+          aria-label="Live camera preview"
+          sx={{ display: 'block', width: '100%', maxHeight: '60vh', aspectRatio: '4 / 3', objectFit: 'cover', backgroundColor: '#161616' }}
+        />
+        {photoCameraError && <Alert severity="error" sx={{ mt: 2 }}>{photoCameraError}</Alert>}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => setPhotoCameraOpen(false)}>Cancel</Button>
+        <Button
+          startIcon={<CameraAltOutlinedIcon />}
+          onClick={captureLivePhoto}
+          variant="contained"
+          disabled={Boolean(photoCameraError)}
+        >
+          Capture photo
+        </Button>
+      </DialogActions>
+    </Dialog>
   </Box>;
 }

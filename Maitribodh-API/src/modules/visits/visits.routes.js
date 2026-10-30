@@ -15,6 +15,7 @@ const checkinSchema = z.object({
   personId: z.number().int().positive(),
   checkinGateId: z.number().int().positive(),
   checkinLocationId: z.number().int().positive(),
+  accompanyingCount: z.coerce.number().int().min(0).max(32767).optional().default(0),
   device: z.string().trim().max(100).optional(),
 });
 

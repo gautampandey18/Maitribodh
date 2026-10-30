@@ -61,6 +61,9 @@ export function createApprovalsService({ repository }) {
         }
         return person;
       } catch (error) {
+        if (error.code === 'APPROVAL_NOT_REQUIRED') {
+          throw new ApiError(400, error.code, error.message);
+        }
         if (error.code === 'PERSON_NOT_REJECTED') {
           throw new ApiError(409, error.code, error.message);
         }

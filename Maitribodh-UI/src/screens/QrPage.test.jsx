@@ -5,8 +5,15 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { api } from '../api.js';
 import QrPage from './QrPage.jsx';
 
+const nativeCreateObjectURL = URL.createObjectURL;
+const nativeRevokeObjectURL = URL.revokeObjectURL;
+
 afterEach(() => {
   vi.restoreAllMocks();
+  if (nativeCreateObjectURL) Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: nativeCreateObjectURL });
+  else URL.createObjectURL = () => 'blob:qr-image';
+  if (nativeRevokeObjectURL) Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: nativeRevokeObjectURL });
+  else URL.revokeObjectURL = () => {};
 });
 
 it('keeps the identity table hidden until search and shows a no-match message', async () => {
@@ -59,4 +66,44 @@ it('shows one identity when the search uniquely matches an active user', async (
   expect(get).toHaveBeenCalledWith('/persons', {
     params: { q: 'MB-000005', status: 'ACTIVE', page: 1, pageSize: 2 },
   });
+});
+
+it('fetches and displays the person photo in the ID card when available', async () => {
+  URL.createObjectURL = vi.fn(() => 'blob:mock-photo-url');
+  URL.revokeObjectURL = vi.fn();
+  vi.spyOn(api, 'get').mockImplementation((path) => {
+    if (path === '/persons') {
+      return Promise.resolve({
+        data: {
+          items: [{
+            person_id: 8,
+            person_code: 'MB-000008',
+            name: 'Rohan Sharma',
+            category: 'Visitor',
+            mobile: '9876543210',
+            status: 'ACTIVE',
+            created_at: '2026-07-13T00:00:00.000Z',
+            expires_on: null,
+            qr_version: 1,
+            photo_key: 'rohan.jpg',
+          }],
+          total: 1,
+        },
+      });
+    }
+    if (path === '/persons/8/files/rohan.jpg') {
+      return Promise.resolve({ data: new Blob(['fake-image'], { type: 'image/jpeg' }) });
+    }
+    return Promise.resolve({ data: new Blob(['qr'], { type: 'image/png' }) });
+  });
+
+  render(<MemoryRouter><QrPage /></MemoryRouter>);
+  const user = userEvent.setup();
+
+  await user.type(screen.getByRole('textbox', { name: 'Search person ID, name or mobile' }), 'MB-000008');
+  await user.click(screen.getByRole('button', { name: 'Search' }));
+
+  const photoImg = await screen.findByRole('img', { name: 'Rohan Sharma profile' });
+  expect(photoImg).toBeInTheDocument();
+  expect(photoImg).toHaveAttribute('src', 'blob:mock-photo-url');
 });
