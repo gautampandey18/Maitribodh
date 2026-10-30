@@ -49,7 +49,7 @@ it('loads live summary metrics and the inside list', async () => {
   expect(await screen.findByText('Total Users')).toBeInTheDocument();
   expect(screen.getByText('Active Members')).toBeInTheDocument();
   expect(screen.getByText(/Last sync:.*Live monitoring/)).toBeInTheDocument();
-  expect(screen.getByText('(total 1 inside)')).toBeInTheDocument();
+  expect(screen.getByText('1 inside')).toBeInTheDocument();
   expect(screen.getByText('Asha Patel')).toBeInTheDocument();
   expect(screen.getByText('Main Gate')).toBeInTheDocument();
   expect(screen.getAllByText('Assembly Hall')).toHaveLength(2);
@@ -106,10 +106,68 @@ it('hides the occupancy table and pagination when there are no open check-ins', 
     </Provider>,
   );
 
-  expect(await screen.findByText('(total 0 inside)')).toBeInTheDocument();
+  expect(await screen.findByText('0 inside')).toBeInTheDocument();
   const occupancySection = screen.getByText('Current Occupancy').closest('.dashboard-inside');
   expect(within(occupancySection).queryByRole('table')).not.toBeInTheDocument();
   expect(within(occupancySection).queryByText(/rows per page/i)).not.toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: 'Occupancy Breakdown' })).not.toBeInTheDocument();
+  expect(screen.queryByText('Occupancy by Location')).not.toBeInTheDocument();
+  expect(screen.queryByText('Occupancy by Category')).not.toBeInTheDocument();
+}, 30_000);
+
+it('hides individual occupancy breakdown when data is <= 0 or empty', async () => {
+  vi.spyOn(api, 'get').mockImplementation((path) => Promise.resolve(
+    path === '/dashboard'
+      ? {
+        data: {
+          active_persons: 1,
+          registrations_today: 0,
+          checkins_today: 1,
+          checkouts_today: 0,
+          pending_approvals: 0,
+          blacklist_attempts_today: 0,
+          open_visits: 1,
+          checkin_trend: [],
+          category_mix: [],
+          recent_activity: [],
+          security_alerts: { total_today: 0, latest_at: null },
+        }
+      }
+      : path === '/dashboard/recent-activity'
+        ? { data: { items: [], total: 0, page: 1, pageSize: 5 } }
+        : {
+          data: {
+            items: [{
+              visit_id: 10,
+              person_code: 'MB-000010',
+              name: 'Single Location Person',
+              category: 'Staff',
+              gate: 'Main Gate',
+              location: 'Dining Hall',
+              checkin_at: '2026-10-09T08:30:00Z',
+              accompanying_count: 0,
+              checked_in_by: 'Guard',
+            }],
+            total: 1,
+            page: 1,
+            pageSize: 5,
+            byLocation: [{ name: 'Dining Hall', count: 1 }],
+            byCategory: [{ name: 'Staff', count: 0 }],
+          },
+        },
+  ));
+
+  render(
+    <Provider store={store}>
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>
+    </Provider>,
+  );
+
+  expect(await screen.findByText('Occupancy Breakdown')).toBeInTheDocument();
+  expect(screen.getByText('Occupancy by Location')).toBeInTheDocument();
+  expect(screen.queryByText('Occupancy by Category')).not.toBeInTheDocument();
 }, 30_000);
 
 it('allows security guards to view the dashboard without management actions', async () => {
@@ -227,7 +285,6 @@ it('displays combined total inside and accompanying count when additional people
     </Provider>,
   );
 
-  expect(await screen.findByText('(total 3 inside)')).toBeInTheDocument();
-  expect(screen.getByText('(total 2 accompany inside)')).toBeInTheDocument();
-  expect(screen.getByText('and')).toBeInTheDocument();
+  expect(await screen.findByText('Total 3 inside')).toBeInTheDocument();
+  expect(screen.getByText('(1 checked in + 2 accompanying)')).toBeInTheDocument();
 }, 30_000);

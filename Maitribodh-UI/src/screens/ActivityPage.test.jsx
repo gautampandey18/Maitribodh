@@ -103,3 +103,65 @@ it('sends free-text search changes to the audit API', async () => {
   expect(screen.getByRole('textbox', { name: 'Search entry or mobile number' })).toHaveValue('');
   expect(await screen.findByText('No audit records match the selected filters.')).toBeInTheDocument();
 });
+
+it('supports multi-select, select-all checkbox, and deleting audit logs', async () => {
+  const sampleItems = [
+    { audit_id: 101, occurred_at: '2026-10-10T10:00:00.000Z', actor: 'admin1', activity: 'CREATED', module: 'PERSON', entity: 'Person MB-000021', person_mobile: '9876543211', old_value: null, new_value: null },
+    { audit_id: 102, occurred_at: '2026-10-10T10:05:00.000Z', actor: 'admin2', activity: 'UPDATED', module: 'ACCESS', entity: 'Person MB-000022', person_mobile: '9876543212', old_value: null, new_value: null },
+  ];
+
+  vi.spyOn(api, 'get').mockResolvedValue({
+    data: {
+      items: sampleItems,
+      total: 2,
+      users: [],
+      actions: [],
+    },
+  });
+
+  const deleteApi = vi.spyOn(api, 'delete').mockResolvedValue({ data: { deletedCount: 2 } });
+  const user = userEvent.setup();
+
+  render(<ActivityPage />);
+
+  // Verify checkboxes rendered
+  const selectAll = await screen.findByRole('checkbox', { name: 'Select all audit logs' });
+  const rowCheck1 = screen.getByRole('checkbox', { name: 'Select audit record 101' });
+  const rowCheck2 = screen.getByRole('checkbox', { name: 'Select audit record 102' });
+
+  expect(selectAll).not.toBeChecked();
+  expect(rowCheck1).not.toBeChecked();
+  expect(rowCheck2).not.toBeChecked();
+  expect(screen.queryByRole('button', { name: /Delete selected/i })).not.toBeInTheDocument();
+
+  // Select row 101 specifically
+  await user.click(rowCheck1);
+  expect(rowCheck1).toBeChecked();
+  expect(rowCheck2).not.toBeChecked();
+  expect(screen.getByText('(1 selected)')).toBeInTheDocument();
+  // Ensure clicking the checkbox did NOT open the audit detail drawer
+  expect(screen.queryByText('Audit Detail')).not.toBeInTheDocument();
+
+  // Click Select All
+  await user.click(selectAll);
+  expect(selectAll).toBeChecked();
+  expect(rowCheck1).toBeChecked();
+  expect(rowCheck2).toBeChecked();
+  expect(screen.getByText('(2 selected)')).toBeInTheDocument();
+
+  // Click Delete button
+  const deleteBtn = screen.getByRole('button', { name: 'Delete selected (2)' });
+  await user.click(deleteBtn);
+
+  // Dialog opens
+  const dialog = screen.getByRole('dialog', { name: 'Delete Audit Records' });
+  expect(dialog).toBeInTheDocument();
+  expect(within(dialog).getByText(/Are you sure you want to permanently delete 2 selected audit records\?/i)).toBeInTheDocument();
+
+  // Confirm delete
+  await user.click(within(dialog).getByRole('button', { name: 'Delete' }));
+
+  await waitFor(() => expect(deleteApi).toHaveBeenCalledWith('/audit', { data: { auditIds: [101, 102] } }));
+  expect(await screen.findByText('Successfully deleted 2 audit records.')).toBeInTheDocument();
+  expect(selectAll).not.toBeChecked();
+});

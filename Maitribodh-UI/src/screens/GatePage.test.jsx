@@ -28,14 +28,16 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 const options = { categories: [], lookups: [], locations: [{ location_id: 1, location_type: 'GATE', name: 'Main Gate' }, { location_id: 2, location_type: 'AREA', name: 'Goushala' }] };
 it('searches configured gates and areas from their selectors', async () => {
-  vi.spyOn(api, 'get').mockResolvedValue({ data: {
-    ...options,
-    locations: [
-      ...options.locations,
-      { location_id: 3, location_type: 'GATE', name: 'North Gate' },
-      { location_id: 4, location_type: 'AREA', name: 'Workshop Area' },
-    ],
-  } });
+  vi.spyOn(api, 'get').mockResolvedValue({
+    data: {
+      ...options,
+      locations: [
+        ...options.locations,
+        { location_id: 3, location_type: 'GATE', name: 'North Gate' },
+        { location_id: 4, location_type: 'AREA', name: 'Workshop Area' },
+      ],
+    }
+  });
   const user = userEvent.setup();
   render(<MemoryRouter><GatePage /></MemoryRouter>);
 
@@ -60,7 +62,7 @@ it('requires lookup and photo confirmation before check-in', async () => {
   render(<MemoryRouter><GatePage /></MemoryRouter>);
   expect(screen.getByRole('button', { name: 'Check-In' })).toBeDisabled();
   expect(await screen.findByRole('combobox', { name: 'Area' })).toHaveValue('Goushala');
-  await user.type(screen.getByRole('textbox', { name: 'Mobile number, name or Person ID' }), 'MB-000008');
+  await user.type(screen.getByRole('textbox', { name: 'Mobile number' }), '9876543210');
   await user.click(screen.getByRole('button', { name: 'Find Person' }));
   expect(await screen.findByText('PROFILE FOUND')).toBeInTheDocument();
   const personCard = screen.getByRole('region', { name: 'Selected person details' });
@@ -72,9 +74,54 @@ it('requires lookup and photo confirmation before check-in', async () => {
   expect(personCard.querySelector('.idc-main')).toBeInTheDocument();
   expect(personCard.querySelector('.idc-details')).toHaveTextContent('Gate');
   expect(personCard.querySelector('.idc-back')).not.toBeInTheDocument();
-  expect(post).toHaveBeenCalledWith('/gate/lookups', { query: 'MB-000008', locationId: 2 });
+  expect(post).toHaveBeenCalledWith('/gate/lookups', { mobile: '9876543210', locationId: 2 });
   expect(screen.getByRole('button', { name: 'Check-In' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Check-Out' })).toBeDisabled();
+}, 30_000);
+
+it('preserves selected person and id card section when gate changes', async () => {
+  vi.spyOn(api, 'get').mockResolvedValue({
+    data: {
+      ...options,
+      locations: [
+        { location_id: 1, location_type: 'GATE', name: 'Main Gate' },
+        { location_id: 3, location_type: 'GATE', name: 'North Gate' },
+        { location_id: 2, location_type: 'AREA', name: 'Goushala' },
+      ],
+    },
+  });
+  vi.spyOn(api, 'post').mockResolvedValue({
+    data: {
+      items: [{
+        personId: 8,
+        personCode: 'MB-000008',
+        name: 'Asha Patel',
+        category: 'Visitor',
+        outcome: 'ELIGIBLE',
+        status: 'ACTIVE',
+        openVisitId: null,
+      }],
+    },
+  });
+  const user = userEvent.setup();
+  render(<MemoryRouter><GatePage /></MemoryRouter>);
+
+  await screen.findByRole('combobox', { name: 'Gate' });
+  await user.type(screen.getByRole('textbox', { name: 'Mobile number' }), '9876543210');
+  await user.click(screen.getByRole('button', { name: 'Find Person' }));
+
+  const personCard = await screen.findByRole('region', { name: 'Selected person details' });
+  expect(personCard).toBeInTheDocument();
+  expect(personCard.querySelector('.idc-details')).toHaveTextContent('Main Gate');
+
+  const gate = screen.getByRole('combobox', { name: 'Gate' });
+  await user.click(gate);
+  await user.clear(gate);
+  await user.type(gate, 'North');
+  await user.click(await screen.findByRole('option', { name: 'North Gate' }));
+
+  expect(screen.getByRole('region', { name: 'Selected person details' })).toBeInTheDocument();
+  expect(personCard.querySelector('.idc-details')).toHaveTextContent('North Gate');
 }, 30_000);
 it('auto-selects an assigned area and warns when another restricted area is selected', async () => {
   const restrictedOptions = {
@@ -92,7 +139,7 @@ it('auto-selects an assigned area and warns when another restricted area is sele
   render(<MemoryRouter initialEntries={['/gate?gate=1&area=3']}><GatePage /></MemoryRouter>);
 
   expect(await screen.findByRole('combobox', { name: 'Area' })).toHaveValue('Other Hall');
-  await user.type(screen.getByRole('textbox', { name: 'Mobile number, name or Person ID' }), 'MB-000012');
+  await user.type(screen.getByRole('textbox', { name: 'Mobile number' }), '9876543212');
   await user.click(screen.getByRole('button', { name: 'Find Person' }));
   expect(await screen.findByText('PROFILE FOUND')).toBeInTheDocument();
   expect(screen.getByRole('combobox', { name: 'Area' })).toHaveValue('Assigned Hall');
@@ -113,7 +160,7 @@ it('blacklisted persons cannot check in but can leave an open visit', async () =
   const user = userEvent.setup();
   render(<MemoryRouter><GatePage /></MemoryRouter>);
   expect(await screen.findByRole('combobox', { name: 'Area' })).toHaveValue('Goushala');
-  await user.type(screen.getByRole('textbox', { name: 'Mobile number, name or Person ID' }), 'Asha Patel');
+  await user.type(screen.getByRole('textbox', { name: 'Mobile number' }), '9876543210');
   await user.click(screen.getByRole('button', { name: 'Find Person' }));
   expect(await screen.findByText('BLACKLISTED - ENTRY NOT ALLOWED')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Check-In' })).toBeDisabled();
@@ -178,7 +225,7 @@ it('still looks up a decoded QR if camera cleanup fails', async () => {
   Object.defineProperty(window, 'isSecureContext', { configurable: true, value: true });
   Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: vi.fn() } });
   scannerMocks.stop.mockRejectedValue(new Error('Camera stop failed'));
-  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => { });
   vi.spyOn(api, 'get').mockResolvedValue({ data: options });
   const post = vi.spyOn(api, 'post').mockResolvedValue({ data: { items: [] } });
   const user = userEvent.setup();
@@ -213,7 +260,7 @@ it('automatically displays the detected person and photo before camera shutdown 
   expect(screen.getByText('MB-000008')).toBeInTheDocument();
   expect(screen.getByText('******3210')).toBeInTheDocument();
   expect(screen.getByText('Visitor')).toBeInTheDocument();
-  expect(screen.getByRole('textbox', { name: 'Mobile number, name or Person ID' })).toHaveValue('');
+  expect(screen.getByRole('textbox', { name: 'Mobile number' })).toHaveValue('');
   expect(post).toHaveBeenCalledExactlyOnceWith('/gate/lookups', { qrPayload: 'signed-qr-payload', locationId: 2 });
   await waitFor(() => expect(screen.getByRole('img', { name: 'Asha Patel profile' })).toHaveAttribute('src', 'blob:person-photo'));
   expect(screen.getByRole('button', { name: 'Check-In' })).toBeDisabled();
@@ -259,7 +306,7 @@ it('routes signed QR text from a USB reader to QR verification instead of name s
   const user = userEvent.setup();
   render(<MemoryRouter><GatePage /></MemoryRouter>);
   await waitFor(() => expect(screen.getByRole('combobox', { name: 'Area' })).toHaveValue('Goushala'));
-  await user.type(screen.getByRole('textbox', { name: 'Mobile number, name or Person ID' }), 'AMS1.MB-000008.1.signature{Enter}');
+  await user.type(screen.getByRole('textbox', { name: 'Mobile number' }), 'AMS1.MB-000008.1.signature{Enter}');
   await waitFor(() => expect(post).toHaveBeenCalledWith('/gate/lookups', { qrPayload: 'AMS1.MB-000008.1.signature', locationId: 2 }));
 });
 
@@ -327,7 +374,7 @@ it('captures and saves a missing profile photo before enabling check-in', async 
   const user = userEvent.setup();
   render(<MemoryRouter><GatePage /></MemoryRouter>);
   expect(await screen.findByRole('combobox', { name: 'Area' })).toHaveValue('Goushala');
-  await user.type(screen.getByRole('textbox', { name: 'Mobile number, name or Person ID' }), 'MB-000009');
+  await user.type(screen.getByRole('textbox', { name: 'Mobile number' }), '9876543219');
   await user.click(screen.getByRole('button', { name: 'Find Person' }));
   expect(await screen.findByText('No profile photo. Capture one before check-in.')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Check-In' })).toBeDisabled();
@@ -451,7 +498,7 @@ it('allows entering accompanying visitors and submits accompanyingCount at check
   const user = userEvent.setup();
   render(<MemoryRouter><GatePage /></MemoryRouter>);
   expect(await screen.findByRole('combobox', { name: 'Area' })).toHaveValue('Goushala');
-  await user.type(screen.getByRole('textbox', { name: 'Mobile number, name or Person ID' }), 'MB-000021');
+  await user.type(screen.getByRole('textbox', { name: 'Mobile number' }), '9876543221');
   await user.click(screen.getByRole('button', { name: 'Find Person' }));
 
   expect(await screen.findByText('Rohan Sharma')).toBeInTheDocument();
@@ -476,6 +523,49 @@ it('allows entering accompanying visitors and submits accompanyingCount at check
     accompanyingCount: 3,
   });
   expect(await screen.findByText('Check-In recorded.')).toBeInTheDocument();
+}, 30_000);
+
+it('only allows mobile numbers in the input box and validates before search', async () => {
+  vi.spyOn(api, 'get').mockResolvedValue({ data: options });
+  const post = vi.spyOn(api, 'post').mockResolvedValue({
+    data: {
+      items: [
+        { personId: 101, personCode: 'MB-000101', name: 'Multi One', category: 'Staff', outcome: 'ELIGIBLE', status: 'ACTIVE', openVisitId: null },
+        { personId: 102, personCode: 'MB-000102', name: 'Multi Two', category: 'Visitor', outcome: 'ELIGIBLE', status: 'ACTIVE', openVisitId: null },
+      ],
+    },
+  });
+  const user = userEvent.setup();
+  render(<MemoryRouter><GatePage /></MemoryRouter>);
+  await screen.findByRole('combobox', { name: 'Area' });
+
+  const mobileInput = screen.getByRole('textbox', { name: 'Mobile number' });
+  // Typing letters should be blocked by onChange regex
+  await user.type(mobileInput, 'JohnDoe');
+  expect(mobileInput).toHaveValue('');
+
+  // Typing invalid/incomplete number and submitting
+  await user.type(mobileInput, '12345');
+  await user.click(screen.getByRole('button', { name: 'Find Person' }));
+  expect(await screen.findByText('Please enter a valid 10-digit mobile number.')).toBeInTheDocument();
+  expect(post).not.toHaveBeenCalled();
+
+  // Typing valid 10-digit number
+  await user.clear(mobileInput);
+  await user.type(mobileInput, '9820011223');
+  await user.click(screen.getByRole('button', { name: 'Find Person' }));
+
+  expect(post).toHaveBeenCalledWith('/gate/lookups', { mobile: '9820011223', locationId: 2 });
+  expect(await screen.findByText(/2 matches for/i)).toBeInTheDocument();
+  expect(screen.getByText('Select the correct registration')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Multi One · Staff · MB-000101' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Multi Two · Visitor · MB-000102' })).toBeInTheDocument();
+
+  // Clicking one of the registrations selects them
+  await user.click(screen.getByRole('button', { name: 'Multi One · Staff · MB-000101' }));
+  expect(await screen.findByText('PROFILE FOUND')).toBeInTheDocument();
+  const selectedDetails = screen.getByRole('region', { name: 'Selected person details' });
+  expect(selectedDetails).toHaveTextContent('Multi One');
 }, 30_000);
 
 

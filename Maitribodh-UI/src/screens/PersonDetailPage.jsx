@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
-  Alert, Box, Button, Checkbox, CircularProgress, Dialog, DialogActions,
+  Alert, Avatar, Box, Button, Checkbox, CircularProgress, Dialog, DialogActions,
   DialogContent, DialogTitle, FormControl, InputLabel, MenuItem, Select, TextField, Typography,
 } from '@mui/material';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
@@ -11,7 +11,7 @@ import UploadOutlinedIcon from '@mui/icons-material/UploadOutlined';
 import { api } from '../api.js';
 import { downloadBlob, requestMessage, useResource } from '../utils/resources.js';
 import InternationalPhoneField from '../components/InternationalPhoneField.jsx';
-import PersonIdentityCard from '../components/PersonIdentityCard.jsx';
+import PersonIdentityCard, { QrPreview } from '../components/PersonIdentityCard.jsx';
 import { formatPhoneNumber, splitPhoneNumber, toE164Phone } from '../utils/phone.js';
 
 /* ── Section card wrapper ───────────────────────────────────────────── */
@@ -51,8 +51,9 @@ function usePersonPhoto(personId, photoKey) {
   return src;
 }
 
-function IdentityCard({ person, role, onToggleStatus, displayCard = true }) {
+function IdentityCard({ person, role, onToggleStatus, displayCard = false, photoSrc: propPhotoSrc }) {
   const photoSrc = usePersonPhoto(person.person_id, person.photo_key);
+  const resolvedPhoto = propPhotoSrc ?? photoSrc;
   const st = person.status;
   return (
     <PersonIdentityCard
@@ -61,7 +62,7 @@ function IdentityCard({ person, role, onToggleStatus, displayCard = true }) {
       name={`${person.first_name} ${person.last_name}`}
       category={person.category}
       status={st}
-      photoSrc={photoSrc}
+      photoSrc={resolvedPhoto}
       mobile={formatPhoneNumber(person.mobile)}
       qrVersion={person.qr_version ?? 1}
       displayCard={displayCard}
@@ -81,6 +82,39 @@ function IdentityCard({ person, role, onToggleStatus, displayCard = true }) {
   );
 }
 
+function PersonMediaSection({ person, photoSrc }) {
+  const initials = `${person.first_name?.[0] ?? ''}${person.last_name?.[0] ?? ''}`.toUpperCase();
+
+  return (
+    <Box component="section" className="person-detail-subsection person-media-section" aria-label="Person photo and QR code">
+      <Box className="person-media-row">
+        <Box className="person-media-block">
+          <Typography variant="caption" className="person-media-title">Profile photo</Typography>
+          {photoSrc ? (
+            <Box
+              component="img"
+              src={photoSrc}
+              alt={`${person.first_name} ${person.last_name} profile`}
+              className="person-media-photo"
+            />
+          ) : (
+            <Avatar className="person-media-photo person-media-avatar" aria-hidden="true">
+              {initials}
+            </Avatar>
+          )}
+        </Box>
+        <Box className="person-media-block">
+          <Typography variant="caption" className="person-media-title">Gate QR code</Typography>
+          <Box className="person-media-qr">
+            <QrPreview personId={person.person_id} personCode={person.person_code} showPreview={true} />
+            <Typography className="person-media-scan-label">Scan at gate</Typography>
+          </Box>
+        </Box>
+      </Box>
+    </Box>
+  );
+}
+
 /* ══ Main page ══════════════════════════════════════════════════════════ */
 export default function PersonDetailPage() {
   const { personId } = useParams();
@@ -89,6 +123,7 @@ export default function PersonDetailPage() {
   const autoEditStarted = useRef(false);
   const { data: person, error, reload } = useResource(`/persons/${personId}`);
   const role = useSelector((state) => state.auth.user?.role);
+  const photoSrc = usePersonPhoto(person?.person_id, person?.photo_key);
 
   /* state */
   const [edit, setEdit] = useState(null);
@@ -129,16 +164,20 @@ export default function PersonDetailPage() {
   function beginEdit() {
     setProfilePhoto(null);
     const phone = splitPhoneNumber(person.mobile);
+    const altPhone = splitPhoneNumber(person.alternate_mobile);
+    const emergPhone = splitPhoneNumber(person.emergency_contact_mobile);
     setEdit({
       firstName: person.first_name,
       lastName: person.last_name,
       mobile: phone.number,
       country: phone.country,
-      alternateMobile: person.alternate_mobile ?? '',
+      alternateMobile: altPhone.number,
+      alternateMobileCountry: altPhone.country,
       email: person.email ?? '',
       address: person.address ?? '',
       emergencyName: person.emergency_contact_name ?? '',
-      emergencyMobile: person.emergency_contact_mobile ?? '',
+      emergencyMobile: emergPhone.number,
+      emergencyMobileCountry: emergPhone.country,
       locationIds: person.location_ids ?? [],
       expiresOn: person.expires_on ? String(person.expires_on).slice(0, 10) : '',
     });
@@ -151,9 +190,30 @@ export default function PersonDetailPage() {
     try {
       const mobile = toE164Phone(edit.mobile, person.form_type === 'VISITOR' ? edit.country : 'IN');
       if (!mobile) { setFailure('Enter a valid mobile number for the selected country.'); return; }
+      if (person.form_type !== 'VISITOR' && !mobile.startsWith('+91')) {
+        setFailure('Use an Indian mobile number for this category.');
+        return;
+      }
+      let alternateMobile = '';
+      if (edit.alternateMobile?.trim()) {
+        alternateMobile = toE164Phone(edit.alternateMobile.trim(), edit.alternateMobileCountry || 'IN');
+        if (!alternateMobile) { setFailure('Enter a valid alternate mobile number.'); return; }
+      }
+      let emergencyMobile = '';
+      if (edit.emergencyMobile?.trim()) {
+        emergencyMobile = toE164Phone(edit.emergencyMobile.trim(), edit.emergencyMobileCountry || 'IN');
+        if (!emergencyMobile) { setFailure('Enter a valid emergency contact mobile number.'); return; }
+      }
       const { locationIds, expiresOn, ...profileChanges } = edit;
       delete profileChanges.country;
-      await api.patch(`/persons/${personId}`, { ...profileChanges, mobile });
+      delete profileChanges.alternateMobileCountry;
+      delete profileChanges.emergencyMobileCountry;
+      await api.patch(`/persons/${personId}`, {
+        ...profileChanges,
+        mobile,
+        alternateMobile: alternateMobile || null,
+        emergencyMobile: emergencyMobile || null,
+      });
       profileSaved = true;
       if (profilePhoto) {
         const form = new FormData(); form.append('photo', profilePhoto);
@@ -174,10 +234,27 @@ export default function PersonDetailPage() {
     } finally { setBusy(false); }
   }
 
+  function closeStatusDialog() {
+    if (!busy) {
+      setStatusTarget('');
+      setReason('');
+    }
+  }
+
   async function saveStatus(event) {
-    event.preventDefault(); setBusy(true);
-    try { await api.post(`/persons/${personId}/status`, { status: statusTarget, reason }); setStatusTarget(''); setReason(''); reload(); }
-    catch (e) { setFailure(requestMessage(e)); } finally { setBusy(false); }
+    event.preventDefault();
+    if (!reason.trim()) return;
+    setBusy(true);
+    try {
+      await api.post(`/persons/${personId}/status`, { status: statusTarget, reason: reason.trim() });
+      setStatusTarget('');
+      setReason('');
+      reload();
+    } catch (e) {
+      setFailure(requestMessage(e));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function downloadDocument(doc) {
@@ -248,6 +325,7 @@ export default function PersonDetailPage() {
                 person={person}
                 role={role}
                 displayCard={false}
+                photoSrc={photoSrc}
                 onToggleStatus={() => setStatusTarget(person.status === 'DEACTIVATED' ? 'ACTIVE' : 'DEACTIVATED')}
               />
               {canEdit && !edit && <Button size="small" startIcon={<EditOutlinedIcon />} onClick={beginEdit}>Edit details</Button>}
@@ -262,11 +340,61 @@ export default function PersonDetailPage() {
             {edit ? (
               <Box id="person-details-form" component="form" onSubmit={save} className="form-grid person-overview-grid">
                 <Typography className="person-detail-subheading">Profile details</Typography>
-                {editFields.map(([label, key, value]) =>
-                  key === 'mobile' && person.form_type === 'VISITOR'
-                    ? <InternationalPhoneField key={key} country={edit.country} number={edit.mobile} onCountryChange={changePhoneCountry} onNumberChange={(m) => setEdit({ ...edit, mobile: m })} required />
-                    : <TextField key={key ?? label} label={label} value={key ? edit[key] : value ?? ''} InputProps={{ readOnly: !key }} required={['firstName', 'lastName'].includes(key)} type={key === 'email' ? 'email' : 'text'} onChange={key ? (e) => setEdit({ ...edit, [key]: e.target.value }) : undefined} inputProps={{ maxLength: key?.toLowerCase().includes('mobile') ? 10 : ['firstName', 'lastName', 'emergencyName'].includes(key) ? 100 : key === 'email' ? 150 : 500, ...(key?.toLowerCase().includes('mobile') ? { pattern: '[6-9][0-9]{9}' } : {}) }} />
-                )}
+                {editFields.map(([label, key, value]) => {
+                  if (key === 'mobile') {
+                    return (
+                      <InternationalPhoneField
+                        key={key}
+                        country={edit.country}
+                        number={edit.mobile}
+                        onCountryChange={changePhoneCountry}
+                        onNumberChange={(m) => setEdit({ ...edit, mobile: m })}
+                        required
+                        label="Mobile Number"
+                      />
+                    );
+                  }
+                  if (key === 'alternateMobile') {
+                    return (
+                      <InternationalPhoneField
+                        key={key}
+                        country={edit.alternateMobileCountry || 'IN'}
+                        number={edit.alternateMobile}
+                        onCountryChange={(c) => setEdit({ ...edit, alternateMobileCountry: c })}
+                        onNumberChange={(m) => setEdit({ ...edit, alternateMobile: m })}
+                        required={false}
+                        label="Alternate Mobile"
+                      />
+                    );
+                  }
+                  if (key === 'emergencyMobile') {
+                    return (
+                      <InternationalPhoneField
+                        key={key}
+                        country={edit.emergencyMobileCountry || 'IN'}
+                        number={edit.emergencyMobile}
+                        onCountryChange={(c) => setEdit({ ...edit, emergencyMobileCountry: c })}
+                        onNumberChange={(m) => setEdit({ ...edit, emergencyMobile: m })}
+                        required={Boolean(person.emergency_required)}
+                        label="Emergency Contact Mobile"
+                      />
+                    );
+                  }
+                  return (
+                    <TextField
+                      key={key ?? label}
+                      label={label}
+                      value={key ? edit[key] : value ?? ''}
+                      InputProps={{ readOnly: !key }}
+                      required={['firstName', 'lastName'].includes(key)}
+                      type={key === 'email' ? 'email' : 'text'}
+                      onChange={key ? (e) => setEdit({ ...edit, [key]: e.target.value }) : undefined}
+                      inputProps={{
+                        maxLength: ['firstName', 'lastName', 'emergencyName'].includes(key) ? 100 : key === 'email' ? 150 : 500,
+                      }}
+                    />
+                  );
+                })}
                 <Box>
                   <Typography component="label" htmlFor="profile-photo-edit">Profile photo (optional)</Typography>
                   <input id="profile-photo-edit" type="file" accept="image/jpeg,image/png" capture="environment" onChange={(e) => { const f = e.target.files?.[0] ?? null; if (f && (f.size > 5 * 1024 * 1024 || !['image/jpeg', 'image/png'].includes(f.type))) { setFailure('Choose a JPG or PNG photograph no larger than 5 MB.'); setProfilePhoto(null); e.target.value = ''; return; } setFailure(''); setProfilePhoto(f); }} />
@@ -287,6 +415,7 @@ export default function PersonDetailPage() {
               </Box>
             ) : (
               <>
+                <PersonMediaSection person={person} photoSrc={photoSrc} />
                 <Box component="section" className="person-detail-subsection">
                   <Typography component="h3" className="person-detail-subheading">Profile details</Typography>
                   <Box className="person-readonly-grid">
@@ -371,15 +500,44 @@ export default function PersonDetailPage() {
       )}
 
       {/* Status change dialog */}
-      <Dialog open={Boolean(statusTarget)} onClose={() => !busy && setStatusTarget('')}>
+      <Dialog open={Boolean(statusTarget)} onClose={closeStatusDialog} fullWidth maxWidth="sm">
         <Box component="form" onSubmit={saveStatus}>
-          <DialogTitle>{statusTarget === 'ACTIVE' ? 'Reactivate' : 'Deactivate'} Person</DialogTitle>
+          <DialogTitle>{statusTarget === 'ACTIVE' ? 'Activate person' : 'Deactivate person'}</DialogTitle>
           <DialogContent>
-            <TextField label="Reason" required value={reason} onChange={(e) => setReason(e.target.value)} fullWidth sx={{ mt: 1 }} />
+            <Typography>
+              {person?.first_name} {person?.last_name}{' '}
+              <Typography component="span" color="text.secondary">
+                ({person?.person_code})
+              </Typography>
+            </Typography>
+            <TextField
+              autoFocus
+              label={statusTarget === 'ACTIVE' ? 'Reason for activation' : 'Reason for deactivation'}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              required
+              fullWidth
+              multiline
+              minRows={3}
+              inputProps={{ maxLength: 300 }}
+              helperText={reason.trim() ? `${reason.trim().length}/300 characters` : 'Enter a reason.'}
+              sx={{ mt: 2 }}
+            />
           </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setStatusTarget('')}>Cancel</Button>
-            <Button type="submit" disabled={busy}>Confirm</Button>
+          <DialogActions className="dialog-actions">
+            <Button onClick={closeStatusDialog} disabled={busy}>Cancel</Button>
+            <Button
+              type="submit"
+              variant="contained"
+              color={statusTarget === 'ACTIVE' ? 'primary' : 'error'}
+              disabled={busy || !reason.trim()}
+            >
+              {busy ? (
+                <CircularProgress size={18} />
+              ) : (
+                statusTarget === 'ACTIVE' ? 'Confirm activation' : 'Confirm deactivation'
+              )}
+            </Button>
           </DialogActions>
         </Box>
       </Dialog>

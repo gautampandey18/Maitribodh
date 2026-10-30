@@ -7,14 +7,18 @@ const mobile = z.union([
   z.string().regex(/^[6-9]\d{9}$/).transform((value) => `+91${value}`),
   z.string().regex(/^\+[1-9]\d{7,14}$/),
 ]).refine((value) => isValidPhoneNumber(value), 'Enter a valid mobile number with country code');
-const indianMobile = z.string().regex(/^[6-9]\d{9}$/);
+const optionalPhone = z.union([
+  z.literal(''),
+  z.string().regex(/^[6-9]\d{9}$/).transform((value) => `+91${value}`),
+  z.string().regex(/^\+[1-9]\d{7,14}$/),
+]).refine((value) => !value || isValidPhoneNumber(value), 'Enter a valid mobile number with country code');
 const optionalText = (max) => z.string().trim().max(max).optional().default('');
 export const registrationInputSchema = z.object({
   categoryId: z.coerce.number().int().positive(),
   firstName: z.string().trim().min(1).max(100).regex(/^[\p{L}\p{M} -]+$/u),
   lastName: z.string().trim().min(1).max(100).regex(/^[\p{L}\p{M} -]+$/u),
   mobile,
-  alternateMobile: z.union([indianMobile, z.literal('')]).optional().default(''),
+  alternateMobile: optionalPhone.optional().default(''),
   gender: z.enum(['MALE', 'FEMALE', 'OTHER']),
   residentStatus: z.enum(['RESIDENT', 'NON_RESIDENT']).default('RESIDENT'),
   passportNumber: optionalText(9),
@@ -22,7 +26,7 @@ export const registrationInputSchema = z.object({
   idProofNumber: optionalText(50),
   dateOfBirth: z.union([z.iso.date(), z.literal('')]).optional().default(''),
   address: optionalText(500), email: z.union([z.email().max(150), z.literal('')]).optional().default(''),
-  emergencyName: optionalText(100), emergencyMobile: z.union([indianMobile, z.literal('')]).optional().default(''),
+  emergencyName: optionalText(100), emergencyMobile: optionalPhone.optional().default(''),
   locationIds: z.array(z.coerce.number().int().positive()).max(100).default([]),
   accompanyingCount: z.coerce.number().int().min(0).max(32767).default(0),
   remarks: optionalText(500), categoryDetails: z.record(z.string(), z.union([z.string().max(500), z.number()])).default({}),
@@ -62,8 +66,11 @@ export function validateCategoryDetails(input, category, role, today = new Date(
     if (details.driver_name && details.driver_name.trim().length > 100) {
       throw new ApiError(400, 'VALIDATION_ERROR', 'Driver name must be 100 characters or fewer');
     }
-    if (details.driver_mobile && !/^[6-9]\d{9}$/.test(details.driver_mobile)) {
-      throw new ApiError(400, 'VALIDATION_ERROR', 'Driver contact number must be a valid 10-digit mobile number');
+    if (details.driver_mobile) {
+      const normalizedDriver = /^[6-9]\d{9}$/.test(details.driver_mobile) ? `+91${details.driver_mobile}` : details.driver_mobile;
+      if (!isValidPhoneNumber(normalizedDriver)) {
+        throw new ApiError(400, 'VALIDATION_ERROR', 'Driver contact number must be a valid 10-digit mobile number or international phone number');
+      }
     }
   }
   if (details.start_date && details.end_date && details.end_date < details.start_date) throw new ApiError(400, 'VALIDATION_ERROR', 'Contract End Date cannot be before Contract Start Date.');

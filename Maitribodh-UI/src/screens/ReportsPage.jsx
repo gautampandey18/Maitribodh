@@ -20,6 +20,7 @@ import {
 } from '@mui/material';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import { api } from '../api.js';
+import { REPORT_TABS_CONFIG, ReportChartsSection } from './ReportsCharts.jsx';
 
 const reports = [
   { key: 'visits', title: 'Visit History', path: '/reports/visit-history', dateRange: true, category: true },
@@ -52,9 +53,11 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const reportRequestId = useRef(0);
-  const report = reports.find((item) => item.key === selectedKey);
+  const report = reports.find((item) => item.key === selectedKey) || reports[0];
+  const tabConfig = REPORT_TABS_CONFIG[selectedKey] || REPORT_TABS_CONFIG.visits;
 
   function selectReport(nextReport) {
+    if (!nextReport) return;
     reportRequestId.current += 1;
     setLoading(false);
     setSelectedKey(nextReport.key);
@@ -145,14 +148,26 @@ export default function ReportsPage() {
 
   return (
     <Box className="reports-page">
-      <Box className="page-heading">
+      <Box className="reports-header-row">
         <Box>
           <Typography component="h1" variant="h1">Reports &amp; Analytics</Typography>
-          <Typography color="text.secondary" sx={{ mt: 0.75 }}>Review operational records with optional filters.</Typography>
+          <Typography className="reports-header-subtitle">
+            {tabConfig.subtitle}
+          </Typography>
         </Box>
+        <Button
+          className="reports-export-btn"
+          variant="outlined"
+          startIcon={<FileDownloadOutlinedIcon />}
+          onClick={exportReport}
+          disabled={loading}
+        >
+          Export Excel
+        </Button>
       </Box>
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+
       <Box className="reports-layout">
         <Tabs
           className="reports-tabs"
@@ -164,11 +179,16 @@ export default function ReportsPage() {
         >
           {reports.map((item) => <Tab key={item.key} value={item.key} label={item.title} />)}
         </Tabs>
+
+        {/* Tier 1 & Tier 2: KPIs and Visual Graphical Charts */}
+        <ReportChartsSection selectedKey={selectedKey} />
+
+        {/* Tier 3: Records Data Table & Filters */}
         <Paper className="table-panel report-panel" elevation={0}>
           <Box className="table-panel-heading">
-            <Typography variant="h3">{report.title}</Typography>
+            <Typography variant="h3">{tabConfig.tableTitle || report.title}</Typography>
             <Typography variant="body2" color="text.secondary">
-              {hasRun ? `${total} records` : 'Filters'}
+              {hasRun ? `${total} records` : (tabConfig.tableCounter || 'Filters')}
             </Typography>
           </Box>
           <Box component="form" className="report-filters" onSubmit={runReport}>
@@ -222,9 +242,6 @@ export default function ReportsPage() {
                 {loading && <CircularProgress size={18} sx={{ mr: 1 }} />}
                 Run report
               </Button>
-              <Button type="button" startIcon={<FileDownloadOutlinedIcon />} onClick={exportReport} disabled={loading || !hasRun}>
-                Export Excel
-              </Button>
             </Box>
           </Box>
           {loading ? (
@@ -232,13 +249,17 @@ export default function ReportsPage() {
           ) : hasRun && items.length ? (
             <TableContainer>
               <Table size="medium" aria-label={`${report.title} results`}>
-                <TableHead>
+                <TableHead className="report-table-head">
                   <TableRow>{columns.map((column) => <TableCell key={column}>{columnLabel(column)}</TableCell>)}</TableRow>
                 </TableHead>
                 <TableBody>
                   {items.map((item, index) => (
                     <TableRow key={`${item.person_code ?? item.day ?? 'row'}-${index}`} hover>
-                      {columns.map((column) => <TableCell key={column}>{formatCell(item[column])}</TableCell>)}
+                      {columns.map((column) => (
+                        <TableCell key={column}>
+                          {renderCellContent(column, item[column])}
+                        </TableCell>
+                      ))}
                     </TableRow>
                   ))}
                 </TableBody>
@@ -263,7 +284,37 @@ export default function ReportsPage() {
 }
 
 function columnLabel(value) {
-  return value.replaceAll('_', ' ').replace(/\b\w/g, (character) => character.toUpperCase());
+  const map = {
+    person_code: 'Code',
+    first_name: 'First Name',
+    last_name: 'Last Name',
+    name: 'Person',
+    mobile: 'Mobile',
+    category: 'Category',
+    checkin_at: 'Check-In',
+    checkout_at: 'Check-Out',
+    checkin_location: 'Checkin Location',
+    checkout_location: 'Checkout Location',
+    duration: 'Duration',
+    accompanying_count: 'Guests',
+    status: 'Status',
+    route: 'Route',
+    job_role: 'Job Role',
+    action: 'Action',
+    reason: 'Reason',
+    by_user: 'Approver',
+    acted_at: 'Requested',
+  };
+  return map[value] || value.replaceAll('_', ' ').replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function renderCellContent(column, value) {
+  if (value === null || value === undefined || value === '') return '—';
+  if (column === 'status') {
+    const slug = String(value).toLowerCase().replace(/[^a-z0-9]/g, '-');
+    return <span className={`report-status-pill status-${slug}`}>{formatCell(value)}</span>;
+  }
+  return formatCell(value);
 }
 
 function formatCell(value) {

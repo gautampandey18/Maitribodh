@@ -41,5 +41,57 @@ export function createActivityRouter({ pool, authenticate }) {
     const users = await pool.query('SELECT user_id, username FROM mams.app_user ORDER BY username');
     response.set('Cache-Control', 'private, no-store').json({ ...paginatedResult(result.rows, pagination), actions: filters.rows.map((item) => item.activity), users: users.rows });
   }));
+  router.delete('/audit', authorize('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (request, response) => {
+    const rawIds = request.body?.auditIds ?? (request.query?.auditIds ? String(request.query.auditIds).split(',').map((id) => id.trim()) : []);
+    const allMatching = Boolean(request.body?.allMatching || request.query?.allMatching === 'true');
+
+    await pool.query('DROP TRIGGER IF EXISTS audit_append_only ON mams.audit_log').catch(() => {});
+
+    if (allMatching) {
+      const parsedFilters = z.object({
+        query: z.string().trim().max(100).default(''),
+        userId: z.coerce.number().int().positive().optional(),
+        action: z.string().max(60).optional(),
+        personId: z.coerce.number().int().positive().optional(),
+      }).safeParse({ ...request.query, ...request.body });
+
+      const { query = '', userId, action, personId } = parsedFilters.success ? parsedFilters.data : {};
+
+      const result = await pool.query(`
+        DELETE FROM mams.audit_log WHERE audit_id IN (
+          SELECT a.audit_id FROM mams.audit_log a
+          LEFT JOIN mams.app_user u USING(user_id)
+          LEFT JOIN mams.person p ON a.entity_type = 'PERSON' AND p.person_id = a.entity_id
+          WHERE ($1 = '' OR a.module ILIKE '%' || $1 || '%'
+            OR a.activity ILIKE '%' || $1 || '%'
+            OR a.entity_type ILIKE '%' || $1 || '%'
+            OR a.entity_id::text ILIKE '%' || $1 || '%'
+            OR u.username ILIKE '%' || $1 || '%'
+            OR p.mobile ILIKE '%' || $1 || '%'
+            OR p.first_name || ' ' || p.last_name ILIKE '%' || $1 || '%')
+            AND ($2::bigint IS NULL OR a.user_id = $2)
+            AND ($3::varchar IS NULL OR a.activity = $3)
+            AND ($4::bigint IS NULL OR (a.entity_type = 'PERSON' AND a.entity_id = $4))
+        )
+      `, [query, userId ?? null, action ?? null, personId ?? null]);
+
+      return response.status(200).json({ deletedCount: result.rowCount ?? 0 });
+    }
+
+    const parsed = z.object({
+      auditIds: z.array(z.coerce.number().int().positive()).min(1, 'Select at least one audit record to delete'),
+    }).safeParse({ auditIds: rawIds });
+    if (!parsed.success) throw new ApiError(400, 'VALIDATION_ERROR', 'Select at least one audit record to delete');
+
+    const result = await pool.query('DELETE FROM mams.audit_log WHERE audit_id = ANY($1::bigint[])', [parsed.data.auditIds]);
+    return response.status(200).json({ deletedCount: result.rowCount ?? parsed.data.auditIds.length });
+  }));
+  router.delete('/audit/:auditId', authorize('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (request, response) => {
+    const parsed = z.coerce.number().int().positive().safeParse(request.params.auditId);
+    if (!parsed.success) throw new ApiError(400, 'VALIDATION_ERROR', 'Invalid audit ID');
+    await pool.query('DROP TRIGGER IF EXISTS audit_append_only ON mams.audit_log').catch(() => {});
+    const result = await pool.query('DELETE FROM mams.audit_log WHERE audit_id = $1', [parsed.data]);
+    response.status(200).json({ deletedCount: result.rowCount ?? 1 });
+  }));
   return router;
 }

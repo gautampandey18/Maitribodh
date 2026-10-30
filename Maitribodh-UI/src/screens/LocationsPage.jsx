@@ -169,15 +169,6 @@ export default function LocationsPage() {
 
   return (
     <Box className="locations-page">
-      <Box className="page-heading">
-        <Box>
-          <Typography component="h1" variant="h1">Locations</Typography>
-        </Box>
-        <Button variant="contained" color="secondary" startIcon={<AddIcon />} onClick={openCreate}>
-          Add location
-        </Button>
-      </Box>
-
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       <Paper className="table-panel" elevation={0}>
         <Box className="table-panel-heading">
@@ -191,6 +182,16 @@ export default function LocationsPage() {
           </TextField>
           <Button type="submit" variant="contained" color="secondary" startIcon={<SearchOutlinedIcon />} disabled={loading}>Apply</Button>
           <Button type="button" onClick={clearFilters} disabled={loading || (!activeFilters.query && !activeFilters.locationType && !query && !locationTypeFilter)}>Clear</Button>
+          <Button
+            className="master-data-add-action"
+            type="button"
+            variant="contained"
+            color="primary"
+            startIcon={<AddIcon />}
+            onClick={openCreate}
+          >
+            Add location
+          </Button>
         </Box>
         {loading ? (
           <Box className="loading-state"><CircularProgress size={28} /></Box>

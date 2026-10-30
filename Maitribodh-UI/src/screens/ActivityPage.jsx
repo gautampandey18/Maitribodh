@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Badge, Box, Button, Drawer, IconButton, List, ListItem, MenuItem, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow, TextField, Tooltip, Typography } from '@mui/material';
+import { Alert, Badge, Box, Button, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, Drawer, IconButton, List, ListItem, MenuItem, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow, TextField, Tooltip, Typography } from '@mui/material';
 import NotificationsOutlinedIcon from '@mui/icons-material/NotificationsOutlined';
 import CloseOutlinedIcon from '@mui/icons-material/CloseOutlined';
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
+import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import { api } from '../api.js';
 import { csvBlob, downloadBlob, requestMessage, useResource } from '../utils/resources.js';
 
@@ -149,15 +150,100 @@ export default function ActivityPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(5);
   const [selected, setSelected] = useState(null);
+  const [selectedAuditIds, setSelectedAuditIds] = useState([]);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const [actionSuccess, setActionSuccess] = useState('');
+
   const params = new URLSearchParams({ page, pageSize, query, ...(userId ? { userId } : {}), ...(action ? { action } : {}) });
-  const { data, error } = useResource(`/audit?${params}`);
+  const { data, error, reload } = useResource(`/audit?${params}`);
+
+  const pageItems = data?.items ?? [];
+  const pageItemIds = pageItems.map((item) => item.audit_id);
+  const isAllPageSelected = pageItemIds.length > 0 && pageItemIds.every((id) => selectedAuditIds.includes(id));
+  const isSomePageSelected = pageItemIds.some((id) => selectedAuditIds.includes(id)) && !isAllPageSelected;
+
+  useEffect(() => {
+    setSelectedAuditIds([]);
+  }, [query, userId, action, page, pageSize]);
+
+  function toggleSelectAll(event) {
+    event?.stopPropagation();
+    if (isAllPageSelected) {
+      setSelectedAuditIds((prev) => prev.filter((id) => !pageItemIds.includes(id)));
+    } else {
+      setSelectedAuditIds((prev) => Array.from(new Set([...prev, ...pageItemIds])));
+    }
+  }
+
+  function toggleSelectRow(auditId, event) {
+    event?.stopPropagation();
+    setSelectedAuditIds((prev) =>
+      prev.includes(auditId) ? prev.filter((id) => id !== auditId) : [...prev, auditId]
+    );
+  }
+
+  async function handleDeleteSelected() {
+    setDeleteBusy(true);
+    setDeleteError('');
+    try {
+      await api.delete('/audit', { data: { auditIds: selectedAuditIds } });
+      const count = selectedAuditIds.length;
+      setSelectedAuditIds([]);
+      setConfirmDeleteOpen(false);
+      setActionSuccess(`Successfully deleted ${count} audit ${count === 1 ? 'record' : 'records'}.`);
+      reload();
+    } catch (err) {
+      setDeleteError(requestMessage(err, 'Failed to delete audit records.'));
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
+
   return <Box className="audit-page">
-    <Box className="page-heading"><Typography variant="h1" component="h1">Audit &amp; Compliance</Typography><Button startIcon={<DownloadOutlinedIcon />} disabled={!data?.items?.length} onClick={() => downloadBlob(csvBlob(data.items), 'maitribodh-audit-page.csv')}>Export Page CSV</Button></Box>
-    {error && <Alert severity="error">{error}</Alert>}
+    <Box className="page-heading">
+      <Typography variant="h1" component="h1">Audit &amp; Compliance</Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+        {selectedAuditIds.length > 0 && (
+          <Button
+            variant="contained"
+            color="error"
+            startIcon={<DeleteOutlineOutlinedIcon />}
+            onClick={() => { setDeleteError(''); setConfirmDeleteOpen(true); }}
+            disabled={deleteBusy}
+          >
+            Delete selected ({selectedAuditIds.length})
+          </Button>
+        )}
+        <Button startIcon={<DownloadOutlinedIcon />} disabled={!data?.items?.length} onClick={() => downloadBlob(csvBlob(data.items), 'maitribodh-audit-page.csv')}>Export Page CSV</Button>
+      </Box>
+    </Box>
+    {(error || deleteError) && <Alert severity="error" sx={{ mb: 2 }}>{error || deleteError}</Alert>}
+    {actionSuccess && <Alert severity="success" onClose={() => setActionSuccess('')} sx={{ mb: 2 }}>{actionSuccess}</Alert>}
     <Paper component="section" className="table-panel audit-panel" aria-labelledby="audit-records-title" elevation={0}>
       <Box className="table-panel-heading">
-        <Typography id="audit-records-title" component="h2" variant="h3">Audit records</Typography>
-        <Typography variant="body2" color="text.secondary">{data ? `${data.total ?? 0} records` : 'Loading records…'}</Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+          <Typography id="audit-records-title" component="h2" variant="h3">Audit records</Typography>
+          <Typography variant="body2" color="text.secondary">{data ? `${data.total ?? 0} records` : 'Loading records…'}</Typography>
+          {selectedAuditIds.length > 0 && (
+            <Typography variant="body2" sx={{ fontWeight: 600, color: 'primary.main' }}>
+              ({selectedAuditIds.length} selected)
+            </Typography>
+          )}
+        </Box>
+        {selectedAuditIds.length > 0 && (
+          <Button
+            variant="outlined"
+            color="error"
+            size="small"
+            startIcon={<DeleteOutlineOutlinedIcon />}
+            onClick={() => { setDeleteError(''); setConfirmDeleteOpen(true); }}
+            disabled={deleteBusy}
+          >
+            Delete ({selectedAuditIds.length})
+          </Button>
+        )}
       </Box>
       <Box className="filter-toolbar audit-filters" role="group" aria-label="Audit filters">
         <TextField label="Search entry or mobile number" value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} />
@@ -167,26 +253,74 @@ export default function ActivityPage() {
       </Box>
       <TableContainer className="audit-table-container">
         <Table className="audit-table" aria-label="Audit log">
-          <TableHead><TableRow>{['Timestamp', 'User', 'Action', 'Module', 'Entity', 'Mobile', 'Old Value', 'New Value'].map((label) => <TableCell key={label}>{label}</TableCell>)}</TableRow></TableHead>
+          <TableHead>
+            <TableRow>
+              <TableCell padding="checkbox" sx={{ width: 48, textAlign: 'center' }}>
+                <Checkbox
+                  color="primary"
+                  indeterminate={isSomePageSelected}
+                  checked={isAllPageSelected}
+                  onChange={toggleSelectAll}
+                  disabled={!pageItems.length}
+                  inputProps={{ 'aria-label': 'Select all audit logs' }}
+                />
+              </TableCell>
+              {['Timestamp', 'User', 'Action', 'Module', 'Entity', 'Mobile', 'Old Value', 'New Value'].map((label) => <TableCell key={label}>{label}</TableCell>)}
+            </TableRow>
+          </TableHead>
           <TableBody>
-            {data?.items?.map((item) => (
-              <TableRow hover key={item.audit_id} onClick={() => setSelected(item)} tabIndex={0} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelected(item); } }} aria-label={`View audit detail: ${item.activity}, ${item.entity}`}>
-                <TableCell className="audit-timestamp">{new Date(item.occurred_at).toLocaleString()}</TableCell>
-                <TableCell>{item.actor ?? 'System'}</TableCell>
-                <TableCell><Box component="span" className="audit-action-badge">{item.activity}</Box></TableCell>
-                <TableCell><Box component="span" className="audit-module-badge">{item.module}</Box></TableCell>
-                <TableCell>{item.entity}</TableCell>
-                <TableCell className="audit-mobile">{item.person_mobile ?? '—'}</TableCell>
-                <TableCell className="audit-before"><AuditValueSummary value={item.old_value} /></TableCell>
-                <TableCell className="audit-after"><AuditValueSummary value={item.new_value} /></TableCell>
-              </TableRow>
-            ))}
-            {!data?.items?.length && <TableRow><TableCell colSpan={8} className="empty-table">{error ? 'Audit records could not be loaded.' : data ? 'No audit records match the selected filters.' : 'Loading audit records…'}</TableCell></TableRow>}
+            {data?.items?.map((item) => {
+              const isChecked = selectedAuditIds.includes(item.audit_id);
+              return (
+                <TableRow
+                  hover
+                  key={item.audit_id}
+                  selected={isChecked}
+                  onClick={() => setSelected(item)}
+                  tabIndex={0}
+                  onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelected(item); } }}
+                  aria-label={`View audit detail: ${item.activity}, ${item.entity}`}
+                >
+                  <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()} sx={{ width: 48, textAlign: 'center' }}>
+                    <Checkbox
+                      color="primary"
+                      checked={isChecked}
+                      onChange={(e) => toggleSelectRow(item.audit_id, e)}
+                      inputProps={{ 'aria-label': `Select audit record ${item.audit_id}` }}
+                    />
+                  </TableCell>
+                  <TableCell className="audit-timestamp">{new Date(item.occurred_at).toLocaleString()}</TableCell>
+                  <TableCell>{item.actor ?? 'System'}</TableCell>
+                  <TableCell><Box component="span" className="audit-action-badge">{item.activity}</Box></TableCell>
+                  <TableCell><Box component="span" className="audit-module-badge">{item.module}</Box></TableCell>
+                  <TableCell>{item.entity}</TableCell>
+                  <TableCell className="audit-mobile">{item.person_mobile ?? '—'}</TableCell>
+                  <TableCell className="audit-before"><AuditValueSummary value={item.old_value} /></TableCell>
+                  <TableCell className="audit-after"><AuditValueSummary value={item.new_value} /></TableCell>
+                </TableRow>
+              );
+            })}
+            {!data?.items?.length && <TableRow><TableCell colSpan={9} className="empty-table">{error ? 'Audit records could not be loaded.' : data ? 'No audit records match the selected filters.' : 'Loading audit records…'}</TableCell></TableRow>}
           </TableBody>
         </Table>
       </TableContainer>
       <TablePagination component="div" count={data?.total ?? 0} page={page - 1} rowsPerPage={pageSize} rowsPerPageOptions={[5, 10, 25, 50, 100]} onPageChange={(_event, nextPage) => setPage(nextPage + 1)} onRowsPerPageChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }} />
     </Paper>
     <Drawer anchor="right" open={Boolean(selected)} onClose={() => setSelected(null)}><Box sx={{ width: 'min(480px, 100vw)', p: 3 }}><IconButton aria-label="Close audit detail" onClick={() => setSelected(null)} sx={{ float: 'right' }}><CloseOutlinedIcon /></IconButton><Typography variant="h2">Audit Detail</Typography><Typography>{selected?.activity} · {selected?.entity}</Typography>{['old_value', 'new_value'].map((key) => <Box key={key} sx={{ mt: 3 }}><Typography variant="h3">{key === 'old_value' ? 'Before' : 'After'}</Typography><Box component="pre" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{JSON.stringify(selected?.[key], null, 2)}</Box></Box>)}<Typography>Actor: {selected?.actor ?? 'System'}</Typography></Box></Drawer>
+    <Dialog open={confirmDeleteOpen} onClose={() => !deleteBusy && setConfirmDeleteOpen(false)} aria-labelledby="confirm-delete-dialog-title">
+      <DialogTitle id="confirm-delete-dialog-title">Delete Audit Records</DialogTitle>
+      <DialogContent>
+        <Typography>
+          Are you sure you want to permanently delete {selectedAuditIds.length} selected audit {selectedAuditIds.length === 1 ? 'record' : 'records'}? This action cannot be undone.
+        </Typography>
+        {deleteError && <Alert severity="error" sx={{ mt: 2 }}>{deleteError}</Alert>}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => setConfirmDeleteOpen(false)} disabled={deleteBusy}>Cancel</Button>
+        <Button color="error" variant="contained" onClick={handleDeleteSelected} disabled={deleteBusy}>
+          {deleteBusy ? 'Deleting…' : 'Delete'}
+        </Button>
+      </DialogActions>
+    </Dialog>
   </Box>;
 }

@@ -50,6 +50,14 @@ export function createRegistrationRouter({ repository, authenticate, encryptionS
   };
   router.use(authenticate);
   router.get('/registration/options', authorize(...registrationRoles), asyncHandler(async (_request, response) => response.json(await repository.options())));
+  router.get('/registration/check-mobile', authorize(...registrationRoles), asyncHandler(async (request, response) => {
+    const mobile = String(request.query.mobile ?? '').trim();
+    const categoryParsed = z.coerce.number().int().positive().safeParse(request.query.categoryId);
+    if (!mobile || !categoryParsed.success) throw new ApiError(400, 'VALIDATION_ERROR', 'Mobile number and category are required');
+    const personId = request.query.personId ? z.coerce.number().int().positive().parse(request.query.personId) : null;
+    const result = await repository.checkMobile({ mobile, categoryId: categoryParsed.data, personId });
+    response.json(result);
+  }));
   router.get('/drafts', authorize(...registrationRoles), asyncHandler(async (request, response) => response.json({ items: await repository.drafts(request.auth.userId) })));
   router.post('/drafts', authorize(...registrationRoles), asyncHandler(async (request, response) => {
     const categoryId = idFrom(request.body.categoryId);

@@ -17,7 +17,7 @@ afterEach(() => {
 });
 
 it('keeps the identity table hidden until search and shows a no-match message', async () => {
-  const get = vi.spyOn(api, 'get').mockResolvedValue({ data: { items: [], total: 0, page: 1, pageSize: 2 } });
+  const get = vi.spyOn(api, 'get').mockResolvedValue({ data: { items: [], total: 0, page: 1, pageSize: 50 } });
   const user = userEvent.setup();
 
   render(<MemoryRouter><QrPage /></MemoryRouter>);
@@ -32,7 +32,7 @@ it('keeps the identity table hidden until search and shows a no-match message', 
   expect(screen.queryByRole('table', { name: 'QR identity' })).not.toBeInTheDocument();
   expect(screen.queryByText(/rows per page/i)).not.toBeInTheDocument();
   expect(get).toHaveBeenCalledWith('/persons', {
-    params: { q: 'MB-999999', status: 'ACTIVE', page: 1, pageSize: 2 },
+    params: { q: 'MB-999999', status: 'ACTIVE', page: 1, pageSize: 50 },
   });
 });
 
@@ -64,7 +64,7 @@ it('shows one identity when the search uniquely matches an active user', async (
   expect(screen.getByRole('button', { name: 'Print' })).toBeInTheDocument();
   expect(screen.queryByText(/rows per page/i)).not.toBeInTheDocument();
   expect(get).toHaveBeenCalledWith('/persons', {
-    params: { q: 'MB-000005', status: 'ACTIVE', page: 1, pageSize: 2 },
+    params: { q: 'MB-000005', status: 'ACTIVE', page: 1, pageSize: 50 },
   });
 });
 
@@ -106,4 +106,46 @@ it('fetches and displays the person photo in the ID card when available', async 
   const photoImg = await screen.findByRole('img', { name: 'Rohan Sharma profile' });
   expect(photoImg).toBeInTheDocument();
   expect(photoImg).toHaveAttribute('src', 'blob:mock-photo-url');
+});
+
+it('shows all users in the table when multiple matches are found and switches the QR preview when clicking a user', async () => {
+  vi.spyOn(api, 'get').mockImplementation((path) => {
+    if (path === '/persons') {
+      return Promise.resolve({
+        data: {
+          items: [
+            { person_id: 5, person_code: 'MB-000005', name: 'Asha Patel', category: 'Staff', mobile: '+919876543210', status: 'ACTIVE', created_at: '2026-07-13T00:00:00.000Z', expires_on: null, qr_version: 1 },
+            { person_id: 6, person_code: 'MB-000006', name: 'Ravi Kumar', category: 'Visitor', mobile: '+919876543210', status: 'ACTIVE', created_at: '2026-07-14T00:00:00.000Z', expires_on: null, qr_version: 1 },
+          ],
+          total: 2,
+        },
+      });
+    }
+    if (path === '/persons/5') {
+      return Promise.resolve({ data: { person_id: 5, person_code: 'MB-000005', name: 'Asha Patel', category: 'Staff', mobile: '+919876543210', status: 'ACTIVE', created_at: '2026-07-13T00:00:00.000Z', expires_on: null, qr_version: 1 } });
+    }
+    if (path === '/persons/6') {
+      return Promise.resolve({ data: { person_id: 6, person_code: 'MB-000006', name: 'Ravi Kumar', category: 'Visitor', mobile: '+919876543210', status: 'ACTIVE', created_at: '2026-07-14T00:00:00.000Z', expires_on: null, qr_version: 1 } });
+    }
+    return Promise.resolve({ data: new Blob(['qr'], { type: 'image/png' }) });
+  });
+  const user = userEvent.setup();
+
+  render(<MemoryRouter><QrPage /></MemoryRouter>);
+
+  await user.type(screen.getByRole('textbox', { name: 'Search person ID, name or mobile' }), '9876543210');
+  await user.click(screen.getByRole('button', { name: 'Search' }));
+
+  expect(await screen.findByRole('table', { name: 'QR identity' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Asha Patel' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Ravi Kumar' })).toBeInTheDocument();
+
+  const preview = screen.getByRole('region', { name: 'QR preview' });
+  expect(within(preview).getByText('Asha Patel')).toBeInTheDocument();
+  expect(within(preview).getByText('MB-000005')).toBeInTheDocument();
+
+  await user.click(screen.getByRole('button', { name: 'Ravi Kumar' }));
+
+  expect(within(screen.getByRole('region', { name: 'QR preview' })).getByText('Ravi Kumar')).toBeInTheDocument();
+  expect(within(screen.getByRole('region', { name: 'QR preview' })).getByText('MB-000006')).toBeInTheDocument();
 });

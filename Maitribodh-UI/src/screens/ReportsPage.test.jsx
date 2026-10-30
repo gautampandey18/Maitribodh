@@ -225,3 +225,32 @@ it('keeps the newest page when pagination requests overlap', async () => {
   expect(screen.getByText('Page 3')).toBeInTheDocument();
   expect(screen.queryByText('Page 2')).not.toBeInTheDocument();
 });
+
+it('renders KPI metric cards and graphical charts for active tabs matching the analytics design', async () => {
+  vi.spyOn(api, 'get').mockResolvedValue({
+    data: { items: [], total: 0, page: 1, pageSize: 5 },
+  });
+  const user = userEvent.setup();
+  render(<MemoryRouter><ReportsPage /></MemoryRouter>);
+
+  // Visit History tab KPIs and charts
+  expect(await screen.findByText('Total visits')).toBeInTheDocument();
+  expect(screen.getByText('Inside right now')).toBeInTheDocument();
+  expect(screen.getByText('Avg. visit duration')).toBeInTheDocument();
+  expect(screen.getByText('Accompanying guests')).toBeInTheDocument();
+  expect(screen.getByText('Daily check-ins by category')).toBeInTheDocument();
+  expect(screen.getByText('Visits by category')).toBeInTheDocument();
+
+  // Switch to Occupancy tab
+  await user.click(screen.getByRole('tab', { name: 'Occupancy' }));
+  expect(await screen.findByText('On campus now')).toBeInTheDocument();
+  expect(screen.getByText('Fullest location')).toBeInTheDocument();
+  expect(screen.getByText('People on campus today')).toBeInTheDocument();
+  expect(screen.getByText('Occupancy by location (% full)')).toBeInTheDocument();
+
+  // Switch to Staff tab
+  await user.click(screen.getByRole('tab', { name: 'Staff' }));
+  expect(await screen.findByText('Active staff')).toBeInTheDocument();
+  expect(screen.getByText('Daily attendance')).toBeInTheDocument();
+  expect(screen.getByText('Staff on duty by location (today)')).toBeInTheDocument();
+}, 30_000);

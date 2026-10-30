@@ -12,6 +12,9 @@ export function createRegistrationRepository(pool) {
       return result;
     } catch (error) {
       await client.query('ROLLBACK').catch(() => {});
+      if (error.code === '23505' && (error.constraint === 'ux_person_mobile_category' || String(error.detail).includes('mobile'))) {
+        throw new ApiError(409, 'DUPLICATE_REGISTRATION', 'This mobile number is already registered under this category.');
+      }
       throw error;
     } finally { client.release(); }
   }
@@ -38,6 +41,32 @@ export function createRegistrationRepository(pool) {
     },
     async category(categoryId) {
       return (await pool.query('SELECT * FROM mams.category WHERE category_id = $1', [categoryId])).rows[0];
+    },
+    async checkMobile({ mobile, categoryId, personId = null }) {
+      const normalized = mobile.startsWith('+') ? mobile : `+91${mobile}`;
+      const existing = (await pool.query(
+        `SELECT person_id, person_code, first_name || ' ' || last_name AS name, status
+         FROM mams.person
+         WHERE category_id = $1
+           AND (mobile = $2 OR mobile = $3)
+           AND ($4::bigint IS NULL OR person_id <> $4)
+           AND status IN ('ACTIVE', 'PENDING', 'DEACTIVATED')
+         LIMIT 1`,
+        [categoryId, normalized, mobile, personId],
+      )).rows[0];
+      if (existing) {
+        return {
+          available: false,
+          message: 'This mobile number is already registered under this category.',
+          existingPerson: {
+            personId: existing.person_id,
+            personCode: existing.person_code,
+            name: existing.name,
+            status: existing.status,
+          },
+        };
+      }
+      return { available: true };
     },
     async get(personId) {
       const person = (await pool.query(`SELECT p.*, c.name AS category, c.form_type,
@@ -67,6 +96,17 @@ export function createRegistrationRepository(pool) {
         const currentCategory = (await client.query('SELECT * FROM mams.category WHERE category_id = $1 FOR SHARE', [input.categoryId])).rows[0];
         if (!currentCategory || currentCategory.status !== 'ACTIVE' || currentCategory.approval_required === null || currentCategory.approval_required !== category.approval_required) throw new ApiError(409, 'CATEGORY_CHANGED', 'Category configuration changed. Reload and review this registration.');
         validateCategoryDetails(input, currentCategory, actor.role);
+        const existingPerson = (await client.query(
+          `SELECT person_id FROM mams.person
+           WHERE category_id = $1
+             AND mobile = $2
+             AND status IN ('ACTIVE', 'PENDING', 'DEACTIVATED')
+           LIMIT 1`,
+          [input.categoryId, input.mobile],
+        )).rows[0];
+        if (existingPerson) {
+          throw new ApiError(409, 'DUPLICATE_REGISTRATION', 'This mobile number is already registered under this category.');
+        }
         if (input.idProofTypeId) {
           const proof = (await client.query("SELECT name FROM mams.lookup_value WHERE lookup_id = $1 AND lookup_type = 'ID_PROOF_TYPE' AND status = 'ACTIVE'", [input.idProofTypeId])).rows[0];
           if (!proof) throw new ApiError(400, 'VALIDATION_ERROR', 'Select an active ID Proof Type');
@@ -120,6 +160,20 @@ export function createRegistrationRepository(pool) {
         if (!current) throw new ApiError(404, 'PERSON_NOT_FOUND', 'Person not found');
         if (current.form_type === 'STAFF' && !['ADMIN', 'SUPER_ADMIN'].includes(actor.role)) throw new ApiError(403, 'FORBIDDEN', 'Only an administrator can edit Staff profiles');
         if (current.form_type !== 'VISITOR' && !changes.mobile.startsWith('+91')) throw new ApiError(400, 'VALIDATION_ERROR', 'Only Visitor profiles can use a non-Indian mobile number');
+        if (changes.mobile && changes.mobile !== current.mobile) {
+          const duplicate = (await client.query(
+            `SELECT person_id FROM mams.person
+             WHERE category_id = $1
+               AND mobile = $2
+               AND person_id <> $3
+               AND status IN ('ACTIVE', 'PENDING', 'DEACTIVATED')
+             LIMIT 1`,
+            [current.category_id, changes.mobile, personId],
+          )).rows[0];
+          if (duplicate) {
+            throw new ApiError(409, 'DUPLICATE_REGISTRATION', 'This mobile number is already registered under this category.');
+          }
+        }
         const updated = (await client.query(`UPDATE mams.person SET first_name = $2, last_name = $3, mobile = $4::varchar(16), alternate_mobile = $5,
           email = $6, address = $7, emergency_contact_name = $8, emergency_contact_mobile = $9,
           qr_version = CASE WHEN mobile IS DISTINCT FROM $11::varchar(16) AND status = 'ACTIVE' THEN qr_version + 1 ELSE qr_version END,
