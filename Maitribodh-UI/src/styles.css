@@ -1,5 +1,5 @@
 .registration-form {
-  max-width: 960px;
+  max-width: 1060px;
   margin: 0 auto;
   background: var(--th-surface);
   border: 1px solid var(--th-card-border);
@@ -293,7 +293,7 @@
 }
 
 .registration-form {
-  max-width: 960px;
+  max-width: 1060px;
   margin: 0 auto;
   background: var(--th-surface);
   border: 1px solid var(--th-card-border);

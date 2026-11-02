@@ -512,12 +512,6 @@ export default function GatePage() {
           )}
         </Box>
 
-        <Box sx={{ mt: 3, mb: 0.75 }}>
-          <Typography component="label" htmlFor="gate-mobile-input" sx={{ fontWeight: 600, fontSize: '0.875rem', color: '#2B1A0F' }}>
-            Mobile number <Box component="span" sx={{ color: '#D32F2F' }}>*</Box>
-          </Typography>
-        </Box>
-
         <Box
           component="form"
           onSubmit={(event) => {
@@ -539,19 +533,34 @@ export default function GatePage() {
             const mobileToLookup = (mobileCountry !== 'IN' && e164) ? e164 : cleaned;
             lookup({ mobile: mobileToLookup });
           }}
-          sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}
+          sx={{ mt: 3, display: 'flex', gap: 1.5, alignItems: 'flex-start' }}
         >
           <Box sx={{ display: 'flex', gap: 1, flex: 1, maxWidth: 520 }}>
             <TextField
               select
               size="small"
-              label="Country code"
               value={mobileCountry}
               onChange={(event) => {
                 setMobileCountry(event.target.value);
                 setMobileError('');
               }}
-              sx={{ width: 130, flexShrink: 0 }}
+              sx={{
+                width: 130,
+                flexShrink: 0,
+                bgcolor: '#FFFFFF',
+                borderRadius: '8px',
+                '& fieldset': {
+                  borderColor: '#C76A23',
+                  borderWidth: '1.5px',
+                },
+                '&:hover fieldset': {
+                  borderColor: '#9C4508',
+                },
+                '&.Mui-focused fieldset': {
+                  borderColor: '#9C4508',
+                  borderWidth: '2px',
+                },
+              }}
               SelectProps={{
                 renderValue: (selected) => {
                   const item = phoneCountries.find((c) => c.country === selected);
@@ -582,7 +591,7 @@ export default function GatePage() {
                   }
                 }}
                 error={Boolean(mobileError)}
-                helperText={mobileError || (mobileCountry === 'IN' ? '10 digits, no spaces or country code' : 'Enter national mobile number')}
+                helperText={mobileError || ''}
                 FormHelperTextProps={{
                   sx: {
                     color: mobileError ? 'error.main' : '#887161',

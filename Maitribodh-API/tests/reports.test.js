@@ -391,3 +391,77 @@ test('staff report route validates and forwards name and job-role filters', asyn
     .query({ jobRole: 'x'.repeat(101) })
     .expect(400);
 });
+
+test('analytics route validates tab and date range, and forwards to reportsService', async () => {
+  let received;
+  const mockAnalytics = {
+    subtitle: 'Last 14 days · times in IST',
+    kpis: [{ label: 'Total visits', value: '10' }],
+    chartLeft: { type: 'stacked-bar', title: 'Daily check-ins', xLabels: ['1'], yMax: 4, yTicks: [0, 1, 2, 3, 4], series: [] },
+    chartRight: { type: 'donut', title: 'Visits by category', totalValue: '10', totalLabel: 'visits', segments: [] },
+  };
+
+  const app = express();
+  app.use('/api/v1/reports', createReportsRouter({
+    authenticate(request_, _response, next) {
+      request_.auth = { userId: 1, role: 'ADMIN' };
+      next();
+    },
+    reportsService: {
+      async analytics(input) {
+        received = input;
+        return mockAnalytics;
+      },
+    },
+  }));
+  app.use(errorHandler);
+
+  const res = await request(app).get('/api/v1/reports/analytics')
+    .query({ tab: 'visits', fromDate: '2026-10-01', toDate: '2026-10-14' })
+    .expect(200);
+
+  assert.deepEqual(received, {
+    tab: 'visits',
+    filters: { fromDate: '2026-10-01', toDate: '2026-10-14' },
+  });
+  assert.equal(res.body.subtitle, mockAnalytics.subtitle);
+
+  // Invalid tab
+  await request(app).get('/api/v1/reports/analytics')
+    .query({ tab: 'invalid_tab' })
+    .expect(400);
+
+  // Invalid date range (fromDate > toDate)
+  await request(app).get('/api/v1/reports/analytics')
+    .query({ tab: 'visits', fromDate: '2026-10-20', toDate: '2026-10-10' })
+    .expect(400);
+});
+
+test('reports repository analytics generates structured config for each tab', async () => {
+  const repository = createReportsRepository({
+    async query(sql) {
+      if (sql.includes('FROM mams.visit') && sql.includes('current_visits')) {
+        return {
+          rows: [{
+            current_visits: 12,
+            prev_visits: 10,
+            inside_now: 2,
+            open_over_24h: 1,
+            avg_duration_min: 35,
+            prev_avg_duration_min: 30,
+            accompanying: 4,
+            prev_accompanying: 2,
+          }],
+        };
+      }
+      return { rows: [] };
+    },
+  });
+
+  const analytics = await repository.analytics({ tab: 'visits', fromDate: '2026-10-01', toDate: '2026-10-14' });
+  assert.equal(typeof analytics.subtitle, 'string');
+  assert.equal(analytics.kpis.length, 4);
+  assert.equal(analytics.chartLeft.type, 'stacked-bar');
+  assert.equal(analytics.chartRight.type, 'donut');
+});
+
