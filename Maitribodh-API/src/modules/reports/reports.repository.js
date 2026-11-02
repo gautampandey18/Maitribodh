@@ -21,15 +21,15 @@ export function createReportsRepository(pool) {
            FROM mams.visit AS v
            JOIN mams.person AS p ON p.person_id = v.person_id
            JOIN mams.category AS c ON c.category_id = p.category_id
-           JOIN mams.location AS gi ON gi.location_id = v.checkin_gate_id
-           JOIN mams.location AS li ON li.location_id = v.checkin_location_id
+           LEFT JOIN mams.location AS gi ON gi.location_id = v.checkin_gate_id
+           LEFT JOIN mams.location AS li ON li.location_id = v.checkin_location_id
            LEFT JOIN mams.location AS go ON go.location_id = v.checkout_gate_id
            LEFT JOIN mams.location AS lo ON lo.location_id = v.checkout_location_id
           WHERE ($1::date IS NULL OR (v.checkin_at AT TIME ZONE 'Asia/Kolkata')::date >= $1::date)
             AND ($2::date IS NULL OR (v.checkin_at AT TIME ZONE 'Asia/Kolkata')::date <= $2::date)
             AND ($3::smallint IS NULL OR p.category_id = $3)
             AND ($4::smallint IS NULL OR v.checkin_location_id = $4)
-          ORDER BY v.checkin_at, v.visit_id${pagination ? ' LIMIT $5 OFFSET $6' : ''}`,
+          ORDER BY v.checkin_at DESC, v.visit_id DESC${pagination ? ' LIMIT $5 OFFSET $6' : ''}`,
         pagination
           ? [fromDate, toDate, categoryId ?? null, locationId ?? null, pagination.pageSize, pagination.offset]
           : [fromDate, toDate, categoryId ?? null, locationId ?? null],
@@ -67,7 +67,7 @@ export function createReportsRepository(pool) {
           WHERE ($1::date IS NULL OR (v.checkin_at AT TIME ZONE 'Asia/Kolkata')::date >= $1::date)
             AND ($2::date IS NULL OR (v.checkin_at AT TIME ZONE 'Asia/Kolkata')::date <= $2::date)
           GROUP BY 1, 2
-          ORDER BY 1, 2${pagination ? ' LIMIT $3 OFFSET $4' : ''}`,
+          ORDER BY 1 DESC, 2 ASC${pagination ? ' LIMIT $3 OFFSET $4' : ''}`,
         pagination ? [fromDate, toDate, pagination.pageSize, pagination.offset] : [fromDate, toDate],
       );
       return result.rows;
@@ -99,10 +99,10 @@ export function createReportsRepository(pool) {
     async approvals({ fromDate, toDate, user = '', pagination }) {
       const result = await pool.query(
         `SELECT p.person_code, p.first_name || ' ' || p.last_name AS name,
-                h.action, h.reason, u.username AS by_user, h.acted_at${pagination ? ', count(*) OVER()::int AS total' : ''}
+                h.action, h.reason, coalesce(u.username, 'Former Approver') AS by_user, h.acted_at${pagination ? ', count(*) OVER()::int AS total' : ''}
            FROM mams.approval_history AS h
            JOIN mams.person AS p ON p.person_id = h.person_id
-           JOIN mams.app_user AS u ON u.user_id = h.acted_by
+           LEFT JOIN mams.app_user AS u ON u.user_id = h.acted_by
           WHERE ($1::date IS NULL OR (h.acted_at AT TIME ZONE 'Asia/Kolkata')::date >= $1::date)
             AND ($2::date IS NULL OR (h.acted_at AT TIME ZONE 'Asia/Kolkata')::date <= $2::date)
             AND ($3 = '' OR u.username ILIKE '%' || $3 || '%')

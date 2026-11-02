@@ -27,6 +27,7 @@ try {
 
     Push-Location (Split-Path -Parent $PSScriptRoot)
     try {
+        & $node db/migrate.js
         & $node src/server.js
     } finally {
         Pop-Location

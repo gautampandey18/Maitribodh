@@ -221,9 +221,9 @@ async function exportRowsForReport(reportKey, request, reportsService) {
 }
 
 function parseDateRange(query) {
-  const fromDate = query.fromDate === undefined ? undefined : dateSchema.safeParse(query.fromDate);
-  const toDate = query.toDate === undefined ? undefined : dateSchema.safeParse(query.toDate);
-  if (fromDate && !fromDate.success || toDate && !toDate.success) {
+  const fromDate = (query.fromDate === undefined || query.fromDate === '') ? undefined : dateSchema.safeParse(query.fromDate);
+  const toDate = (query.toDate === undefined || query.toDate === '') ? undefined : dateSchema.safeParse(query.toDate);
+  if ((fromDate && !fromDate.success) || (toDate && !toDate.success)) {
     throw new ApiError(400, 'VALIDATION_ERROR', 'Provide valid date filters');
   }
   if (fromDate?.success && toDate?.success && fromDate.data > toDate.data) {

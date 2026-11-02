@@ -99,14 +99,14 @@ export function createDashboardRepository(pool) {
                 p.mobile, p.photo_key IS NOT NULL AS has_photo,
                 c.name AS category, gi.name AS gate, li.name AS location,
                 v.checkin_at, v.accompanying_count, v.accompanying_names,
-                u.first_name || ' ' || u.last_name AS checked_in_by,
+                coalesce(u.first_name || ' ' || u.last_name, 'Staff') AS checked_in_by,
                 v.checkin_device
            FROM mams.visit AS v
            JOIN mams.person AS p ON p.person_id = v.person_id
            JOIN mams.category AS c ON c.category_id = p.category_id
            JOIN mams.location AS gi ON gi.location_id = v.checkin_gate_id
            JOIN mams.location AS li ON li.location_id = v.checkin_location_id
-           JOIN mams.app_user AS u ON u.user_id = v.checkin_by
+           LEFT JOIN mams.app_user AS u ON u.user_id = v.checkin_by
           WHERE v.status = 'OPEN'
            ORDER BY v.checkin_at
           LIMIT $1 OFFSET $2`,

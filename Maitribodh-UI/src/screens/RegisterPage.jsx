@@ -89,6 +89,91 @@ export default function RegisterPage() {
   const [notice, setNotice] = useState('');
   const [mobileError, setMobileError] = useState('');
   const [checkingMobile, setCheckingMobile] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({});
+
+  function validateField(name, value = values[name]) {
+    let fieldError = '';
+    const trimmed = typeof value === 'string' ? value.trim() : value;
+    switch (name) {
+      case 'firstName':
+        if (!trimmed) fieldError = 'First name is required.';
+        else if (trimmed.length > 100) fieldError = 'First name cannot exceed 100 characters.';
+        break;
+      case 'lastName':
+        if (!trimmed) fieldError = 'Last name is required.';
+        else if (trimmed.length > 100) fieldError = 'Last name cannot exceed 100 characters.';
+        break;
+      case 'email':
+        if (trimmed && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) fieldError = 'Enter a valid email address.';
+        break;
+      case 'gender':
+        if (!trimmed) fieldError = 'Gender is required.';
+        break;
+      case 'residentStatus':
+        if (!trimmed) fieldError = 'Resident status is required.';
+        break;
+      case 'passportNumber':
+        if (values.residentStatus === 'NON_RESIDENT') {
+          if (!trimmed) fieldError = 'Passport number is required for international visitors.';
+          else if (!/^[A-Za-z0-9]{6,9}$/.test(trimmed)) fieldError = 'Passport number must be 6-9 alphanumeric characters.';
+        }
+        break;
+      case 'address':
+        if (schema.addressRequired && !trimmed) fieldError = 'Residential address is required.';
+        break;
+      case 'emergencyName':
+        if (schema.emergencyRequired && !trimmed) fieldError = 'Emergency contact name is required.';
+        break;
+      case 'emergencyMobile':
+        if (schema.emergencyRequired && !trimmed) {
+          fieldError = 'Emergency contact mobile is required.';
+        } else if (trimmed) {
+          const parsed = toE164Phone(trimmed, values.emergencyMobileCountry || 'IN');
+          if (!parsed) fieldError = 'Enter a valid emergency contact mobile number.';
+        }
+        break;
+      case 'alternateMobile':
+        if (trimmed) {
+          const parsed = toE164Phone(trimmed, values.alternateMobileCountry || 'IN');
+          if (!parsed) fieldError = 'Enter a valid alternate mobile number.';
+        }
+        break;
+      default:
+        break;
+    }
+    setFieldErrors((prev) => {
+      if (fieldError) return { ...prev, [name]: fieldError };
+      const next = { ...prev };
+      delete next[name];
+      return next;
+    });
+    return !fieldError;
+  }
+
+  async function validateStep1() {
+    const errors = {};
+    const check = await validateMobile();
+    if (!check.valid) {
+      errors.mobile = check.error || 'Valid mobile number is required.';
+    }
+    if (!values.firstName?.trim()) errors.firstName = 'First name is required.';
+    if (!values.lastName?.trim()) errors.lastName = 'Last name is required.';
+    if (!values.gender) errors.gender = 'Gender is required.';
+    if (!values.residentStatus) errors.residentStatus = 'Resident status is required.';
+    if (values.residentStatus === 'NON_RESIDENT') {
+      if (!values.passportNumber?.trim()) errors.passportNumber = 'Passport number is required for international visitors.';
+      else if (!/^[A-Za-z0-9]{6,9}$/.test(values.passportNumber.trim())) errors.passportNumber = 'Passport number must be 6-9 alphanumeric characters.';
+    }
+    if (schema.addressRequired && !values.address?.trim()) {
+      errors.address = 'Residential address is required.';
+    }
+    if (schema.emergencyRequired) {
+      if (!values.emergencyName?.trim()) errors.emergencyName = 'Emergency contact name is required.';
+      if (!values.emergencyMobile?.trim()) errors.emergencyMobile = 'Emergency contact mobile is required.';
+    }
+    setFieldErrors((prev) => ({ ...prev, ...errors }));
+    return Object.keys(errors).length === 0 ? null : errors;
+  }
   const lastCheckedMobileRef = useRef('');
 
   const categories = (options?.categories ?? []).filter((category) => !fromGate || category.form_type === 'VISITOR');
@@ -157,7 +242,7 @@ export default function RegisterPage() {
     setValues({ ...initialValues, categoryDetails: { driver_mobile_country: 'IN' } });
     setMobileError('');
     lastCheckedMobileRef.current = '';
-    setStep(1); setNotice(''); setError('');
+    setStep(1); setNotice(''); setError(''); setFieldErrors({});
   }
   function pickFiles(files, isPhoto) {
     const maxSize = isPhoto ? 2 * 1024 * 1024 : 5 * 1024 * 1024;
@@ -265,15 +350,15 @@ export default function RegisterPage() {
       passportNumber: '',
       consent: false,
     });
-    setDraftId(draft.person_id); setStep(1); setPhoto(null); setPhotoPreview(''); setDocuments([]); setMobileError(''); lastCheckedMobileRef.current = '';
+    setDraftId(draft.person_id); setStep(1); setPhoto(null); setPhotoPreview(''); setDocuments([]); setMobileError(''); setFieldErrors({}); lastCheckedMobileRef.current = '';
   }
   async function submit(event) {
     event.preventDefault(); setError(''); setNotice('');
     if (!category) { setError('Select a category'); return; }
     if (step === 1) {
-      const check = await validateMobile();
-      if (!check.valid) {
-        setError(check.error || 'Please provide a valid mobile number.');
+      const step1Errors = await validateStep1();
+      if (step1Errors) {
+        setError(Object.values(step1Errors)[0]);
         return;
       }
     }
@@ -341,7 +426,35 @@ export default function RegisterPage() {
       } else { setValues(initialValues); setPhoto(null); setPhotoPreview(''); setDocuments([]); setStep(0); setCategoryId(''); setDraftId(null); setMobileError(''); lastCheckedMobileRef.current = ''; }
     } catch (failure) { setError(requestMessage(failure)); } finally { setBusy(false); }
   }
-  const textField = (field, value, onChange) => <TextField key={field.key} label={field.label} value={value ?? ''} onChange={onChange} required={field.required} type={field.type ?? 'text'} fullWidth inputProps={{ maxLength: field.maxLength ?? 500, pattern: field.pattern, ...(field.type === 'date' ? { max: new Date().toISOString().slice(0, 10) } : {}) }} InputLabelProps={field.type === 'date' ? { shrink: true } : undefined} />;
+  const textField = (field, value, onChange) => (
+    <TextField
+      key={field.key}
+      label={field.label}
+      value={value ?? ''}
+      onChange={(event) => {
+        onChange(event);
+        if (fieldErrors[field.key]) validateField(field.key, event.target.value);
+      }}
+      onBlur={() => validateField(field.key, value)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          validateField(field.key, value);
+        }
+      }}
+      error={Boolean(fieldErrors[field.key])}
+      helperText={fieldErrors[field.key]}
+      required={field.required}
+      type={field.type ?? 'text'}
+      fullWidth
+      inputProps={{
+        maxLength: field.maxLength ?? 500,
+        pattern: field.pattern,
+        ...(field.type === 'date' ? { max: new Date().toISOString().slice(0, 10) } : {}),
+      }}
+      InputLabelProps={field.type === 'date' ? { shrink: true } : undefined}
+    />
+  );
 
   const backTo = fromGate ? `/gate?${new URLSearchParams({ gate: params.get('gate') ?? '', area: params.get('area') ?? '' })}` : '/persons';
   return <Box>
@@ -350,7 +463,13 @@ export default function RegisterPage() {
     {loadError && <Alert severity="error" role="alert" sx={{ mb: 2 }}>Registration options could not be loaded ({loadError}). Restart the updated API server, then reload this page.</Alert>}
     {notice && <Alert severity="success" role="status" sx={{ mb: 2 }}>{notice}</Alert>}
     {!options && !loadError ? <CircularProgress /> : loadError ? null : <Box component="form" onSubmit={submit} className="registration-form">
-      <Stepper activeStep={step} alternativeLabel sx={{ mb: 3 }}>{steps.map((label) => <Step key={label}><StepLabel>{label}</StepLabel></Step>)}</Stepper>
+      <Stepper activeStep={step} alternativeLabel sx={{ mb: 3 }}>
+        {steps.map((label, idx) => (
+          <Step key={label} sx={{ cursor: idx <= step ? 'pointer' : 'default' }} onClick={() => { if (idx < step) setStep(idx); }}>
+            <StepLabel>{label}</StepLabel>
+          </Step>
+        ))}
+      </Stepper>
       {step === 0 && <>
         {categories.length ? <Box className="category-grid">{categories.map((item) => {
           const Icon = categoryIcons[item.form_type] ?? PersonOutlineIcon;
@@ -380,14 +499,94 @@ export default function RegisterPage() {
           country={values.alternateMobileCountry || 'IN'}
           number={values.alternateMobile}
           onCountryChange={(country) => setValues((previous) => ({ ...previous, alternateMobileCountry: country }))}
-          onNumberChange={(value) => change('alternateMobile', value)}
+          onNumberChange={(value) => {
+            change('alternateMobile', value);
+            if (fieldErrors.alternateMobile) validateField('alternateMobile', value);
+          }}
+          onBlur={() => validateField('alternateMobile', values.alternateMobile)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              validateField('alternateMobile', values.alternateMobile);
+            }
+          }}
+          error={Boolean(fieldErrors.alternateMobile)}
+          helperText={fieldErrors.alternateMobile}
           required={false}
           label="Alternate Mobile"
         />
-        <TextField select label="Gender" value={values.gender} onChange={(event) => change('gender', event.target.value)} required>{['MALE', 'FEMALE', 'OTHER'].map((value) => <MenuItem key={value} value={value}>{value}</MenuItem>)}</TextField>
-        <TextField select label="Resident Status" value={values.residentStatus} onChange={(event) => change('residentStatus', event.target.value)} required><MenuItem value="RESIDENT">Resident</MenuItem><MenuItem value="NON_RESIDENT">Non-Resident / International</MenuItem></TextField>
-        {values.residentStatus === 'NON_RESIDENT' && <TextField label="Passport Number" value={values.passportNumber} onChange={(event) => change('passportNumber', event.target.value)} required inputProps={{ pattern: '[A-Za-z0-9]{6,9}', maxLength: 9 }} />}
-        <TextField label="Residential Address" value={values.address} onChange={(event) => change('address', event.target.value)} required={schema.addressRequired} multiline inputProps={{ maxLength: 500 }} />
+        <TextField
+          select
+          label="Gender"
+          value={values.gender}
+          onChange={(event) => {
+            change('gender', event.target.value);
+            if (fieldErrors.gender) validateField('gender', event.target.value);
+          }}
+          onBlur={() => validateField('gender', values.gender)}
+          error={Boolean(fieldErrors.gender)}
+          helperText={fieldErrors.gender}
+          required
+        >
+          {['MALE', 'FEMALE', 'OTHER'].map((value) => <MenuItem key={value} value={value}>{value}</MenuItem>)}
+        </TextField>
+        <TextField
+          select
+          label="Resident Status"
+          value={values.residentStatus}
+          onChange={(event) => {
+            change('residentStatus', event.target.value);
+            if (fieldErrors.residentStatus) validateField('residentStatus', event.target.value);
+          }}
+          onBlur={() => validateField('residentStatus', values.residentStatus)}
+          error={Boolean(fieldErrors.residentStatus)}
+          helperText={fieldErrors.residentStatus}
+          required
+        >
+          <MenuItem value="RESIDENT">Resident</MenuItem>
+          <MenuItem value="NON_RESIDENT">Non-Resident / International</MenuItem>
+        </TextField>
+        {values.residentStatus === 'NON_RESIDENT' && (
+          <TextField
+            label="Passport Number"
+            value={values.passportNumber}
+            onChange={(event) => {
+              change('passportNumber', event.target.value);
+              if (fieldErrors.passportNumber) validateField('passportNumber', event.target.value);
+            }}
+            onBlur={() => validateField('passportNumber', values.passportNumber)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                validateField('passportNumber', values.passportNumber);
+              }
+            }}
+            error={Boolean(fieldErrors.passportNumber)}
+            helperText={fieldErrors.passportNumber}
+            required
+            inputProps={{ pattern: '[A-Za-z0-9]{6,9}', maxLength: 9 }}
+          />
+        )}
+        <TextField
+          label="Residential Address"
+          value={values.address}
+          onChange={(event) => {
+            change('address', event.target.value);
+            if (fieldErrors.address) validateField('address', event.target.value);
+          }}
+          onBlur={() => validateField('address', values.address)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault();
+              validateField('address', values.address);
+            }
+          }}
+          error={Boolean(fieldErrors.address)}
+          helperText={fieldErrors.address}
+          required={schema.addressRequired}
+          multiline
+          inputProps={{ maxLength: 500 }}
+        />
         <TextField select label="ID Proof Type" value={values.idProofTypeId} onChange={(event) => change('idProofTypeId', event.target.value)}><MenuItem value="">None</MenuItem>{selectedOptions('ID_PROOF_TYPE').map((item) => <MenuItem key={item.id} value={item.id}>{item.name}</MenuItem>)}</TextField>
         <TextField label="ID Proof Number" value={values.idProofNumber} onChange={(event) => change('idProofNumber', event.target.value)} inputProps={{ maxLength: 50 }} />
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -482,13 +681,42 @@ export default function RegisterPage() {
           return field.type === 'select' ? <TextField key={field.key} select label={field.label} required={field.required} value={values.categoryDetails[field.key] ?? ''} onChange={onChange}><MenuItem value="">Select</MenuItem>{field.source ? selectedOptions(field.source).map((option) => <MenuItem key={option.id} value={option.id}>{option.name}</MenuItem>) : (field.options ?? []).map((option) => <MenuItem key={option} value={option}>{option}</MenuItem>)}</TextField>
             : <TextField key={field.key} label={field.label} type={field.type} required={field.required} value={values.categoryDetails[field.key] ?? ''} onChange={onChange} inputProps={{ maxLength: 500, ...(field.type === 'number' ? { min: 1, step: 1 } : {}) }} InputLabelProps={field.type === 'date' ? { shrink: true } : undefined} />;
         })}
-        <TextField label="Emergency Contact Name" value={values.emergencyName} onChange={(event) => change('emergencyName', event.target.value)} required={schema.emergencyRequired} />
+        <TextField
+          label="Emergency Contact Name"
+          value={values.emergencyName}
+          onChange={(event) => {
+            change('emergencyName', event.target.value);
+            if (fieldErrors.emergencyName) validateField('emergencyName', event.target.value);
+          }}
+          onBlur={() => validateField('emergencyName', values.emergencyName)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              validateField('emergencyName', values.emergencyName);
+            }
+          }}
+          error={Boolean(fieldErrors.emergencyName)}
+          helperText={fieldErrors.emergencyName}
+          required={schema.emergencyRequired}
+        />
         <InternationalPhoneField
           label="Emergency Contact Mobile"
           country={values.emergencyMobileCountry || 'IN'}
           number={values.emergencyMobile}
           onCountryChange={(country) => setValues((previous) => ({ ...previous, emergencyMobileCountry: country }))}
-          onNumberChange={(value) => change('emergencyMobile', value)}
+          onNumberChange={(value) => {
+            change('emergencyMobile', value);
+            if (fieldErrors.emergencyMobile) validateField('emergencyMobile', value);
+          }}
+          onBlur={() => validateField('emergencyMobile', values.emergencyMobile)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              validateField('emergencyMobile', values.emergencyMobile);
+            }
+          }}
+          error={Boolean(fieldErrors.emergencyMobile)}
+          helperText={fieldErrors.emergencyMobile}
           required={Boolean(schema.emergencyRequired)}
         />
       </Box>}

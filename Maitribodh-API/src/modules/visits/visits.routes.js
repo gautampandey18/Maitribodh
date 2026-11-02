@@ -1,6 +1,7 @@
 import express from 'express';
 import { z } from 'zod';
 import { ApiError } from '../../errors/ApiError.js';
+import { formatZodError } from '../../utils/errorFormatter.js';
 import { asyncHandler } from '../../middleware/asyncHandler.js';
 import { authorize } from '../../middleware/authorize.js';
 import { ROLES } from '../../constants/roles.js';
@@ -30,7 +31,7 @@ export function createVisitsRouter({ visitsService, authenticate }) {
       const visitId = z.coerce.number().int().positive().safeParse(request.params.visitId);
       const input = z.object({ note: z.string().trim().min(1).max(500) }).safeParse(request.body);
       if (!visitId.success) throw new ApiError(404, 'NO_ACTIVE_CHECKIN', 'No active check-in found');
-      if (!input.success) throw new ApiError(400, 'VALIDATION_ERROR', 'Provide an admin reconciliation note');
+      if (!input.success) throw new ApiError(400, 'VALIDATION_ERROR', formatZodError(input.error, 'visit reconciliation'));
       const visit = await visitsService.reconcile({
         visitId: visitId.data,
         ...input.data,
@@ -47,7 +48,7 @@ export function createVisitsRouter({ visitsService, authenticate }) {
     asyncHandler(async (request, response) => {
       const input = checkinSchema.safeParse(request.body);
       if (!input.success) {
-        throw new ApiError(400, 'VALIDATION_ERROR', 'Provide a valid person, gate, and area');
+        throw new ApiError(400, 'VALIDATION_ERROR', formatZodError(input.error, 'gate check-in'));
       }
 
       const visit = await visitsService.checkIn({
@@ -74,7 +75,7 @@ export function createVisitsRouter({ visitsService, authenticate }) {
         throw new ApiError(404, 'NO_ACTIVE_CHECKIN', 'No active check-in found');
       }
       if (!input.success) {
-        throw new ApiError(400, 'VALIDATION_ERROR', 'Provide a valid checkout gate and location');
+        throw new ApiError(400, 'VALIDATION_ERROR', formatZodError(input.error, 'gate check-out'));
       }
 
       const visit = await visitsService.checkOut({

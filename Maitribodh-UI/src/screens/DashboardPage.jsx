@@ -22,6 +22,7 @@ import {
 import { Link } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { api } from '../api.js';
+import { requestMessage } from '../utils/resources.js';
 
 const metrics = [
   ['total_users', 'Total Users', '#4F46E5', '#EEF2FF', '#C7D2FE'],
@@ -100,7 +101,7 @@ export default function DashboardPage() {
       })
       .catch((requestError) => {
         if (active) {
-          setError(requestError.response?.data?.error?.message ?? 'Dashboard data could not be loaded.');
+          setError(requestMessage(requestError, 'Dashboard data could not be loaded.'));
         }
       })
       .finally(() => {
@@ -130,7 +131,7 @@ export default function DashboardPage() {
       setReconciliationTarget(null);
       setReconciliationNote('');
     } catch (requestError) {
-      setReconciliationError(requestError.response?.data?.error?.message ?? 'The open visit could not be reconciled.');
+      setReconciliationError(requestMessage(requestError, 'The open visit could not be reconciled.'));
     } finally { setReconciling(false); }
   }
 

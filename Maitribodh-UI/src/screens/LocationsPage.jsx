@@ -29,6 +29,7 @@ import {
   Typography,
 } from '@mui/material';
 import { api } from '../api.js';
+import { requestMessage } from '../utils/resources.js';
 
 const emptyLocation = { name: '', locationType: 'GATE', isRestricted: false, departmentId: '' };
 const locationTypes = ['GATE', 'AREA'];
@@ -49,6 +50,23 @@ export default function LocationsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [formError, setFormError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
+
+  function validateField(name, value = locationForm[name]) {
+    let err = '';
+    const trimmed = typeof value === 'string' ? value.trim() : value;
+    if (name === 'name') {
+      if (!trimmed) err = 'Enter a location name.';
+      else if (trimmed.length > 100) err = 'Location name cannot exceed 100 characters.';
+    }
+    setFieldErrors((prev) => {
+      if (err) return { ...prev, [name]: err };
+      const next = { ...prev };
+      delete next[name];
+      return next;
+    });
+    return !err;
+  }
   const [notice, setNotice] = useState('');
   const requestId = useRef(0);
 
@@ -75,7 +93,7 @@ export default function LocationsPage() {
       setDepartments(departmentResponse.data.items);
     } catch (requestError) {
       if (currentRequestId !== requestId.current) return;
-      setError(requestError.response?.data?.error?.message ?? 'Location data could not be loaded.');
+      setError(requestMessage(requestError, 'Location data could not be loaded.'));
     } finally {
       if (currentRequestId === requestId.current) setLoading(false);
     }
@@ -99,6 +117,7 @@ export default function LocationsPage() {
     setEditing(null);
     setLocationForm(emptyLocation);
     setFormError('');
+    setFieldErrors({});
     setDialogOpen(true);
   }
 
@@ -117,7 +136,7 @@ export default function LocationsPage() {
       setFormError('');
       setDialogOpen(true);
     } catch (requestError) {
-      setError(requestError.response?.data?.error?.message ?? 'Location details could not be loaded.');
+      setError(requestMessage(requestError, 'Location details could not be loaded.'));
     } finally {
       setSaving(false);
     }
@@ -125,6 +144,9 @@ export default function LocationsPage() {
 
   function updateForm(event) {
     const { name, value, checked, type } = event.target;
+    if (fieldErrors[name]) {
+      validateField(name, type === 'checkbox' ? checked : value);
+    }
     setLocationForm((current) => ({
       ...current,
       [name]: type === 'checkbox' ? checked : value,
@@ -134,7 +156,7 @@ export default function LocationsPage() {
 
   async function saveLocation(event) {
     event.preventDefault();
-    if (!locationForm.name.trim()) {
+    if (!validateField('name')) {
       setFormError('Enter a location name.');
       return;
     }
@@ -159,7 +181,7 @@ export default function LocationsPage() {
       setDialogOpen(false);
       await loadData();
     } catch (requestError) {
-      const message = requestError.response?.data?.error?.message ?? 'Location could not be saved.';
+      const message = requestMessage(requestError, 'Location could not be saved.');
       setFormError(message);
       setError(message);
     } finally {
@@ -246,7 +268,19 @@ export default function LocationsPage() {
         <Box component="form" onSubmit={saveLocation} noValidate>
           <DialogContent className="category-form-grid">
             {formError && <Alert severity="error" sx={{ gridColumn: '1 / -1' }}>{formError}</Alert>}
-            <TextField name="name" label="Location name" value={locationForm.name} onChange={updateForm} required fullWidth inputProps={{ maxLength: 100 }} />
+            <TextField
+              name="name"
+              label="Location name"
+              value={locationForm.name}
+              onChange={updateForm}
+              onBlur={() => validateField('name')}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); validateField('name'); } }}
+              error={Boolean(fieldErrors.name)}
+              helperText={fieldErrors.name}
+              required
+              fullWidth
+              inputProps={{ maxLength: 100 }}
+            />
             <TextField name="locationType" label="Location type" value={locationForm.locationType} onChange={updateForm} select fullWidth disabled={Boolean(editing)}>
               <MenuItem value="GATE">Gate</MenuItem>
               <MenuItem value="AREA">Area</MenuItem>

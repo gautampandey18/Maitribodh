@@ -35,6 +35,7 @@ import {
   Typography,
 } from '@mui/material';
 import { api } from '../api.js';
+import { requestMessage } from '../utils/resources.js';
 import CategorySchemaEditor from './CategorySchemaEditor.jsx';
 
 const formTypes = ['STAFF', 'PARIVAR', 'VISITOR', 'VENDOR', 'CONTRACTOR', 'PARTICIPANT', 'GENERIC'];
@@ -72,6 +73,7 @@ export default function CategoriesPage() {
   const { control, handleSubmit, reset, formState: { errors } } = useForm({
     resolver: zodResolver(categoryFormSchema),
     defaultValues: emptyValues,
+    mode: 'all',
   });
 
   async function loadData(nextPage = page, nextRowsPerPage = rowsPerPage, filters = activeFilters) {
@@ -126,7 +128,7 @@ export default function CategoriesPage() {
       await api.patch(`/categories/${statusTarget.category_id}`, { status: statusTarget.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE' });
       setStatusTarget(null);
       await loadData();
-    } catch (failure) { setError(failure.response?.data?.error?.message ?? 'Category status could not be changed.'); }
+    } catch (failure) { setError(requestMessage(failure, 'Category status could not be changed.')); }
     finally { setSaving(false); }
   }
 
@@ -141,7 +143,7 @@ export default function CategoriesPage() {
       await loadData(nextPage, rowsPerPage);
       setNotice('Category deleted');
     } catch (failure) {
-      setError(failure.response?.data?.error?.message ?? 'Category could not be deleted.');
+      setError(requestMessage(failure, 'Category could not be deleted.'));
     } finally {
       setSaving(false);
     }
@@ -172,7 +174,7 @@ export default function CategoriesPage() {
       setDialogOpen(false);
       await loadData();
     } catch (requestError) {
-      setError(requestError.response?.data?.error?.message ?? 'Category could not be saved.');
+      setError(requestMessage(requestError, 'Category could not be saved.'));
     } finally {
       setSaving(false);
     }

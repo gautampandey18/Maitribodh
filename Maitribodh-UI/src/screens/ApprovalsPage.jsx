@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useSelector } from 'react-redux';
 import {
   Alert,
   Box,
@@ -28,6 +29,7 @@ import CheckOutlinedIcon from '@mui/icons-material/CheckOutlined';
 import CloseOutlinedIcon from '@mui/icons-material/CloseOutlined';
 import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined';
 import { api } from '../api.js';
+import { requestMessage } from '../utils/resources.js';
 
 const NON_APPROVAL_NAMES = new Set(['visitor', 'vendor', 'contractor', 'participant']);
 const NON_APPROVAL_TYPES = new Set(['VISITOR', 'VENDOR', 'CONTRACTOR', 'PARTICIPANT']);
@@ -42,6 +44,8 @@ function isApprovalRequiredPerson(item) {
 }
 
 export default function ApprovalsPage() {
+  const role = useSelector((state) => state.auth.user?.role);
+  const isAdmin = ['ADMIN', 'SUPER_ADMIN'].includes(String(role ?? '').toUpperCase());
   const [tab, setTab] = useState('PENDING');
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
@@ -79,7 +83,7 @@ export default function ApprovalsPage() {
       setTotal(approvalEntries.length !== rawItems.length ? approvalEntries.length : (response.data.total ?? approvalEntries.length));
     } catch (requestError) {
       if (currentRequestId !== requestId.current) return;
-      setError(requestError.response?.data?.error?.message ?? 'Approval queue could not be loaded.');
+      setError(requestMessage(requestError, 'Approval queue could not be loaded.'));
     } finally {
       if (currentRequestId === requestId.current) setLoading(false);
     }
@@ -128,7 +132,7 @@ export default function ApprovalsPage() {
       setSelected(null);
       await loadQueue(tab, nextPage, rowsPerPage);
     } catch (requestError) {
-      setError(requestError.response?.data?.error?.message ?? 'Decision could not be saved. Refresh the queue and try again.');
+      setError(requestMessage(requestError, 'Decision could not be saved. Refresh the queue and try again.'));
     } finally {
       setSaving(false);
     }
@@ -146,7 +150,7 @@ export default function ApprovalsPage() {
         : 'Registration resubmitted for approval');
       await loadQueue('REJECTED', nextPage, rowsPerPage);
     } catch (requestError) {
-      setError(requestError.response?.data?.error?.message ?? 'Registration could not be resubmitted.');
+      setError(requestMessage(requestError, 'Registration could not be resubmitted.'));
     } finally {
       setSaving(false);
     }
@@ -241,9 +245,26 @@ export default function ApprovalsPage() {
                         </Button>
                       )}
                       {tab === 'REJECTED' && (
-                        <Button size="small" onClick={() => resubmitRegistration(item)} disabled={saving}>
-                          {saving ? <CircularProgress size={18} /> : 'Resubmit'}
-                        </Button>
+                        <Box sx={{ display: 'inline-flex', gap: 1, alignItems: 'center' }}>
+                          {isAdmin && (
+                            <Tooltip title={`Re-approve ${item.name}`}>
+                              <span>
+                                <IconButton
+                                  aria-label={`Re-approve ${item.name}`}
+                                  color="success"
+                                  onClick={() => openDecision(item, 'APPROVE')}
+                                  disabled={saving}
+                                  size="small"
+                                >
+                                  <CheckOutlinedIcon fontSize="small" />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          )}
+                          <Button size="small" onClick={() => resubmitRegistration(item)} disabled={saving}>
+                            {saving ? <CircularProgress size={18} /> : 'Resubmit'}
+                          </Button>
+                        </Box>
                       )}
                     </TableCell>
                   </TableRow>

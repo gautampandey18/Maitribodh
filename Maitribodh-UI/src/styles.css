@@ -2711,7 +2711,7 @@ body.notifications-panel-open .top-bar .top-toolbar>.MuiIconButton-root {
 .reports-tabs {
   min-width: 0;
   border-bottom: 1px solid var(--th-line, #E5E7EB);
-  margin-bottom: 20px;
+  margin-bottom: 12px;
 }
 
 .reports-tabs .MuiTab-root {
@@ -2719,8 +2719,8 @@ body.notifications-panel-open .top-bar .top-toolbar>.MuiIconButton-root {
   font-size: 14px;
   font-weight: 500;
   color: #6B7280;
-  padding: 10px 16px;
-  min-height: 44px;
+  padding: 6px 14px;
+  min-height: 38px;
 }
 
 .reports-tabs .Mui-selected {
@@ -2737,8 +2737,8 @@ body.notifications-panel-open .top-bar .top-toolbar>.MuiIconButton-root {
 .reports-kpi-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  margin-bottom: 20px;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 @media (max-width: 900px) {
@@ -2757,25 +2757,25 @@ body.notifications-panel-open .top-bar .top-toolbar>.MuiIconButton-root {
   background: #FFFFFF;
   border: 1px solid #E5E7EB;
   border-radius: 12px;
-  padding: 18px 20px;
+  padding: 12px 16px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  min-height: 110px;
+  min-height: 85px;
 }
 
 .reports-kpi-label {
-  font-size: 13px;
+  font-size: 12px;
   color: #6B7280;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .reports-kpi-value {
-  font-size: 30px;
+  font-size: 26px;
   font-weight: 700;
   color: #111827;
   line-height: 1.1;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .reports-kpi-delta {
@@ -2787,8 +2787,8 @@ body.notifications-panel-open .top-bar .top-toolbar>.MuiIconButton-root {
 .reports-charts-grid {
   display: grid;
   grid-template-columns: 1.4fr 1fr;
-  gap: 20px;
-  margin-bottom: 24px;
+  gap: 14px;
+  margin-bottom: 14px;
 }
 
 @media (max-width: 1024px) {
@@ -2801,7 +2801,7 @@ body.notifications-panel-open .top-bar .top-toolbar>.MuiIconButton-root {
   background: #FFFFFF;
   border: 1px solid #E5E7EB;
   border-radius: 12px;
-  padding: 20px 24px;
+  padding: 14px 18px;
   display: flex;
   flex-direction: column;
 }
@@ -2810,7 +2810,7 @@ body.notifications-panel-open .top-bar .top-toolbar>.MuiIconButton-root {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
 }
 
 .reports-chart-title {
@@ -5463,7 +5463,7 @@ body.notifications-panel-open .app-navigation-drawer .MuiDrawer-paper::after {
 .reports-tabs {
   min-width: 0;
   border-bottom: 1px solid var(--th-line, #E5E7EB);
-  margin-bottom: 20px;
+  margin-bottom: 12px;
 }
 
 .reports-tabs .MuiTab-root {
@@ -5471,8 +5471,8 @@ body.notifications-panel-open .app-navigation-drawer .MuiDrawer-paper::after {
   font-size: 14px;
   font-weight: 500;
   color: #6B7280;
-  padding: 10px 16px;
-  min-height: 44px;
+  padding: 6px 14px;
+  min-height: 38px;
 }
 
 .reports-tabs .Mui-selected {
@@ -5489,8 +5489,8 @@ body.notifications-panel-open .app-navigation-drawer .MuiDrawer-paper::after {
 .reports-kpi-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  margin-bottom: 20px;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 @media (max-width: 900px) {
@@ -5509,25 +5509,25 @@ body.notifications-panel-open .app-navigation-drawer .MuiDrawer-paper::after {
   background: #FFFFFF;
   border: 1px solid #E5E7EB;
   border-radius: 12px;
-  padding: 18px 20px;
+  padding: 12px 16px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  min-height: 110px;
+  min-height: 85px;
 }
 
 .reports-kpi-label {
-  font-size: 13px;
+  font-size: 12px;
   color: #6B7280;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .reports-kpi-value {
-  font-size: 30px;
+  font-size: 26px;
   font-weight: 700;
   color: #111827;
   line-height: 1.1;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .reports-kpi-delta {
@@ -5539,8 +5539,8 @@ body.notifications-panel-open .app-navigation-drawer .MuiDrawer-paper::after {
 .reports-charts-grid {
   display: grid;
   grid-template-columns: 1.4fr 1fr;
-  gap: 20px;
-  margin-bottom: 24px;
+  gap: 14px;
+  margin-bottom: 14px;
 }
 
 @media (max-width: 1024px) {
@@ -5553,7 +5553,7 @@ body.notifications-panel-open .app-navigation-drawer .MuiDrawer-paper::after {
   background: #FFFFFF;
   border: 1px solid #E5E7EB;
   border-radius: 12px;
-  padding: 20px 24px;
+  padding: 14px 18px;
   display: flex;
   flex-direction: column;
 }
@@ -5562,7 +5562,7 @@ body.notifications-panel-open .app-navigation-drawer .MuiDrawer-paper::after {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
 }
 
 .reports-chart-title {

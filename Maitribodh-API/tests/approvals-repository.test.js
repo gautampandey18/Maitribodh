@@ -83,7 +83,7 @@ test('approval writes status, history, notification, audit, and commit in order'
   assert.equal(calls[7].sql, 'COMMIT');
 });
 
-test('Admin cannot decide their own submission', async () => {
+test('Admin can decide their own submission', async () => {
   const calls = [];
   const client = {
     async query(sql, values = []) {
@@ -91,20 +91,19 @@ test('Admin cannot decide their own submission', async () => {
       if (sql === 'BEGIN' || sql === 'ROLLBACK') return { rows: [] };
       if (sql.includes('FROM mams.person')) return { rows: [{ person_id: 10, status: 'PENDING' }] };
       if (sql.includes('FROM mams.approval_history')) return { rows: [{ acted_by: 7 }] };
-      throw new Error('Decision write must not occur');
+      if (sql.includes('UPDATE mams.person')) return { rows: [{ person_id: 10, person_code: 'MB-000010', status: 'ACTIVE' }] };
+      return { rows: [], rowCount: 1 };
     },
     release() {},
   };
   const repository = createApprovalsRepository({ async connect() { return client; } });
 
-  await assert.rejects(
-    repository.decide({ personId: 10, decision: 'APPROVE', actorUserId: 7, actorRole: 'ADMIN' }),
-    (error) => error.code === 'SELF_APPROVAL_FORBIDDEN',
-  );
-  assert.equal(calls.at(-1).sql, 'ROLLBACK');
+  const result = await repository.decide({ personId: 10, decision: 'APPROVE', actorUserId: 7, actorRole: 'ADMIN' });
+  assert.equal(result.status, 'ACTIVE');
+  assert.equal(calls.at(-1).sql, 'COMMIT');
 });
 
-test('Super Admin cannot decide their own submission', async () => {
+test('Super Admin can decide their own submission', async () => {
   const calls = [];
   const client = {
     async query(sql, values = []) {
@@ -112,17 +111,16 @@ test('Super Admin cannot decide their own submission', async () => {
       if (sql === 'BEGIN' || sql === 'ROLLBACK') return { rows: [] };
       if (sql.includes('FROM mams.person')) return { rows: [{ person_id: 10, status: 'PENDING' }] };
       if (sql.includes('FROM mams.approval_history')) return { rows: [{ acted_by: 7 }] };
-      throw new Error('Decision write must not occur');
+      if (sql.includes('UPDATE mams.person')) return { rows: [{ person_id: 10, person_code: 'MB-000010', status: 'ACTIVE' }] };
+      return { rows: [], rowCount: 1 };
     },
     release() {},
   };
   const repository = createApprovalsRepository({ async connect() { return client; } });
 
-  await assert.rejects(
-    repository.decide({ personId: 10, decision: 'APPROVE', actorUserId: 7, actorRole: 'SUPER_ADMIN' }),
-    (error) => error.code === 'SELF_APPROVAL_FORBIDDEN',
-  );
-  assert.equal(calls.at(-1).sql, 'ROLLBACK');
+  const result = await repository.decide({ personId: 10, decision: 'APPROVE', actorUserId: 7, actorRole: 'SUPER_ADMIN' });
+  assert.equal(result.status, 'ACTIVE');
+  assert.equal(calls.at(-1).sql, 'COMMIT');
 });
 
 test('Approver cannot decide their own submission', async () => {
@@ -140,6 +138,43 @@ test('Approver cannot decide their own submission', async () => {
   await assert.rejects(
     repository.decide({ personId: 10, decision: 'APPROVE', actorUserId: 7, actorRole: 'APPROVER' }),
     (error) => error.code === 'SELF_APPROVAL_FORBIDDEN',
+  );
+});
+
+test('Admin can re-approve a rejected person directly', async () => {
+  const calls = [];
+  const client = {
+    async query(sql, values = []) {
+      calls.push({ sql, values });
+      if (sql === 'BEGIN' || sql === 'ROLLBACK') return { rows: [] };
+      if (sql.includes('FROM mams.person')) return { rows: [{ person_id: 10, status: 'REJECTED' }] };
+      if (sql.includes('FROM mams.approval_history')) return { rows: [{ acted_by: 7 }] };
+      if (sql.includes('UPDATE mams.person')) return { rows: [{ person_id: 10, person_code: 'MB-000010', status: 'ACTIVE' }] };
+      return { rows: [], rowCount: 1 };
+    },
+    release() {},
+  };
+  const repository = createApprovalsRepository({ async connect() { return client; } });
+
+  const result = await repository.decide({ personId: 10, decision: 'APPROVE', actorUserId: 7, actorRole: 'ADMIN' });
+  assert.equal(result.status, 'ACTIVE');
+  assert.equal(calls.at(-1).sql, 'COMMIT');
+});
+
+test('Approver cannot re-approve a rejected person directly', async () => {
+  const client = {
+    async query(sql) {
+      if (sql === 'BEGIN' || sql === 'ROLLBACK') return { rows: [] };
+      if (sql.includes('FROM mams.person')) return { rows: [{ person_id: 10, status: 'REJECTED' }] };
+      throw new Error('Decision write must not occur');
+    },
+    release() {},
+  };
+  const repository = createApprovalsRepository({ async connect() { return client; } });
+
+  await assert.rejects(
+    repository.decide({ personId: 10, decision: 'APPROVE', actorUserId: 7, actorRole: 'APPROVER' }),
+    (error) => error.code === 'PERSON_NOT_PENDING',
   );
 });
 

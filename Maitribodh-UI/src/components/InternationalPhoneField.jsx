@@ -43,6 +43,7 @@ export default function InternationalPhoneField({
   onCountryChange,
   onNumberChange,
   onBlur,
+  onKeyDown,
   error = false,
   helperText,
   required = false,
@@ -56,7 +57,7 @@ export default function InternationalPhoneField({
   InputProps,
   id,
 }) {
-  const codeLabel = countryCodeLabel || (label && label .toLowerCase() !== 'mobile number' ? `${label} code` : 'Country code');
+  const codeLabel = countryCodeLabel || (label && label.toLowerCase() !== 'mobile number' ? `${label} code` : 'Country code');
 
   return (
     <Box
@@ -86,6 +87,7 @@ export default function InternationalPhoneField({
         value={number}
         onChange={(event) => onNumberChange(event.target.value.replace(/\D/g, '').slice(0, 15))}
         onBlur={onBlur}
+        onKeyDown={onKeyDown}
         error={error}
         helperText={helperText}
         required={required}

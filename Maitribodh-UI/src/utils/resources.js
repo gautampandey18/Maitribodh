@@ -2,11 +2,18 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 
 export function requestMessage(error, fallback = 'The request could not be completed. Try again.') {
-  const message = error.response?.data?.error?.message ?? fallback;
-  const debug = import.meta.env.DEV ? error.response?.data?.debug : null;
-  if (!debug?.message) return message;
+  const message = error?.response?.data?.error?.message ?? error?.message ?? fallback;
+  const debug = error?.response?.data?.debug;
+  if (!debug?.message && !debug?.code) {
+    const details = error?.response?.data?.error?.details;
+    if (Array.isArray(details) && details.length > 0) {
+      const detailsMsg = details.map((d) => d.message || d).join(', ');
+      return `${message}: ${detailsMsg}`;
+    }
+    return message;
+  }
   const context = [debug.code, debug.constraint, debug.column, debug.table, debug.message].filter(Boolean).join(' | ');
-  return `${message} (${context})`;
+  return context ? `${message} (${context})` : message;
 }
 
 export async function blobRequestMessage(error) {
