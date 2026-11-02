@@ -53,27 +53,81 @@ const datePresets = [
 ];
 
 const reports = [
-  { key: 'visits', title: 'Visit History', path: '/reports/visit-history', dateRange: true, category: true },
-  { key: 'registrations', title: 'Person Registrations', path: '/reports/registrations', status: true },
-  { key: 'occupancy', title: 'Occupancy', path: '/reports/occupancy', dateRange: true },
-  { key: 'staff', title: 'Staff', path: '/reports/staff' },
-  { key: 'approvals', title: 'Approvals', path: '/reports/approvals', dateRange: true },
-  { key: 'blacklist', title: 'Blacklist', path: '/reports/blacklist' },
+  { key: 'visits', title: 'Visit History', path: '/reports/visit-history', category: true, location: true },
+  {
+    key: 'registrations',
+    title: 'Person Registrations',
+    path: '/reports/registrations',
+    category: true,
+    status: true,
+    dateHint: 'Dates filter by registration date.',
+  },
+  {
+    key: 'occupancy',
+    title: 'Occupancy',
+    path: '/reports/occupancy',
+    dateHint: 'Charts show the To date; the table lists check-ins in the range.',
+  },
+  {
+    key: 'staff',
+    title: 'Staff',
+    path: '/reports/staff',
+    textFilters: [{ name: 'name', label: 'Name' }, { name: 'jobRole', label: 'Job Role' }],
+    dateHint: 'Dates apply to the charts; the table lists all staff.',
+  },
+  { key: 'approvals', title: 'Approvals', path: '/reports/approvals', textFilters: [{ name: 'user', label: 'User' }] },
+  {
+    key: 'blacklist',
+    title: 'Blacklist',
+    path: '/reports/blacklist',
+    textFilters: [{ name: 'name', label: 'Name' }, { name: 'category', label: 'Category' }],
+    dateHint: 'Dates apply to the charts; the table lists all blacklist entries.',
+  },
 ];
 
 const statusOptions = ['PENDING', 'ACTIVE', 'REJECTED', 'DEACTIVATED'];
 
+const emptyFilters = {
+  fromDate: '',
+  toDate: '',
+  search: '',
+  categoryId: '',
+  locationId: '',
+  status: '',
+  name: '',
+  category: '',
+  user: '',
+  jobRole: '',
+};
+
+/**
+ * Builds the query params shared by a report's table, analytics, and export so all three show the same data.
+ * @param {object} report Report definition from `reports`.
+ * @param {object} filters Current filter values.
+ * @returns {object} Non-empty query params supported by the report.
+ */
+function buildReportParams(report, filters) {
+  const params = {
+    fromDate: filters.fromDate,
+    toDate: filters.toDate,
+    search: filters.search.trim(),
+    ...(report.category && filters.categoryId ? { categoryId: Number(filters.categoryId) } : {}),
+    ...(report.location && filters.locationId ? { locationId: Number(filters.locationId) } : {}),
+    ...(report.status ? { status: filters.status } : {}),
+    ...Object.fromEntries((report.textFilters || []).map(({ name }) => [name, filters[name].trim()])),
+  };
+  return Object.fromEntries(Object.entries(params).filter(([, value]) => value !== '' && value !== undefined));
+}
+
+function optionLabel(option) {
+  return option.status === 'ACTIVE' ? option.name : `${option.name} (inactive)`;
+}
+
 export default function ReportsPage() {
   const [selectedKey, setSelectedKey] = useState('visits');
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
-  const [categoryId, setCategoryId] = useState('');
-  const [blacklistName, setBlacklistName] = useState('');
-  const [blacklistCategory, setBlacklistCategory] = useState('');
-  const [approvalUser, setApprovalUser] = useState('');
-  const [staffName, setStaffName] = useState('');
-  const [staffJobRole, setStaffJobRole] = useState('');
-  const [status, setStatus] = useState('');
+  const [filters, setFilters] = useState(emptyFilters);
+  const [filterOptions, setFilterOptions] = useState({ categories: [], locations: [] });
+  const [optionsError, setOptionsError] = useState(false);
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
@@ -83,59 +137,51 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(false);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [analyticsData, setAnalyticsData] = useState({});
+  const [analyticsError, setAnalyticsError] = useState('');
   const [error, setError] = useState('');
   const reportRequestId = useRef(0);
   const analyticsRequestId = useRef(0);
+  // Filters behind the rows and charts on screen; pagination and export reuse them.
+  const appliedFilters = useRef(emptyFilters);
   const report = reports.find((item) => item.key === selectedKey) || reports[0];
   const currentAnalytics = analyticsData[selectedKey];
   const tabConfig = currentAnalytics || REPORT_TABS_CONFIG[selectedKey] || REPORT_TABS_CONFIG.visits;
+  const hasActiveFilters = Object.values(filters).some(Boolean);
+
+  function updateFilter(name, value) {
+    setFilters((current) => ({ ...current, [name]: value }));
+  }
 
   function isPresetActive(preset) {
     if (!preset) return false;
-    if (!fromDate && !toDate) {
+    if (!filters.fromDate && !filters.toDate) {
       return preset.label === 'Last 14 days';
     }
     if (typeof preset.getRange !== 'function') return false;
     const { from, to } = preset.getRange();
-    return fromDate === from && toDate === to;
+    return filters.fromDate === from && filters.toDate === to;
+  }
+
+  function runWithFilters(nextFilters) {
+    appliedFilters.current = nextFilters;
+    setError('');
+    return Promise.all([
+      loadReport(0, rowsPerPage, nextFilters),
+      loadAnalytics(nextFilters),
+    ]);
   }
 
   function applyPreset(preset) {
     const { from, to } = preset.getRange();
-    setFromDate(from);
-    setToDate(to);
-    setError('');
-    loadReport(0, rowsPerPage, { fromDate: from, toDate: to });
-    loadAnalytics(selectedKey, from, to);
+    const nextFilters = { ...filters, fromDate: from, toDate: to };
+    setFilters(nextFilters);
+    runWithFilters(nextFilters);
   }
 
   function resetFilters() {
-    setFromDate('');
-    setToDate('');
-    setCategoryId('');
-    setStatus('');
-    setBlacklistName('');
-    setBlacklistCategory('');
-    setApprovalUser('');
-    setStaffName('');
-    setStaffJobRole('');
-    setError('');
-    loadReport(0, rowsPerPage, {
-      fromDate: undefined,
-      toDate: undefined,
-      categoryId: undefined,
-      status: undefined,
-      name: undefined,
-      category: undefined,
-      user: undefined,
-      jobRole: undefined,
-    });
-    loadAnalytics(selectedKey, '', '');
+    setFilters(emptyFilters);
+    runWithFilters(emptyFilters);
   }
-
-  const hasActiveFilters = Boolean(
-    fromDate || toDate || categoryId || status || blacklistName || blacklistCategory || approvalUser || staffName || staffJobRole
-  );
 
   function selectReport(nextReport) {
     if (!nextReport) return;
@@ -150,46 +196,25 @@ export default function ReportsPage() {
     setColumns([]);
     setHasRun(false);
     setError('');
-    setCategoryId('');
-    setStatus('');
-    setBlacklistName('');
-    setBlacklistCategory('');
-    setApprovalUser('');
-    setStaffName('');
-    setStaffJobRole('');
-    if (!nextReport.dateRange) {
-      setFromDate('');
-      setToDate('');
-    }
+    setAnalyticsError('');
+    // Dates and the person search carry across tabs; tab-specific filters do not.
+    setFilters((current) => ({
+      ...emptyFilters,
+      fromDate: current.fromDate,
+      toDate: current.toDate,
+      search: current.search,
+    }));
   }
 
-  function getParams() {
-    return {
-      ...(report.dateRange && fromDate ? { fromDate } : {}),
-      ...(report.dateRange && toDate ? { toDate } : {}),
-      ...(report.category && categoryId ? { categoryId: Number(categoryId) } : {}),
-      ...(report.status && status ? { status } : {}),
-      ...(report.key === 'blacklist' && blacklistName.trim() ? { name: blacklistName.trim() } : {}),
-      ...(report.key === 'blacklist' && blacklistCategory.trim() ? { category: blacklistCategory.trim() } : {}),
-      ...(report.key === 'approvals' && approvalUser.trim() ? { user: approvalUser.trim() } : {}),
-      ...(report.key === 'staff' && staffName.trim() ? { name: staffName.trim() } : {}),
-      ...(report.key === 'staff' && staffJobRole.trim() ? { jobRole: staffJobRole.trim() } : {}),
-    };
-  }
-
-  async function loadReport(nextPage = 0, nextRowsPerPage = rowsPerPage, customParams = null) {
+  async function loadReport(nextPage = 0, nextRowsPerPage = rowsPerPage, nextFilters = appliedFilters.current) {
     const requestId = ++reportRequestId.current;
     setPage(nextPage);
     setRowsPerPage(nextRowsPerPage);
     setLoading(true);
     setError('');
     try {
-      const mergedParams = customParams ? { ...getParams(), ...customParams } : getParams();
-      const params = Object.fromEntries(
-        Object.entries(mergedParams).filter(([, val]) => val !== undefined && val !== ''),
-      );
       const response = await api.get(report.path, {
-        params: { ...params, page: nextPage + 1, pageSize: nextRowsPerPage },
+        params: { ...buildReportParams(report, nextFilters), page: nextPage + 1, pageSize: nextRowsPerPage },
       });
       if (requestId !== reportRequestId.current) return;
       const responseItems = Array.isArray(response.data?.items) ? response.data.items : [];
@@ -211,20 +236,22 @@ export default function ReportsPage() {
     }
   }
 
-  async function loadAnalytics(key = selectedKey, fDate = fromDate, tDate = toDate) {
+  async function loadAnalytics(nextFilters = appliedFilters.current) {
+    const key = selectedKey;
     const reqId = ++analyticsRequestId.current;
     setAnalyticsLoading(true);
+    setAnalyticsError('');
     try {
-      const params = { tab: key };
-      if (fDate) params.fromDate = fDate;
-      if (tDate) params.toDate = tDate;
-      const response = await api.get('/reports/analytics', { params });
+      const response = await api.get('/reports/analytics', {
+        params: { tab: key, ...buildReportParams(report, nextFilters) },
+      });
       if (reqId !== analyticsRequestId.current) return;
-      if (response?.data?.kpis) {
-        setAnalyticsData((prev) => ({ ...prev, [key]: response.data }));
-      }
-    } catch {
-      // Retain existing data or static fallback gracefully
+      setAnalyticsData((prev) => ({ ...prev, [key]: response?.data?.kpis ? response.data : undefined }));
+    } catch (requestError) {
+      if (reqId !== analyticsRequestId.current) return;
+      // Drop charts from earlier filters so they are never shown against the new table.
+      setAnalyticsData((prev) => ({ ...prev, [key]: undefined }));
+      setAnalyticsError(requestMessage(requestError, 'Charts could not be loaded.'));
     } finally {
       if (reqId === analyticsRequestId.current) {
         setAnalyticsLoading(false);
@@ -234,15 +261,11 @@ export default function ReportsPage() {
 
   async function runReport(event) {
     if (event?.preventDefault) event.preventDefault();
-    if (report.dateRange && fromDate && toDate && fromDate > toDate) {
+    if (filters.fromDate && filters.toDate && filters.fromDate > filters.toDate) {
       setError('Choose a valid date range (From Date must not be after To Date).');
       return;
     }
-    setError('');
-    await Promise.all([
-      loadReport(0, rowsPerPage),
-      loadAnalytics(selectedKey, fromDate, toDate),
-    ]);
+    await runWithFilters(filters);
   }
 
   async function exportReport() {
@@ -250,7 +273,7 @@ export default function ReportsPage() {
     setError('');
     try {
       const response = await api.get(`${report.path}/export`, {
-        params: getParams(),
+        params: buildReportParams(report, appliedFilters.current),
         responseType: 'blob',
       });
       const url = URL.createObjectURL(response.data);
@@ -267,8 +290,25 @@ export default function ReportsPage() {
   }
 
   useEffect(() => {
-    loadReport(0, rowsPerPage);
-    loadAnalytics(selectedKey, fromDate, toDate);
+    let active = true;
+    async function loadFilterOptions() {
+      try {
+        const response = await api.get('/reports/options');
+        if (!active) return;
+        setFilterOptions({
+          categories: Array.isArray(response?.data?.categories) ? response.data.categories : [],
+          locations: Array.isArray(response?.data?.locations) ? response.data.locations : [],
+        });
+      } catch {
+        if (active) setOptionsError(true);
+      }
+    }
+    loadFilterOptions();
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    runWithFilters(filters);
   }, [selectedKey]);
 
   return (
@@ -292,6 +332,7 @@ export default function ReportsPage() {
       </Box>
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {analyticsError && <Alert severity="warning" sx={{ mb: 2 }}>{analyticsError}</Alert>}
 
       <Box className="reports-layout">
         <Tabs
@@ -308,61 +349,99 @@ export default function ReportsPage() {
         {/* Dedicated Date Range & Filter Toolbar */}
         <Paper className="table-panel report-panel" elevation={0} sx={{ mb: 1.5 }}>
           <Box component="form" className="report-filters" onSubmit={runReport} sx={{ borderBottom: 0, px: 2, py: 1.25 }}>
-            {report.dateRange && (
-              <>
-                <Box sx={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1, mb: 1 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                    <CalendarTodayOutlinedIcon sx={{ fontSize: 16, color: '#E06D2E' }} />
-                    <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mr: 0.5 }}>
-                      Quick date range:
-                    </Typography>
-                    {datePresets.map((preset) => {
-                      const isActive = isPresetActive(preset);
-                      return (
-                        <Chip
-                          key={preset.label}
-                          label={preset.label}
-                          size="small"
-                          clickable
-                          color={isActive ? 'primary' : 'default'}
-                          variant={isActive ? 'filled' : 'outlined'}
-                          onClick={() => applyPreset(preset)}
-                          sx={{ fontSize: '12px', fontWeight: isActive ? 600 : 400, height: 24 }}
-                        />
-                      );
-                    })}
-                  </Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto', fontWeight: 500 }}>
-                    {fromDate && toDate && !isPresetActive(datePresets[2])
-                      ? `${fromDate} to ${toDate}`
-                      : 'Default: Last 14 days'}
-                  </Typography>
-                </Box>
-                <TextField
-                  label="From"
-                  type="date"
-                  value={fromDate}
-                  onChange={(event) => setFromDate(event.target.value)}
-                  InputLabelProps={{ shrink: true }}
-                  inputProps={{ 'aria-label': 'From' }}
-                  size="small"
-                />
-                <TextField
-                  label="To"
-                  type="date"
-                  value={toDate}
-                  onChange={(event) => setToDate(event.target.value)}
-                  InputLabelProps={{ shrink: true }}
-                  inputProps={{ 'aria-label': 'To' }}
-                  size="small"
-                />
-              </>
+            <Box sx={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1, mb: 1 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                <CalendarTodayOutlinedIcon sx={{ fontSize: 16, color: '#E06D2E' }} />
+                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mr: 0.5 }}>
+                  Quick date range:
+                </Typography>
+                {datePresets.map((preset) => {
+                  const isActive = isPresetActive(preset);
+                  return (
+                    <Chip
+                      key={preset.label}
+                      label={preset.label}
+                      size="small"
+                      clickable
+                      color={isActive ? 'primary' : 'default'}
+                      variant={isActive ? 'filled' : 'outlined'}
+                      onClick={() => applyPreset(preset)}
+                      sx={{ fontSize: '12px', fontWeight: isActive ? 600 : 400, height: 24 }}
+                    />
+                  );
+                })}
+              </Box>
+              <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto', fontWeight: 500 }}>
+                {filters.fromDate || filters.toDate
+                  ? `${filters.fromDate || 'Start'} to ${filters.toDate || 'today'}`
+                  : 'No dates: table shows all records, charts show the last 14 days'}
+                {report.dateHint ? ` · ${report.dateHint}` : ''}
+              </Typography>
+            </Box>
+            <TextField
+              label="Search person"
+              value={filters.search}
+              onChange={(event) => updateFilter('search', event.target.value)}
+              placeholder="Name, person code or mobile"
+              inputProps={{ maxLength: 100 }}
+              size="small"
+              sx={{ minWidth: 240 }}
+            />
+            <TextField
+              label="From"
+              type="date"
+              value={filters.fromDate}
+              onChange={(event) => updateFilter('fromDate', event.target.value)}
+              InputLabelProps={{ shrink: true }}
+              inputProps={{ 'aria-label': 'From' }}
+              size="small"
+            />
+            <TextField
+              label="To"
+              type="date"
+              value={filters.toDate}
+              onChange={(event) => updateFilter('toDate', event.target.value)}
+              InputLabelProps={{ shrink: true }}
+              inputProps={{ 'aria-label': 'To' }}
+              size="small"
+            />
+            {report.category && (
+              <TextField
+                label="Category"
+                value={filters.categoryId}
+                onChange={(event) => updateFilter('categoryId', event.target.value)}
+                select
+                size="small"
+                sx={{ minWidth: 180 }}
+                helperText={optionsError ? 'Categories could not be loaded' : undefined}
+              >
+                <MenuItem value="">All categories</MenuItem>
+                {filterOptions.categories.map((option) => (
+                  <MenuItem key={option.category_id} value={String(option.category_id)}>{optionLabel(option)}</MenuItem>
+                ))}
+              </TextField>
+            )}
+            {report.location && (
+              <TextField
+                label="Location"
+                value={filters.locationId}
+                onChange={(event) => updateFilter('locationId', event.target.value)}
+                select
+                size="small"
+                sx={{ minWidth: 180 }}
+                helperText={optionsError ? 'Locations could not be loaded' : undefined}
+              >
+                <MenuItem value="">All locations</MenuItem>
+                {filterOptions.locations.map((option) => (
+                  <MenuItem key={option.location_id} value={String(option.location_id)}>{optionLabel(option)}</MenuItem>
+                ))}
+              </TextField>
             )}
             {report.status && (
               <TextField
                 label="Status"
-                value={status}
-                onChange={(event) => setStatus(event.target.value)}
+                value={filters.status}
+                onChange={(event) => updateFilter('status', event.target.value)}
                 select
                 size="small"
                 sx={{ minWidth: 180 }}
@@ -371,61 +450,16 @@ export default function ReportsPage() {
                 {statusOptions.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
               </TextField>
             )}
-            {report.category && (
+            {(report.textFilters || []).map(({ name, label }) => (
               <TextField
-                label="Category ID"
-                type="number"
-                value={categoryId}
-                onChange={(event) => setCategoryId(event.target.value)}
-                inputProps={{ min: 1, step: 1 }}
-                size="small"
-              />
-            )}
-            {report.key === 'blacklist' && (
-              <>
-                <TextField
-                  label="Name"
-                  value={blacklistName}
-                  onChange={(event) => setBlacklistName(event.target.value)}
-                  inputProps={{ maxLength: 100 }}
-                  size="small"
-                />
-                <TextField
-                  label="Category"
-                  value={blacklistCategory}
-                  onChange={(event) => setBlacklistCategory(event.target.value)}
-                  inputProps={{ maxLength: 100 }}
-                  size="small"
-                />
-              </>
-            )}
-            {report.key === 'approvals' && (
-              <TextField
-                label="User"
-                value={approvalUser}
-                onChange={(event) => setApprovalUser(event.target.value)}
+                key={name}
+                label={label}
+                value={filters[name]}
+                onChange={(event) => updateFilter(name, event.target.value)}
                 inputProps={{ maxLength: 100 }}
                 size="small"
               />
-            )}
-            {report.key === 'staff' && (
-              <>
-                <TextField
-                  label="Name"
-                  value={staffName}
-                  onChange={(event) => setStaffName(event.target.value)}
-                  inputProps={{ maxLength: 100 }}
-                  size="small"
-                />
-                <TextField
-                  label="Job Role"
-                  value={staffJobRole}
-                  onChange={(event) => setStaffJobRole(event.target.value)}
-                  inputProps={{ maxLength: 100 }}
-                  size="small"
-                />
-              </>
-            )}
+            ))}
             <Box className="report-filter-actions">
               <Button type="submit" variant="contained" color="secondary" disabled={loading}>
                 {loading && <CircularProgress size={18} sx={{ mr: 1 }} />}

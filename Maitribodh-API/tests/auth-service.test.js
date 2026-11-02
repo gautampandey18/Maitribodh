@@ -3,7 +3,7 @@ import test from 'node:test';
 import { ROLES } from '../src/constants/roles.js';
 import { createAuthService } from '../src/modules/auth/auth.service.js';
 
-test('login issues a Security Guard token with the approved 12-hour expiry', async () => {
+test('login issues a Security Guard token with a two-hour expiry', async () => {
   const issued = [];
   const service = createAuthService({
     repository: createRepository({ role: ROLES.SECURITY_GUARD }),
@@ -16,12 +16,12 @@ test('login issues a Security Guard token with the approved 12-hour expiry', asy
 
   const result = await service.login({ username: 'guard', password: 'valid-password' });
 
-  assert.equal(issued[0].expiresIn, 43200);
+  assert.equal(issued[0].expiresIn, 7200);
   assert.equal(result.accessToken, 'signed-token');
-  assert.equal(result.expiresIn, 43200);
+  assert.equal(result.expiresIn, 7200);
 });
 
-test('login issues other roles tokens with the approved 30-minute expiry', async () => {
+test('login issues other roles tokens with a two-hour expiry', async () => {
   const issued = [];
   const service = createAuthService({
     repository: createRepository({ role: ROLES.ADMIN }),
@@ -34,8 +34,8 @@ test('login issues other roles tokens with the approved 30-minute expiry', async
 
   const result = await service.login({ username: 'admin', password: 'valid-password' });
 
-  assert.equal(issued[0], 1800);
-  assert.equal(result.expiresIn, 1800);
+  assert.equal(issued[0], 7200);
+  assert.equal(result.expiresIn, 7200);
 });
 
 test('first login consumes a valid temporary password and requires password change', async () => {

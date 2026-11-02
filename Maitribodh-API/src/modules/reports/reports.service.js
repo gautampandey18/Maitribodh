@@ -41,6 +41,10 @@ export function createReportsService({ repository }) {
       return repository.analytics({ tab, ...filters });
     },
 
+    options() {
+      return repository.options();
+    },
+
     recordVisitHistoryExport({ filters, rowCount, actor }) {
       return repository.recordVisitHistoryExport({
         filters,

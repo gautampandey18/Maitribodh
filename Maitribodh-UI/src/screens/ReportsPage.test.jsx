@@ -43,7 +43,8 @@ it('automatically loads every report section without applying filters', async ()
     await waitFor(() => expect(get).toHaveBeenCalledWith(path, { params: { page: 1, pageSize: 5 } }));
     await waitFor(() => expect(get).toHaveBeenCalledWith('/reports/analytics', { params: { tab: tabKey } }));
   }
-  expect(get).toHaveBeenCalledTimes(12);
+  expect(get).toHaveBeenCalledWith('/reports/options');
+  expect(get).toHaveBeenCalledTimes(13);
 }, 30_000);
 
 it('runs the registration report with the selected status and renders returned rows', async () => {
@@ -308,7 +309,7 @@ it('renders KPI metric cards and graphical charts for active tabs matching live 
   expect(await screen.findByText('On campus now')).toBeInTheDocument();
   expect(screen.getByText('Fullest location')).toBeInTheDocument();
   expect(screen.getByText('People on campus today')).toBeInTheDocument();
-  expect(screen.getByText('Occupancy by location (% full)')).toBeInTheDocument();
+  expect(screen.getByText('Occupancy by location (now)')).toBeInTheDocument();
 
   // Switch to Staff tab
   await user.click(screen.getByRole('tab', { name: 'Staff' }));
@@ -362,4 +363,82 @@ it('allows selecting quick date presets or custom from-to dates, updating both c
     expect(resetCall?.params?.fromDate).toBeUndefined();
     expect(resetCall?.params?.toDate).toBeUndefined();
   });
+}, 30_000);
+
+it('scopes the table and the KPI charts to a searched person', async () => {
+  const personAnalytics = {
+    subtitle: 'Last 14 days \u00b7 times in IST',
+    kpis: [
+      { label: 'Total visits', value: '3', delta: '+50% vs previous 14 days', isTotal: true },
+      { label: 'Inside right now', value: '1', delta: 'All within 24 h' },
+      { label: 'Avg. visit duration', value: '25 min', delta: '+5 min vs previous' },
+      { label: 'Accompanying guests', value: '0', delta: '0% vs previous' },
+    ],
+    chartLeft: { type: 'stacked-bar', title: 'Daily check-ins by category', xLabels: ['1'], yMax: 4, yTicks: [0, 1, 2, 3, 4], series: [] },
+    chartRight: { type: 'donut', title: 'Visits by category', totalValue: '3', totalLabel: 'visits', segments: [] },
+  };
+  const get = vi.spyOn(api, 'get').mockImplementation((path, config) => {
+    if (path === '/reports/options') return Promise.resolve({ data: { categories: [], locations: [] } });
+    if (path === '/reports/analytics') {
+      return Promise.resolve({ data: config.params.search ? personAnalytics : REPORT_TABS_CONFIG.visits });
+    }
+    return Promise.resolve({
+      data: config.params.search
+        ? { items: [{ person_code: 'MB-000007', name: 'Asha Patel' }], total: 1, page: 1, pageSize: 5 }
+        : { items: [], total: 0, page: 1, pageSize: 5 },
+    });
+  });
+  const user = userEvent.setup();
+
+  render(<MemoryRouter><ReportsPage /></MemoryRouter>);
+  await user.type(screen.getByRole('textbox', { name: 'Search person' }), ' MB-000007 ');
+  await user.click(screen.getByRole('button', { name: 'Run report' }));
+
+  expect(await screen.findByText('Asha Patel')).toBeInTheDocument();
+  expect(await screen.findByText('25 min')).toBeInTheDocument();
+  expect(screen.getByText('+50% vs previous 14 days')).toBeInTheDocument();
+  expect(get).toHaveBeenCalledWith('/reports/visit-history', { params: { search: 'MB-000007', page: 1, pageSize: 5 } });
+  expect(get).toHaveBeenCalledWith('/reports/analytics', { params: { tab: 'visits', search: 'MB-000007' } });
+
+  await user.click(screen.getByRole('tab', { name: 'Approvals' }));
+  await waitFor(() => expect(get).toHaveBeenCalledWith('/reports/analytics', { params: { tab: 'approvals', search: 'MB-000007' } }));
+  expect(get).toHaveBeenCalledWith('/reports/approvals', { params: { search: 'MB-000007', page: 1, pageSize: 5 } });
+}, 30_000);
+
+it('filters visits by category and location chosen from report options and sends them to charts', async () => {
+  const get = vi.spyOn(api, 'get').mockImplementation((path) => {
+    if (path === '/reports/options') {
+      return Promise.resolve({ data: {
+        categories: [{ category_id: 2, name: 'Visitor', status: 'ACTIVE' }, { category_id: 5, name: 'Intern', status: 'INACTIVE' }],
+        locations: [{ location_id: 4, name: 'Main Hall', status: 'ACTIVE' }],
+      } });
+    }
+    if (path === '/reports/analytics') return Promise.resolve({ data: REPORT_TABS_CONFIG.visits });
+    return Promise.resolve({ data: { items: [], total: 0, page: 1, pageSize: 5 } });
+  });
+  const user = userEvent.setup();
+
+  render(<MemoryRouter><ReportsPage /></MemoryRouter>);
+  await user.click(screen.getByRole('combobox', { name: 'Category' }));
+  expect(await screen.findByRole('option', { name: 'Intern (inactive)' })).toBeInTheDocument();
+  await user.click(screen.getByRole('option', { name: 'Visitor' }));
+  await user.click(screen.getByRole('combobox', { name: 'Location' }));
+  await user.click(await screen.findByRole('option', { name: 'Main Hall' }));
+  await user.click(screen.getByRole('button', { name: 'Run report' }));
+
+  await waitFor(() => expect(get).toHaveBeenCalledWith('/reports/visit-history', {
+    params: { categoryId: 2, locationId: 4, page: 1, pageSize: 5 },
+  }));
+  expect(get).toHaveBeenCalledWith('/reports/analytics', { params: { tab: 'visits', categoryId: 2, locationId: 4 } });
+}, 30_000);
+
+it('shows an error instead of stale charts when analytics fail', async () => {
+  vi.spyOn(api, 'get').mockImplementation((path) => {
+    if (path === '/reports/analytics') return Promise.reject(new Error('Network Error'));
+    return Promise.resolve({ data: { items: [], total: 0, page: 1, pageSize: 5 } });
+  });
+
+  render(<MemoryRouter><ReportsPage /></MemoryRouter>);
+
+  expect(await screen.findByRole('alert')).toBeInTheDocument();
 }, 30_000);

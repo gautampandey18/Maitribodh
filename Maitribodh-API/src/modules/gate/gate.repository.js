@@ -45,7 +45,9 @@ export function createGateRepository(pool) {
       return result.rows;
     },
 
-    async recordLookup({ actorUserId, actorRole, resultCount, outcomes, mobileMasked, ipAddress, device }) {
+    async recordLookup({
+      actorUserId, actorRole, resultCount, outcomes, personIds = [], blockedPersonIds = [], mobileMasked, ipAddress, device,
+    }) {
       const hasBlacklistedMatch = outcomes.includes('BLOCKED_BLACKLIST');
       await pool.query(
         `INSERT INTO mams.audit_log
@@ -57,7 +59,13 @@ export function createGateRepository(pool) {
           actorRole,
           hasBlacklistedMatch ? 'GATE_BLOCKED_BLACKLIST' : 'GATE_LOOKUP',
           JSON.stringify({ mobile_masked: mobileMasked ?? null }),
-          JSON.stringify({ matches: resultCount, outcomes }),
+          JSON.stringify({
+            matches: resultCount,
+            outcomes,
+            // Person IDs let reports attribute screenings and blocked attempts to a searched person.
+            ...(personIds.length ? { person_ids: personIds.map(Number) } : {}),
+            ...(blockedPersonIds.length ? { blocked_person_ids: blockedPersonIds.map(Number) } : {}),
+          }),
           ipAddress ?? null,
           device?.slice(0, 100) ?? null,
         ],

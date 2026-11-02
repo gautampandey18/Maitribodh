@@ -715,7 +715,7 @@ Source: [auth routes](../Maitribodh-API/src/modules/auth/auth.routes.js).
 | POST | `/api/v1/auth/logout` | AUTHENTICATED | No required body | `204`; revokes sessions through token version |
 | PUT | `/api/v1/auth/password` | AUTHENTICATED | `currentPassword`, `newPassword` | `204`; password change |
 
-New passwords require 10-256 characters, at least one letter, and at least one digit. Successful sessions expire after 12 hours for security guards and 30 minutes for other roles. Temporary passwords expire after 24 hours and require password change at first login.
+New passwords require 10-256 characters, at least one letter, and at least one digit. Successful sessions expire after two hours for every role. The UI also signs out after 30 minutes without user interaction; background API requests do not count as activity. The current tab's session survives refresh using `sessionStorage`, without extending either deadline. Temporary passwords expire after 24 hours and require password change at first login.
 
 ### 8.3 Users
 
@@ -891,15 +891,19 @@ Source: [report routes](../Maitribodh-API/src/modules/reports/reports.routes.js)
 
 | Method | Path | Access | Query filters | Success |
 |---|---|---|---|---|
-| GET | `/api/v1/reports/visit-history` | REPORT | `fromDate`, `toDate`, `categoryId`, `locationId`, pagination | `200`, visit history |
-| GET | `/api/v1/reports/visit-history/export` | REPORT | `fromDate`, `toDate`, `categoryId`, `locationId` | `200`, CSV attachment; export activity recorded |
-| GET | `/api/v1/reports/registrations` | REPORT | `categoryId`, `status`, pagination | `200`, registration report |
-| GET | `/api/v1/reports/occupancy` | REPORT | `fromDate`, `toDate`, pagination | `200`, occupancy report |
-| GET | `/api/v1/reports/staff` | REPORT | Pagination | `200`, staff report |
-| GET | `/api/v1/reports/approvals` | REPORT | `fromDate`, `toDate`, pagination | `200`, approval report |
-| GET | `/api/v1/reports/blacklist` | REPORT | Pagination | `200`, blacklist report |
+| GET | `/api/v1/reports/visit-history` | REPORT | `fromDate`, `toDate`, `categoryId`, `locationId`, `search`, pagination | `200`, visit history |
+| GET | `/api/v1/reports/registrations` | REPORT | `fromDate`, `toDate` (registration date), `categoryId`, `status`, `search`, pagination | `200`, registration report |
+| GET | `/api/v1/reports/occupancy` | REPORT | `fromDate`, `toDate`, `search`, pagination | `200`, occupancy report |
+| GET | `/api/v1/reports/staff` | REPORT | `name`, `jobRole`, `search`, pagination | `200`, staff report |
+| GET | `/api/v1/reports/approvals` | REPORT | `fromDate`, `toDate`, `user`, `search`, pagination | `200`, approval report |
+| GET | `/api/v1/reports/blacklist` | REPORT | `name`, `category`, `search`, pagination | `200`, blacklist report |
+| GET | `/api/v1/reports/{report}/export` | REPORT | Same filters as the report, no pagination | `200`, XLSX attachment; Visit History export activity recorded |
+| GET | `/api/v1/reports/analytics` | REPORT | `tab` plus the same filters as that tab's report | `200`, KPI cards and chart data |
+| GET | `/api/v1/reports/options` | REPORT | None | `200`, categories and locations for report filters |
 
-Registration report statuses: `PENDING`, `ACTIVE`, `REJECTED`, `DEACTIVATED`. Date ranges reject `fromDate > toDate`. The CSV export does not use pagination and returns `text/csv; charset=utf-8` with filename `visit-history.csv`.
+Registration report statuses: `PENDING`, `ACTIVE`, `REJECTED`, `DEACTIVATED`. Date ranges reject `fromDate > toDate`. Exports do not use pagination.
+
+`search` matches one person by exact person code, exact mobile number, or part of the name. Analytics apply the same filters as the table, so KPIs and charts describe only the matching people. Analytics default to the last 14 IST days. Staff and Blacklist tables are rosters; their date range applies only to the charts. Occupancy charts show the selected end date and are live when that date is today. Gate lookups record matched and blocked person IDs, so per-person blocked-attempt and screening counts start from lookups made after this change.
 
 ### 8.14 Dashboard
 

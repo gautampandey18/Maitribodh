@@ -45,3 +45,29 @@ test('gate lookup audit stores a masked mobile and outcome data', async () => {
   assert.deepEqual(JSON.parse(auditInput[4]), { matches: 1, outcomes: ['ELIGIBLE'] });
   assert.equal(auditInput[6].length, 100);
 });
+
+test('gate lookup audit stores matched and blocked person ids for report filtering', async () => {
+  let auditInput;
+  const repository = createGateRepository({
+    async query(_sql, values) {
+      auditInput ??= values;
+      return { rowCount: 1 };
+    },
+  });
+
+  await repository.recordLookup({
+    actorUserId: 8,
+    actorRole: 'SECURITY_GUARD',
+    resultCount: 2,
+    outcomes: ['BLOCKED_BLACKLIST', 'ELIGIBLE'],
+    personIds: ['11', '12'],
+    blockedPersonIds: ['11'],
+  });
+
+  assert.deepEqual(JSON.parse(auditInput[4]), {
+    matches: 2,
+    outcomes: ['BLOCKED_BLACKLIST', 'ELIGIBLE'],
+    person_ids: [11, 12],
+    blocked_person_ids: [11],
+  });
+});

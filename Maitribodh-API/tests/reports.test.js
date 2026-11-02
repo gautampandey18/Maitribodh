@@ -7,6 +7,12 @@ import { errorHandler } from '../src/middleware/errorHandler.js';
 import { createReportsRouter } from '../src/modules/reports/reports.routes.js';
 import { createReportsService } from '../src/modules/reports/reports.service.js';
 import { createReportsRepository } from '../src/modules/reports/reports.repository.js';
+import {
+  buildApprovalsAnalytics,
+  buildOccupancyAnalytics,
+  buildVisitsAnalytics,
+  getIstDateRange,
+} from '../src/modules/reports/reports.analytics.js';
 
 test('visit history uses the approved date, category, and location filters', async () => {
   let call;
@@ -22,7 +28,7 @@ test('visit history uses the approved date, category, and location filters', asy
   assert.match(call.sql, /AT TIME ZONE 'Asia\/Kolkata'/);
   assert.match(call.sql, /p\.category_id = \$3/);
   assert.match(call.sql, /v\.checkin_location_id = \$4/);
-  assert.deepEqual(call.values, ['2026-10-01', '2026-10-09', 3, 5]);
+  assert.deepEqual(call.values, ['2026-10-01', '2026-10-09', 3, 5, '']);
 });
 
 test('date-based reports accept no dates and return unbounded rows', async () => {
@@ -83,8 +89,8 @@ test('blacklist report filters by person name and category before pagination', a
 
   assert.match(call.sql, /p\.first_name \|\| ' ' \|\| p\.last_name ILIKE/);
   assert.match(call.sql, /c\.name ILIKE/);
-  assert.match(call.sql, /LIMIT \$3 OFFSET \$4/);
-  assert.deepEqual(call.values, ['Asha', 'Staff', 10, 10]);
+  assert.match(call.sql, /LIMIT \$4 OFFSET \$5/);
+  assert.deepEqual(call.values, ['Asha', 'Staff', '', 10, 10]);
 });
 
 test('staff report filters by person name and job role before pagination', async () => {
@@ -101,8 +107,8 @@ test('staff report filters by person name and job role before pagination', async
 
   assert.match(call.sql, /p\.first_name \|\| ' ' \|\| p\.last_name ILIKE/);
   assert.match(call.sql, /j\.name ILIKE/);
-  assert.match(call.sql, /LIMIT \$3 OFFSET \$4/);
-  assert.deepEqual(call.values, ['Asha', 'Coordinator', 10, 10]);
+  assert.match(call.sql, /LIMIT \$4 OFFSET \$5/);
+  assert.deepEqual(call.values, ['Asha', 'Coordinator', '', 10, 10]);
 });
 
 test('approvals report filters by acting username before pagination', async () => {
@@ -119,8 +125,8 @@ test('approvals report filters by acting username before pagination', async () =
   });
 
   assert.match(call.sql, /u\.username ILIKE/);
-  assert.match(call.sql, /LIMIT \$4 OFFSET \$5/);
-  assert.deepEqual(call.values, ['2026-10-01', '2026-10-09', 'approver', 10, 10]);
+  assert.match(call.sql, /LIMIT \$5 OFFSET \$6/);
+  assert.deepEqual(call.values, ['2026-10-01', '2026-10-09', 'approver', '', 10, 10]);
 });
 
 test('Visit History export audit records actor, filters, and row count', async () => {
@@ -232,7 +238,7 @@ test('report routes load without date filters, validate supplied ranges, and exp
 
   const unfiltered = await request(app).get('/api/v1/reports/visit-history');
   assert.equal(unfiltered.status, 200);
-  assert.deepEqual(visitFilters.filters, { fromDate: undefined, toDate: undefined, categoryId: undefined, locationId: undefined });
+  assert.deepEqual(visitFilters.filters, { fromDate: undefined, toDate: undefined, categoryId: undefined, locationId: undefined, search: '' });
 
   const invalidRange = await request(app).get('/api/v1/reports/visit-history')
     .query({ fromDate: '2026-10-10', toDate: '2026-10-09' });
@@ -241,13 +247,13 @@ test('report routes load without date filters, validate supplied ranges, and exp
   const singleDate = await request(app).get('/api/v1/reports/visit-history')
     .query({ fromDate: '2026-10-01' });
   assert.equal(singleDate.status, 200);
-  assert.deepEqual(visitFilters.filters, { fromDate: '2026-10-01', toDate: undefined, categoryId: undefined, locationId: undefined });
+  assert.deepEqual(visitFilters.filters, { fromDate: '2026-10-01', toDate: undefined, categoryId: undefined, locationId: undefined, search: '' });
 
   const blacklist = await request(app).get('/api/v1/reports/blacklist')
     .query({ name: 'Asha', category: 'Staff', page: 2, pageSize: 10 });
   assert.equal(blacklist.status, 200);
   assert.deepEqual(visitFilters, {
-    filters: { name: 'Asha', category: 'Staff' },
+    filters: { fromDate: undefined, toDate: undefined, name: 'Asha', category: 'Staff', search: '' },
     pagination: { page: 2, pageSize: 10, offset: 10 },
   });
   const invalidBlacklistFilter = await request(app).get('/api/v1/reports/blacklist')
@@ -258,7 +264,7 @@ test('report routes load without date filters, validate supplied ranges, and exp
     .query({ user: 'approver', fromDate: '2026-10-01', toDate: '2026-10-09', page: 2, pageSize: 10 });
   assert.equal(approvals.status, 200);
   assert.deepEqual(visitFilters, {
-    filters: { fromDate: '2026-10-01', toDate: '2026-10-09', user: 'approver' },
+    filters: { fromDate: '2026-10-01', toDate: '2026-10-09', user: 'approver', search: '' },
     pagination: { page: 2, pageSize: 10, offset: 10 },
   });
   const invalidApprovalsUser = await request(app).get('/api/v1/reports/approvals')
@@ -317,12 +323,12 @@ test('every report has an unpaginated Excel export endpoint', async () => {
   app.use(errorHandler);
 
   const exports = [
-    ['visit-history', { fromDate: '2026-10-01', categoryId: 2, locationId: 4 }, { filters: { fromDate: '2026-10-01', toDate: undefined, categoryId: 2, locationId: 4 }, actorRole: 'ADMIN' }],
-    ['registrations', { categoryId: 3, status: 'ACTIVE' }, { filters: { categoryId: 3, status: 'ACTIVE' }, actorRole: 'ADMIN' }],
-    ['occupancy', { toDate: '2026-10-15' }, { filters: { fromDate: undefined, toDate: '2026-10-15' } }],
-    ['staff', { name: 'Asha', jobRole: 'Coordinator' }, { filters: { name: 'Asha', jobRole: 'Coordinator' } }],
-    ['approvals', { fromDate: '2026-10-01', user: 'approver' }, { filters: { fromDate: '2026-10-01', toDate: undefined, user: 'approver' } }],
-    ['blacklist', { name: 'Asha', category: 'Staff' }, { filters: { name: 'Asha', category: 'Staff' } }],
+    ['visit-history', { fromDate: '2026-10-01', categoryId: 2, locationId: 4 }, { filters: { fromDate: '2026-10-01', toDate: undefined, categoryId: 2, locationId: 4, search: '' }, actorRole: 'ADMIN' }],
+    ['registrations', { categoryId: 3, status: 'ACTIVE' }, { filters: { fromDate: undefined, toDate: undefined, categoryId: 3, status: 'ACTIVE', search: '' }, actorRole: 'ADMIN' }],
+    ['occupancy', { toDate: '2026-10-15' }, { filters: { fromDate: undefined, toDate: '2026-10-15', search: '' } }],
+    ['staff', { name: 'Asha', jobRole: 'Coordinator' }, { filters: { fromDate: undefined, toDate: undefined, name: 'Asha', jobRole: 'Coordinator', search: '' } }],
+    ['approvals', { fromDate: '2026-10-01', user: 'approver' }, { filters: { fromDate: '2026-10-01', toDate: undefined, user: 'approver', search: '' } }],
+    ['blacklist', { name: 'Asha', category: 'Staff', search: 'MB-0001' }, { filters: { fromDate: undefined, toDate: undefined, name: 'Asha', category: 'Staff', search: 'MB-0001' } }],
   ];
   for (const [report, query, expectedInput] of exports) {
     const response = await request(app).get(`/api/v1/reports/${report}/export`).query(query).buffer(true).parse(parseBuffer);
@@ -384,7 +390,7 @@ test('staff report route validates and forwards name and job-role filters', asyn
     .query({ name: 'Asha', jobRole: 'Coordinator', page: 2, pageSize: 10 })
     .expect(200);
   assert.deepEqual(received, {
-    filters: { name: 'Asha', jobRole: 'Coordinator' },
+    filters: { fromDate: undefined, toDate: undefined, name: 'Asha', jobRole: 'Coordinator', search: '' },
     pagination: { page: 2, pageSize: 10, offset: 10 },
   });
   await request(app).get('/api/v1/reports/staff')
@@ -422,7 +428,7 @@ test('analytics route validates tab and date range, and forwards to reportsServi
 
   assert.deepEqual(received, {
     tab: 'visits',
-    filters: { fromDate: '2026-10-01', toDate: '2026-10-14' },
+    filters: { fromDate: '2026-10-01', toDate: '2026-10-14', categoryId: undefined, locationId: undefined, search: '' },
   });
   assert.equal(res.body.subtitle, mockAnalytics.subtitle);
 
@@ -465,3 +471,147 @@ test('reports repository analytics generates structured config for each tab', as
   assert.equal(analytics.chartRight.type, 'donut');
 });
 
+
+test('every report table query applies the person search', async () => {
+  const calls = [];
+  const repository = createReportsRepository({
+    async query(sql, values) { calls.push({ sql, values }); return { rows: [] }; },
+  });
+
+  await repository.visitHistory({ search: 'MB-0001' });
+  await repository.registrations({ search: 'MB-0001' });
+  await repository.occupancy({ search: 'MB-0001' });
+  await repository.staff({ search: 'MB-0001' });
+  await repository.approvals({ search: 'MB-0001' });
+  await repository.blacklist({ search: 'MB-0001' });
+
+  assert.equal(calls.length, 6);
+  for (const call of calls) {
+    assert.match(call.sql, /p\.person_code = upper\(\$\d+\)/);
+    assert.ok(call.values.includes('MB-0001'));
+  }
+});
+
+test('analytics queries are scoped by person search and tab filters', async () => {
+  const tabs = {
+    visits: { categoryId: 3, locationId: 5 },
+    registrations: { categoryId: 3, status: 'ACTIVE' },
+    occupancy: {},
+    staff: { name: 'Asha', jobRole: 'Coordinator' },
+    approvals: { user: 'approver' },
+    blacklist: { name: 'Asha', category: 'Staff' },
+  };
+  for (const [tab, filters] of Object.entries(tabs)) {
+    const calls = [];
+    const repository = createReportsRepository({
+      async query(sql, values) { calls.push({ sql, values }); return { rows: [] }; },
+    });
+
+    const analytics = await repository.analytics({ tab, fromDate: '2026-10-01', toDate: '2026-10-14', search: 'MB-0001', ...filters });
+
+    assert.ok(calls.length > 0, `${tab} should query`);
+    for (const call of calls) {
+      assert.ok(call.values.includes('MB-0001'), `${tab} query should include the person search`);
+      assert.match(call.sql, /person_code = upper\(\$\d+\)/);
+      // Pending registrations have no acting user yet, so only that count ignores the user filter.
+      const isPendingCount = tab === 'approvals' && call.sql.includes('pending_count');
+      for (const value of Object.values(filters)) {
+        if (isPendingCount) continue;
+        assert.ok(call.values.includes(value), `${tab} query should include ${value}`);
+      }
+    }
+    assert.equal(analytics.kpis.length, 4);
+  }
+  await assert.rejects(createReportsRepository({ async query() { return { rows: [] }; } }).analytics({ tab: 'nope' }), { statusCode: 400 });
+});
+
+test('report routes forward person search to tables and analytics, and expose filter options', async () => {
+  const received = {};
+  const app = express();
+  app.use('/api/v1/reports', createReportsRouter({
+    authenticate(request_, _response, next) {
+      request_.auth = { userId: 3, role: 'VIEWER' };
+      next();
+    },
+    reportsService: {
+      async registrations(input) { received.registrations = input; return { items: [], total: 0, page: 1, pageSize: 20 }; },
+      async analytics(input) { received.analytics = input; return { kpis: [] }; },
+      async options() { return { categories: [{ category_id: 1, name: 'Staff', status: 'ACTIVE' }], locations: [] }; },
+    },
+  }));
+  app.use(errorHandler);
+
+  await request(app).get('/api/v1/reports/registrations')
+    .query({ search: '  Asha  ', fromDate: '2026-10-01', toDate: '2026-10-14', categoryId: '' })
+    .expect(200);
+  assert.deepEqual(received.registrations.filters, {
+    fromDate: '2026-10-01', toDate: '2026-10-14', categoryId: undefined, status: undefined, search: 'Asha',
+  });
+
+  await request(app).get('/api/v1/reports/analytics')
+    .query({ tab: 'staff', search: 'MB-0001', name: 'Asha', jobRole: 'Coordinator' })
+    .expect(200);
+  assert.deepEqual(received.analytics, {
+    tab: 'staff',
+    filters: { fromDate: undefined, toDate: undefined, name: 'Asha', jobRole: 'Coordinator', search: 'MB-0001' },
+  });
+
+  await request(app).get('/api/v1/reports/visit-history').query({ search: 'x'.repeat(101) }).expect(400);
+  await request(app).get('/api/v1/reports/analytics').query({ tab: 'visits', search: 'x'.repeat(101) }).expect(400);
+
+  const options = await request(app).get('/api/v1/reports/options').expect(200);
+  assert.equal(options.body.categories[0].name, 'Staff');
+});
+
+test('visit analytics zero-fill empty days and use one color per category in both charts', () => {
+  const dateRange = getIstDateRange({ fromDate: '2026-10-01', toDate: '2026-10-03' });
+  const analytics = buildVisitsAnalytics({
+    summary: { current_visits: 3 },
+    daily: [
+      { day: '2026-10-01', category_name: 'Visitor', checkin_count: 2 },
+      { day: '2026-10-03', category_name: 'Retired Category', checkin_count: 1 },
+    ],
+    byCategory: [{ category_name: 'Visitor', count: 2 }, { category_name: 'Retired Category', count: 1 }],
+    dateRange,
+  });
+
+  assert.deepEqual(analytics.chartLeft.xLabels, ['1', '2', '3']);
+  const visitor = analytics.chartLeft.series.find((series) => series.name === 'Visitor');
+  const retired = analytics.chartLeft.series.find((series) => series.name === 'Retired Category');
+  assert.deepEqual(visitor.values, [2, 0, 0]);
+  assert.deepEqual(retired.values, [0, 0, 1]);
+  for (const segment of analytics.chartRight.segments) {
+    assert.equal(segment.color, analytics.chartLeft.series.find((series) => series.name === segment.label).color);
+  }
+  assert.equal(analytics.kpis[0].value, '3');
+});
+
+test('approval analytics compute the rate from decisions only', () => {
+  const analytics = buildApprovalsAnalytics({
+    summary: { total_requests: 10, approved_count: 3, rejected_count: 1, pending_count: 0, avg_decision_min: 90 },
+    byOutcome: [{ action: 'SUBMITTED', count: 10 }, { action: 'APPROVED', count: 3 }, { action: 'REJECTED', count: 1 }],
+    dateRange: getIstDateRange({ fromDate: '2026-10-01', toDate: '2026-10-02' }),
+  });
+
+  assert.equal(analytics.kpis[1].delta, '75% approval rate');
+  assert.equal(analytics.kpis[2].delta, 'None waiting');
+  assert.equal(analytics.kpis[3].label, 'Avg. decision time');
+  assert.equal(analytics.kpis[3].value, '1.5 h');
+  assert.equal(analytics.chartRight.totalValue, '14');
+});
+
+test('occupancy analytics describe a past day instead of live data', () => {
+  const analytics = buildOccupancyAnalytics({
+    summary: { checked_in_day: 4, still_inside_from_day: 1 },
+    hourly: [{ hour: 0, count: 0 }, { hour: 9, count: 3 }],
+    byLocation: [{ name: 'Main Hall', count: 3 }],
+    dateRange: getIstDateRange({ fromDate: '2026-10-01', toDate: '2026-10-01' }),
+  });
+
+  assert.equal(analytics.subtitle, '1 Oct 2026 · times in IST');
+  assert.deepEqual(analytics.chartLeft.xLabels, ['12a', '9a']);
+  assert.equal(analytics.chartLeft.peakLabel, 'Peak 3 at 9a');
+  assert.equal(analytics.kpis[1].label, 'Busiest location');
+  assert.equal(analytics.kpis[1].value, 'Main Hall');
+  assert.equal(analytics.chartRight.title, 'Check-ins by location');
+});

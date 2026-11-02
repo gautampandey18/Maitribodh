@@ -77,7 +77,7 @@ export default function LoginPage() {
         </Box>
         <Box className="login-security">
           <LockOutlinedIcon fontSize="small" />
-          <Typography>Secured connection · Security Guard sessions remain valid for at least 12 hours · Access is logged for compliance.</Typography>
+          <Typography>Secured connection · Sessions last up to 2 hours and sign out after 30 minutes of inactivity · Access is logged for compliance.</Typography>
         </Box>
       </Box>
       <Box component="main" className="login-form-wrap">
@@ -85,6 +85,11 @@ export default function LoginPage() {
           <Typography className="eyebrow">SECURE PORTAL</Typography>
           <Typography component="h2" className="login-title">Sign in to your account</Typography>
           <Typography className="login-subtitle">Enter your credentials to continue.</Typography>
+          {auth.logoutReason && <Alert severity="info" className="login-alert">
+            {auth.logoutReason === 'inactive'
+              ? 'You were signed out after 30 minutes of inactivity. Please sign in again.'
+              : 'Your session has expired. Please sign in again.'}
+          </Alert>}
           {serverError && <Alert severity="error" className="login-alert">{serverError}</Alert>}
           <Box component="form" onSubmit={handleSubmit(onSubmit)} noValidate className="login-form">
             <Controller
