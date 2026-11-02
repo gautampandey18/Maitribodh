@@ -150,7 +150,7 @@ export function createRegistrationRepository(pool) {
         await audit(client, actor, 'CREATE', person.person_id, null, { ...person, name: `${input.firstName} ${input.lastName}`, category: category.name });
         await client.query(`INSERT INTO mams.notification (user_id, type, title, body, entity_type, entity_id)
           SELECT user_id, 'REGISTRATION_SUBMITTED', 'Registration Submitted', $1, 'PERSON', $2 FROM mams.app_user
-          WHERE status = 'ACTIVE' AND (role IN ('SUPER_ADMIN','ADMIN','APPROVER') OR user_id = $3)`, [`${input.firstName} ${input.lastName} · ${category.name} · ${status}`, person.person_id, actor.userId]);
+          WHERE status = 'ACTIVE' AND (roles && ARRAY['SUPER_ADMIN','ADMIN','APPROVER']::varchar[] OR user_id = $3)`, [`${input.firstName} ${input.lastName} · ${category.name} · ${status}`, person.person_id, actor.userId]);
         return person;
       });
     },

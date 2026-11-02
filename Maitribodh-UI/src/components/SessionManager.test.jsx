@@ -46,6 +46,14 @@ it('restores login and password-change state after refresh without resetting dea
   expect(restored.getState().auth.mustChangePassword).toBe(true);
 });
 
+it('retains all assigned roles when a session is restored after refresh', () => {
+  const store = createAppStore();
+  store.dispatch(sessionStarted({
+    ...login, user: { id: 4, role: 'APPROVER', roles: ['APPROVER', 'SECURITY_GUARD'] },
+  }));
+  expect(createAppStore().getState().auth.user.roles).toEqual(['APPROVER', 'SECURITY_GUARD']);
+});
+
 it('logs out at exactly 30 minutes idle and revokes the captured token', () => {
   const store = startSession();
   act(() => vi.advanceTimersByTime(SESSION_IDLE_MS - 1));

@@ -23,6 +23,7 @@ import { Link } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { api } from '../api.js';
 import { requestMessage } from '../utils/resources.js';
+import { hasRole } from '../constants/roles.js';
 
 const metrics = [
   ['total_users', 'Total Users', '#4F46E5', '#EEF2FF', '#C7D2FE'],
@@ -58,7 +59,7 @@ export default function DashboardPage() {
   const [reconciling, setReconciling] = useState(false);
   const insideRequestId = useRef(0);
   const recentActivityRequestId = useRef(0);
-  const canReviewApprovals = ['SUPER_ADMIN', 'ADMIN', 'APPROVER'].includes(user?.role);
+  const canReviewApprovals = hasRole(user, 'SUPER_ADMIN', 'ADMIN', 'APPROVER');
 
   async function loadInside(nextPage = insidePage, nextRowsPerPage = insideRowsPerPage) {
     const currentRequestId = ++insideRequestId.current;
@@ -235,7 +236,7 @@ export default function DashboardPage() {
                           <TableCell>{visit.accompanying_count}</TableCell>
                           <TableCell>{visit.checked_in_by}</TableCell>
                           <TableCell>{visit.checkin_device ?? '—'}</TableCell>
-                          <TableCell>{user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN' ? <Button className="dashboard-admin-review" size="small" onClick={() => { setReconciliationError(''); setReconciliationTarget(visit); }}>Review / Checkout</Button> : <Typography variant="caption">Admin review</Typography>}</TableCell>
+                          <TableCell>{hasRole(user, 'ADMIN', 'SUPER_ADMIN') ? <Button className="dashboard-admin-review" size="small" onClick={() => { setReconciliationError(''); setReconciliationTarget(visit); }}>Review / Checkout</Button> : <Typography variant="caption">Admin review</Typography>}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>

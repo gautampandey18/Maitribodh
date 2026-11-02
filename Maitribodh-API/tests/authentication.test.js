@@ -45,8 +45,37 @@ test('authentication attaches the verified active user', async () => {
   assert.deepEqual(request.auth, {
     userId: 12,
     role: ROLES.ADMIN,
+    roles: [ROLES.ADMIN],
     mustChangePassword: false,
   });
+});
+
+test('authentication loads all roles from the database, not token role claims', async () => {
+  const request = createRequest('Bearer signed-token');
+  const middleware = createAuthenticate({
+    verifyToken: async () => ({ sub: '12', tokenVersion: 3, roles: ['SUPER_ADMIN'] }),
+    getUserById: async () => ({
+      user_id: 12, role: ROLES.SECURITY_GUARD, roles: [ROLES.SECURITY_GUARD, ROLES.APPROVER],
+      status: 'ACTIVE', token_version: 3,
+    }),
+  });
+  let error;
+  await middleware(request, {}, (failure) => { error = failure; });
+  assert.equal(error, undefined);
+  assert.deepEqual(request.auth.roles, [ROLES.APPROVER, ROLES.SECURITY_GUARD]);
+  assert.equal(request.auth.role, ROLES.APPROVER);
+});
+
+test('Approver and Security Guard roles grant both permissions, but not administration', () => {
+  const request = { auth: { role: ROLES.APPROVER, roles: [ROLES.APPROVER, ROLES.SECURITY_GUARD] } };
+  for (const role of [ROLES.APPROVER, ROLES.SECURITY_GUARD]) {
+    let error;
+    authorize(role)(request, {}, (failure) => { error = failure; });
+    assert.equal(error, undefined);
+  }
+  let error;
+  authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)(request, {}, (failure) => { error = failure; });
+  assert.equal(error.code, 'FORBIDDEN');
 });
 
 test('authentication blocks temporary sessions outside password change or logout', async () => {

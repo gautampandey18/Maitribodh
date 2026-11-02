@@ -7,6 +7,7 @@ import path from 'node:path';
 import { createApp } from '../src/app.js';
 import { createRegistrationRouter } from '../src/modules/persons/registration.routes.js';
 import { createPersonsRouter } from '../src/modules/persons/persons.routes.js';
+import { createAuthenticate } from '../src/middleware/authenticate.js';
 
 const input = { categoryId: 1, firstName: 'Asha', lastName: 'Patel', mobile: '9820000000', gender: 'OTHER', consent: true, categoryDetails: { purpose: 'Meeting', visit_date: '2026-10-09' } };
 function appFor(role, repository) {
@@ -20,6 +21,29 @@ test('viewer cannot access registration options or submit', async () => {
 test('guard cannot register staff even with a valid common profile', async () => {
   const repository = { async category() { return { form_type: 'STAFF', status: 'ACTIVE', approval_required: true }; } };
   await request(appFor('SECURITY_GUARD', repository)).post('/api/v1/persons').field('metadata', JSON.stringify(input)).expect(403);
+});
+test('adding Security Guard does not remove an Approver non-Visitor registration access', async () => {
+  let saved;
+  const authenticate = createAuthenticate({
+    verifyToken: async () => ({ sub: '9', tokenVersion: 1 }),
+    getUserById: async () => ({
+      user_id: 9, role: 'APPROVER', roles: ['SECURITY_GUARD', 'APPROVER'],
+      status: 'ACTIVE', token_version: 1,
+    }),
+  });
+  const repository = {
+    async category() { return { form_type: 'PARIVAR', status: 'ACTIVE' }; },
+    async saveDraft(value) { saved = value; return { person_id: 5 }; },
+  };
+  const app = createApp({
+    personsRouter: createRegistrationRouter({
+      repository, authenticate, encryptionSecret: 'test-secret-not-for-production',
+    }),
+  });
+  await request(app).post('/api/v1/persons/drafts')
+    .set('Authorization', 'Bearer test-token').send({ categoryId: 2 }).expect(201);
+  assert.equal(saved.actor.role, 'APPROVER');
+  assert.equal(saved.input.categoryId, 2);
 });
 test('invalid image bytes are rejected before persistence', async () => {
   let written = false;

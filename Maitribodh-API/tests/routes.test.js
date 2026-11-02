@@ -44,6 +44,71 @@ test('user creation route requires an authorized role', async () => {
   assert.equal(created, false);
 });
 
+test('user routes accept non-empty role lists and reject invalid or ambiguous assignments', async () => {
+  const calls = [];
+  const app = createRouteApp('/api/v1/users', createUsersRouter({
+    authenticate: authenticateAs('ADMIN'),
+    authService: {},
+    usersService: {
+      async createUser(input) { calls.push(input); return { user_id: 25, roles: input.input.roles }; },
+      async updateUser(input) { calls.push(input); return { user_id: 25, roles: input.input.roles }; },
+    },
+  }));
+  const account = {
+    firstName: 'Asha', lastName: 'Patel', mobile: '9876543210', username: 'approver.guard',
+  };
+  const roles = ['APPROVER', 'SECURITY_GUARD'];
+  await request(app).post('/api/v1/users').send({ ...account, roles }).expect(201);
+  assert.deepEqual(calls[0].input.roles, roles);
+  await request(app).patch('/api/v1/users/25').send({ roles }).expect(200);
+  assert.deepEqual(calls[1].input.roles, roles);
+  for (const invalid of [
+    { roles: [] }, { roles: ['INVALID'] }, { roles: ['APPROVER', 'APPROVER'] },
+    { role: 'VIEWER', roles }, { roles: 'APPROVER' },
+  ]) {
+    await request(app).post('/api/v1/users').send({ ...account, ...invalid }).expect(400);
+    await request(app).patch('/api/v1/users/25').send(invalid).expect(400);
+  }
+  await request(app).post('/api/v1/users').send(account).expect(400);
+  assert.equal(calls.length, 2);
+});
+
+test('an Approver with a Security Guard role can use both APIs but not user administration', async () => {
+  const authenticate = (req, _res, next) => {
+    req.auth = { userId: 7, role: 'APPROVER', roles: ['APPROVER', 'SECURITY_GUARD'] };
+    next();
+  };
+  const app = express();
+  app.use(express.json());
+  app.use('/api/v1/approvals', createApprovalsRouter({
+    authenticate,
+    approvalsService: { async listPending() { return { items: [] }; } },
+  }));
+  app.use('/api/v1/gate', createGateRouter({
+    authenticate,
+    gateService: { async lookup() { return { items: [] }; } },
+  }));
+  app.use('/api/v1/visits', createVisitsRouter({
+    authenticate,
+    visitsService: {
+      async checkIn() { return { visit_id: 1 }; },
+      async checkOut() { return { visit_id: 1, status: 'CLOSED' }; },
+    },
+  }));
+  app.use('/api/v1/users', createUsersRouter({
+    authenticate, authService: {},
+    usersService: { async listUsers() { assert.fail('User administration must remain forbidden'); } },
+  }));
+  app.use(errorHandler);
+  await request(app).get('/api/v1/approvals').expect(200);
+  await request(app).post('/api/v1/gate/lookups').send({ mobile: '9876543210', locationId: 2 }).expect(200);
+  await request(app).post('/api/v1/visits')
+    .send({ personId: 1, checkinGateId: 1, checkinLocationId: 2 }).expect(201);
+  await request(app).post('/api/v1/visits/1/check-outs')
+    .send({ checkoutGateId: 1, checkoutLocationId: 2 }).expect(200);
+  await request(app).get('/api/v1/users').expect(403);
+});
+
 test('admin can delete another user through the user route', async () => {
   let deletedInput;
   const app = createRouteApp(

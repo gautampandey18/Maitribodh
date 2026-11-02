@@ -12,7 +12,7 @@ export function createAuthRepository(pool) {
 
     async getUserById(userId) {
       const result = await pool.query(
-        `SELECT user_id, role, status, token_version, must_change_password
+        `SELECT user_id, role, roles, status, token_version, must_change_password
            FROM mams.app_user
           WHERE user_id = $1`,
         [userId],
@@ -50,7 +50,7 @@ export function createAuthRepository(pool) {
 
     async findByUsername(username) {
       const result = await pool.query(
-        `SELECT user_id, role, status, password_hash, locked_until,
+        `SELECT user_id, role, roles, status, password_hash, locked_until,
                 failed_login_count, failed_login_window_started_at, token_version,
                 must_change_password, temporary_password_expires_at, temporary_password_used_at
            FROM mams.app_user
@@ -112,7 +112,7 @@ export function createAuthRepository(pool) {
               must_change_password = false
               OR (temporary_password_expires_at > $2 AND temporary_password_used_at IS NULL)
             )
-        RETURNING user_id, role, token_version, must_change_password`,
+        RETURNING user_id, role, roles, token_version, must_change_password`,
         [userId, loggedInAt],
       );
       return result.rows[0] ?? null;

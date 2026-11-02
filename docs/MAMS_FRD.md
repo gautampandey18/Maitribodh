@@ -75,7 +75,7 @@ Public QR lookup is an unauthenticated user-facing operation with reduced output
 | FR-AUTH-002 | System shall authenticate usernames case-insensitively and verify passwords using bcrypt. | Implemented |
 | FR-AUTH-003 | System shall reject inactive, locked, password-less, missing, invalid, expired temporary, and already-used temporary credentials with a generic invalid-credentials response. | Implemented |
 | FR-AUTH-004 | System shall issue a signed bearer JWT only after successful credential verification and successful account-state update. | Implemented |
-| FR-AUTH-005 | System shall return user ID, role, token type, expiry, and first-login password-change state. | Implemented |
+| FR-AUTH-005 | System shall return user ID, all assigned roles, a representative role, token type, expiry, and first-login password-change state. | Implemented |
 | FR-AUTH-006 | Sessions for every role shall expire after two hours. The client shall also sign out after 30 minutes without user activity; background requests shall not extend inactivity. | Implemented |
 | FR-AUTH-007 | Logout shall revoke sessions by incrementing the user's token version. | Implemented |
 | FR-AUTH-008 | Authentication shall verify the token and current account state/version before honoring protected requests. | Implemented |
@@ -106,13 +106,14 @@ Public QR lookup is an unauthenticated user-facing operation with reduced output
 | ID | Requirement | Status |
 |---|---|---|
 | FR-USER-001 | Admin/Super Admin shall list users with pagination, text search, role filter, and active/inactive status filter. | Implemented |
-| FR-USER-002 | Admin/Super Admin shall create users with first name, last name, mobile, optional email, username, built-in role, security-head flag, and bulk-upload permission flag. | Implemented |
+| FR-USER-002 | Admin/Super Admin shall create and update users with one or more built-in roles selected in the Roles field, alongside identity/contact data, security-head flag, and bulk-upload permission flag. | Implemented |
 | FR-USER-003 | Only a Super Admin shall be able to assign the Super Admin role. | Implemented |
 | FR-USER-004 | Duplicate username/email/mobile shall produce a conflict response. | Implemented |
 | FR-USER-005 | Admin/Super Admin shall view an individual account, reset active user's password, toggle bulk-upload permission, and deactivate an active account. | Implemented |
 | FR-USER-006 | User creation and sensitive user changes shall retain actor context in audit records where implemented. | Implemented |
 | FR-USER-007 | Admin shall define arbitrary custom roles and permission grants. | Not implemented |
 | FR-USER-008 | Account shall be claimed through a password-free username onboarding flow. | Not implemented |
+| FR-USER-009 | Role changes shall invalidate prior sessions and retain the assigned roles in the audit record. Existing single-role accounts shall retain their access. | Implemented |
 
 ### 4.2 Role navigation and route access
 
@@ -126,6 +127,7 @@ Public QR lookup is an unauthenticated user-facing operation with reduced output
 | FR-RBAC-006 | Security Guard registration shall be restricted to Visitor category/form type. | Implemented |
 | FR-RBAC-007 | Security Guard shall not assign areas when creating a walk-in registration; server shall clear those values and mark walk-in source. | Implemented |
 | FR-RBAC-008 | System shall support database-driven fine-grained permission-code matrix and custom role administration. | Not implemented |
+| FR-RBAC-009 | Sidebar, route guards, and API authorization shall grant the union of a user's assigned built-in roles, without role switching. Guard-only registration restrictions shall not reduce permissions granted by an assigned management role. | Implemented |
 
 The detailed UI screen matrix is in `Maitribodh-UI/src/constants/navigation.js`; each API route group additionally applies its own allowed-role list.
 

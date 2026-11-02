@@ -14,16 +14,20 @@ const userMobile = z.union([
   z.string().regex(/^\+[1-9]\d{7,14}$/),
 ]).refine((value) => isValidPhoneNumber(value.startsWith('+') ? value : `+91${value}`), 'Enter a valid mobile number');
 
+const assignedRoles = z.array(z.enum(Object.values(ROLES))).min(1).max(Object.keys(ROLES).length)
+  .refine((roles) => new Set(roles).size === roles.length, 'Roles must not contain duplicates');
+
 const createUserSchema = z.object({
   firstName: z.string().trim().min(1).max(100),
   lastName: z.string().trim().min(1).max(100),
   mobile: userMobile,
   email: z.union([z.string().trim().email().max(150), z.literal('')]).optional(),
   username: z.string().trim().min(1).max(50),
-  role: z.enum(Object.values(ROLES)),
+  role: z.enum(Object.values(ROLES)).optional(),
+  roles: assignedRoles.optional(),
   isSecurityHead: z.boolean().optional().default(false),
   canBulkUpload: z.boolean().optional().default(false),
-});
+}).refine((input) => Boolean(input.role) !== Boolean(input.roles), 'Supply either role or roles');
 const updateUserSchema = z.object({
   firstName: z.string().trim().min(1).max(100).optional(),
   lastName: z.string().trim().min(1).max(100).optional(),
@@ -31,11 +35,13 @@ const updateUserSchema = z.object({
   email: z.union([z.string().trim().email().max(150), z.literal('')]).optional(),
   username: z.string().trim().min(1).max(50).optional(),
   role: z.enum(Object.values(ROLES)).optional(),
+  roles: assignedRoles.optional(),
   isSecurityHead: z.boolean().optional(),
   deactivate: z.literal(true).optional(),
   activate: z.literal(true).optional(),
   canBulkUpload: z.boolean().optional(),
-}).refine((input) => Object.keys(input).length > 0 && !(input.activate && input.deactivate));
+}).refine((input) => Object.keys(input).length > 0 && !(input.activate && input.deactivate)
+  && !(input.role && input.roles));
 
 export function createUsersRouter({ authService, usersService, authenticate }) {
   const router = express.Router();
@@ -155,6 +161,7 @@ function actorFromRequest(request) {
   return {
     userId: request.auth.userId,
     role: request.auth.role,
+    ...(request.auth.roles ? { roles: request.auth.roles } : {}),
     ipAddress: request.ip,
     device: request.get('user-agent'),
   };

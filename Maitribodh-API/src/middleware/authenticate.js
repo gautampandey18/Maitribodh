@@ -1,5 +1,6 @@
 import { ApiError } from '../errors/ApiError.js';
 import { asyncHandler } from './asyncHandler.js';
+import { getRoles } from '../constants/roles.js';
 
 export function createAuthenticate({ verifyToken, getUserById }) {
   return asyncHandler(async (request, _response, next) => {
@@ -24,7 +25,8 @@ export function createAuthenticate({ verifyToken, getUserById }) {
     }
 
     const user = await getUserById(userId);
-    if (!user || user.status !== 'ACTIVE' || user.token_version !== tokenVersion) {
+    const roles = getRoles(user);
+    if (!user || user.status !== 'ACTIVE' || user.token_version !== tokenVersion || roles.length === 0) {
       throw new ApiError(401, 'INVALID_SESSION', 'Session is invalid or expired');
     }
 
@@ -42,7 +44,8 @@ export function createAuthenticate({ verifyToken, getUserById }) {
 
     request.auth = {
       userId: user.user_id,
-      role: user.role,
+      role: roles[0],
+      roles,
       mustChangePassword,
     };
     next();

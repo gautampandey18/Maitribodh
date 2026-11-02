@@ -1,17 +1,19 @@
+import { ApiError } from '../../errors/ApiError.js';
+
 export function createUsersRepository(pool) {
   const adminMembershipLockId = 1296126532;
 
   return {
     async listUsers({ pageSize, offset, query = '', role, status }) {
       const result = await pool.query(
-        `SELECT user_id, first_name, last_name, mobile, email, username, role,
+        `SELECT user_id, first_name, last_name, mobile, email, username, role, roles,
                 is_security_head, can_bulk_upload, status, created_at, updated_at,
                 count(*) OVER()::int AS total
            FROM mams.app_user
           WHERE ($1 = '' OR first_name || ' ' || last_name ILIKE '%' || $1 || '%'
             OR username ILIKE '%' || $1 || '%' OR email ILIKE '%' || $1 || '%'
             OR mobile ILIKE '%' || $1 || '%')
-            AND ($2::varchar IS NULL OR role = $2)
+            AND ($2::varchar IS NULL OR $2 = ANY(roles))
             AND ($3::varchar IS NULL OR status = $3)
           ORDER BY last_name, first_name, user_id
           LIMIT $4 OFFSET $5`,
@@ -22,7 +24,7 @@ export function createUsersRepository(pool) {
 
     async getUser(targetUserId) {
       const result = await pool.query(
-        `SELECT user_id, first_name, last_name, mobile, email, username, role,
+        `SELECT user_id, first_name, last_name, mobile, email, username, role, roles,
                 is_security_head, can_bulk_upload, status, created_at, updated_at
            FROM mams.app_user
           WHERE user_id = $1`,
@@ -38,6 +40,7 @@ export function createUsersRepository(pool) {
       email,
       username,
       role,
+      roles,
       isSecurityHead,
       canBulkUpload,
       createdBy,
@@ -52,10 +55,10 @@ export function createUsersRepository(pool) {
         const result = await client.query(
           `INSERT INTO mams.app_user
              (first_name, last_name, mobile, email, username, role,
-              is_security_head, can_bulk_upload, created_by)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+              is_security_head, can_bulk_upload, created_by, roles)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::varchar[])
            RETURNING user_id, first_name, last_name, mobile, email, username,
-                     role, is_security_head, can_bulk_upload, status, created_at`,
+                     role, roles, is_security_head, can_bulk_upload, status, created_at`,
           [
             firstName,
             lastName,
@@ -66,6 +69,7 @@ export function createUsersRepository(pool) {
             isSecurityHead,
             canBulkUpload,
             createdBy,
+            roles ?? [role],
           ],
         );
         const user = result.rows[0];
@@ -79,7 +83,7 @@ export function createUsersRepository(pool) {
             createdBy,
             actorRole,
             user.user_id,
-            JSON.stringify({ username: user.username, role: user.role }),
+            JSON.stringify({ username: user.username, role: user.role, roles: user.roles ?? [user.role] }),
             ipAddress ?? null,
             device?.slice(0, 100) ?? null,
           ],
@@ -95,25 +99,37 @@ export function createUsersRepository(pool) {
       }
     },
 
-    async updateUser({ targetUserId, firstName, lastName, mobile, email, username, role, isSecurityHead, deactivate = false, activate = false, canBulkUpload, actorUserId, actorRole, ipAddress, device }) {
+    async updateUser({ targetUserId, firstName, lastName, mobile, email, username, role, roles, isSecurityHead, deactivate = false, activate = false, canBulkUpload, actorUserId, actorRole, ipAddress, device }) {
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
         await client.query('SELECT pg_advisory_xact_lock($1)', [adminMembershipLockId]);
+        if ((role || roles) && actorRole !== 'SUPER_ADMIN') {
+          const current = await client.query(
+            'SELECT roles FROM mams.app_user WHERE user_id = $1 FOR UPDATE',
+            [targetUserId],
+          );
+          if (current.rows[0]?.roles.includes('SUPER_ADMIN')) {
+            throw new ApiError(403, 'FORBIDDEN', 'Only a Super Admin can change the roles of a Super Admin');
+          }
+        }
         const result = await client.query(
             `UPDATE mams.app_user
               SET first_name = COALESCE($4, first_name), last_name = COALESCE($5, last_name),
                 mobile = COALESCE($6, mobile), email = COALESCE($7, email),
                 username = COALESCE($8, username), role = COALESCE($9, role),
+                roles = COALESCE($12::varchar[], roles),
                 is_security_head = COALESCE($10::boolean, is_security_head),
                 status = CASE WHEN $2::boolean THEN 'INACTIVE' WHEN $11::boolean THEN 'ACTIVE' ELSE status END,
                 can_bulk_upload = COALESCE($3::boolean, can_bulk_upload),
-                token_version = CASE WHEN $2::boolean OR $11::boolean THEN token_version + 1 ELSE token_version END,
+                token_version = CASE WHEN $2::boolean OR $11::boolean OR
+                  ($12::varchar[] IS NOT NULL AND roles IS DISTINCT FROM $12::varchar[])
+                  THEN token_version + 1 ELSE token_version END,
                   updated_at = now()
             WHERE user_id = $1
           RETURNING user_id, first_name, last_name, mobile, email, username,
-                    role, is_security_head, can_bulk_upload, status, updated_at`,
-          [targetUserId, deactivate, canBulkUpload ?? null, firstName ?? null, lastName ?? null, mobile ?? null, email ?? null, username ?? null, role ?? null, isSecurityHead ?? null, activate],
+                    role, roles, is_security_head, can_bulk_upload, status, updated_at`,
+          [targetUserId, deactivate, canBulkUpload ?? null, firstName ?? null, lastName ?? null, mobile ?? null, email ?? null, username ?? null, role ?? null, isSecurityHead ?? null, activate, roles ?? (role ? [role] : null)],
         );
         const user = result.rows[0];
         if (!user) {
@@ -122,7 +138,7 @@ export function createUsersRepository(pool) {
         }
 
         const changes = {};
-        for (const [key, value] of Object.entries({ firstName, lastName, mobile, email, username, role, isSecurityHead, canBulkUpload })) {
+        for (const [key, value] of Object.entries({ firstName, lastName, mobile, email, username, role, roles, isSecurityHead, canBulkUpload })) {
           if (value !== undefined) changes[key] = value;
         }
         if (deactivate) changes.status = 'INACTIVE';
