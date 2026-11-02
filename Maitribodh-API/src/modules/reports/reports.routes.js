@@ -111,6 +111,24 @@ export function createReportsRouter({ reportsService, authenticate }) {
   );
 
   router.get(
+    '/analytics',
+    authenticate,
+    authorize(...reportRoles),
+    asyncHandler(async (request, response) => {
+      const tabSchema = z.enum(['visits', 'registrations', 'occupancy', 'staff', 'approvals', 'blacklist']).default('visits');
+      const tabResult = tabSchema.safeParse(request.query.tab || 'visits');
+      if (!tabResult.success) {
+        throw new ApiError(400, 'VALIDATION_ERROR', 'Invalid report tab for analytics');
+      }
+      const filters = parseDateRange(request.query);
+      response.status(200).json(await reportsService.analytics({
+        tab: tabResult.data,
+        filters,
+      }));
+    }),
+  );
+
+  router.get(
     '/:reportKey/export',
     authenticate,
     authorize(...reportRoles),

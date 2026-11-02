@@ -56,7 +56,7 @@ export default function InternationalPhoneField({
   InputProps,
   id,
 }) {
-  const codeLabel = countryCodeLabel || (label && label !== 'Mobile Number' ? `${label} code` : 'Country code');
+  const codeLabel = countryCodeLabel || (label && label .toLowerCase() !== 'mobile number' ? `${label} code` : 'Country code');
 
   return (
     <Box

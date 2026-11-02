@@ -37,6 +37,10 @@ export function createReportsService({ repository }) {
       return pagination ? paginatedResult(rows, pagination) : rows;
     },
 
+    analytics({ tab, filters }) {
+      return repository.analytics({ tab, ...filters });
+    },
+
     recordVisitHistoryExport({ filters, rowCount, actor }) {
       return repository.recordVisitHistoryExport({
         filters,

@@ -3,6 +3,7 @@ import {
   Alert,
   Box,
   Button,
+  Chip,
   CircularProgress,
   MenuItem,
   Paper,
@@ -18,9 +19,37 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import CalendarTodayOutlinedIcon from '@mui/icons-material/CalendarTodayOutlined';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
+import RestartAltOutlinedIcon from '@mui/icons-material/RestartAltOutlined';
 import { api } from '../api.js';
 import { REPORT_TABS_CONFIG, ReportChartsSection } from './ReportsCharts.jsx';
+
+function getIstToday() {
+  const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' });
+  return formatter.format(new Date());
+}
+
+function getDateNDaysAgo(days) {
+  const today = getIstToday();
+  const d = new Date(`${today}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - (days - 1));
+  return d.toISOString().slice(0, 10);
+}
+
+function getFirstDayOfMonth() {
+  const today = getIstToday();
+  const [y, m] = today.split('-');
+  return `${y}-${m}-01`;
+}
+
+const datePresets = [
+  { label: 'Today', getRange: () => { const t = getIstToday(); return { from: t, to: t }; } },
+  { label: 'Last 7 days', getRange: () => ({ from: getDateNDaysAgo(7), to: getIstToday() }) },
+  { label: 'Last 14 days', getRange: () => ({ from: getDateNDaysAgo(14), to: getIstToday() }) },
+  { label: 'Last 30 days', getRange: () => ({ from: getDateNDaysAgo(30), to: getIstToday() }) },
+  { label: 'This month', getRange: () => ({ from: getFirstDayOfMonth(), to: getIstToday() }) },
+];
 
 const reports = [
   { key: 'visits', title: 'Visit History', path: '/reports/visit-history', dateRange: true, category: true },
@@ -51,15 +80,57 @@ export default function ReportsPage() {
   const [columns, setColumns] = useState([]);
   const [hasRun, setHasRun] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsData, setAnalyticsData] = useState({});
   const [error, setError] = useState('');
   const reportRequestId = useRef(0);
+  const analyticsRequestId = useRef(0);
   const report = reports.find((item) => item.key === selectedKey) || reports[0];
-  const tabConfig = REPORT_TABS_CONFIG[selectedKey] || REPORT_TABS_CONFIG.visits;
+  const currentAnalytics = analyticsData[selectedKey];
+  const tabConfig = currentAnalytics || REPORT_TABS_CONFIG[selectedKey] || REPORT_TABS_CONFIG.visits;
+
+  function isPresetActive(preset) {
+    if (!fromDate && !toDate) {
+      return preset.label === 'Last 14 days';
+    }
+    const { from, to } = preset.getRange();
+    return fromDate === from && toDate === to;
+  }
+
+  function applyPreset(preset) {
+    const { from, to } = preset.getRange();
+    setFromDate(from);
+    setToDate(to);
+    setError('');
+    loadReport(0, rowsPerPage, { fromDate: from, toDate: to });
+    loadAnalytics(selectedKey, from, to);
+  }
+
+  function resetFilters() {
+    setFromDate('');
+    setToDate('');
+    setCategoryId('');
+    setStatus('');
+    setBlacklistName('');
+    setBlacklistCategory('');
+    setApprovalUser('');
+    setStaffName('');
+    setStaffJobRole('');
+    setError('');
+    loadReport(0, rowsPerPage, { fromDate: undefined, toDate: undefined, categoryId: undefined, status: undefined });
+    loadAnalytics(selectedKey, '', '');
+  }
+
+  const hasActiveFilters = Boolean(
+    fromDate || toDate || categoryId || status || blacklistName || blacklistCategory || approvalUser || staffName || staffJobRole
+  );
 
   function selectReport(nextReport) {
     if (!nextReport) return;
     reportRequestId.current += 1;
+    analyticsRequestId.current += 1;
     setLoading(false);
+    setAnalyticsLoading(false);
     setSelectedKey(nextReport.key);
     setItems([]);
     setTotal(0);
@@ -67,6 +138,17 @@ export default function ReportsPage() {
     setColumns([]);
     setHasRun(false);
     setError('');
+    setCategoryId('');
+    setStatus('');
+    setBlacklistName('');
+    setBlacklistCategory('');
+    setApprovalUser('');
+    setStaffName('');
+    setStaffJobRole('');
+    if (!nextReport.dateRange) {
+      setFromDate('');
+      setToDate('');
+    }
   }
 
   function getParams() {
@@ -83,26 +165,31 @@ export default function ReportsPage() {
     };
   }
 
-  async function loadReport(nextPage = 0, nextRowsPerPage = rowsPerPage) {
+  async function loadReport(nextPage = 0, nextRowsPerPage = rowsPerPage, customParams = null) {
     const requestId = ++reportRequestId.current;
     setPage(nextPage);
     setRowsPerPage(nextRowsPerPage);
     setLoading(true);
     setError('');
     try {
+      const mergedParams = customParams ? { ...getParams(), ...customParams } : getParams();
+      const params = Object.fromEntries(
+        Object.entries(mergedParams).filter(([, val]) => val !== undefined && val !== ''),
+      );
       const response = await api.get(report.path, {
-        params: { ...getParams(), page: nextPage + 1, pageSize: nextRowsPerPage },
+        params: { ...params, page: nextPage + 1, pageSize: nextRowsPerPage },
       });
       if (requestId !== reportRequestId.current) return;
-      setItems(response.data.items);
-      setColumns(response.data.items.length
-        ? Object.keys(response.data.items[0]).filter((column) => !(
+      const responseItems = Array.isArray(response.data?.items) ? response.data.items : [];
+      setItems(responseItems);
+      setColumns(responseItems.length
+        ? Object.keys(responseItems[0]).filter((column) => !(
           selectedKey === 'visits' && /(?:^|_)location_id$/i.test(column)
         ))
         : []);
-      setTotal(response.data.total ?? response.data.items.length);
-      setPage(response.data.page - 1);
-      setRowsPerPage(response.data.pageSize ?? nextRowsPerPage);
+      setTotal(response.data?.total ?? responseItems.length);
+      setPage((response.data?.page ?? 1) - 1);
+      setRowsPerPage(response.data?.pageSize ?? nextRowsPerPage);
       setHasRun(true);
     } catch (requestError) {
       if (requestId !== reportRequestId.current) return;
@@ -112,13 +199,38 @@ export default function ReportsPage() {
     }
   }
 
+  async function loadAnalytics(key = selectedKey, fDate = fromDate, tDate = toDate) {
+    const reqId = ++analyticsRequestId.current;
+    setAnalyticsLoading(true);
+    try {
+      const params = { tab: key };
+      if (fDate) params.fromDate = fDate;
+      if (tDate) params.toDate = tDate;
+      const response = await api.get('/reports/analytics', { params });
+      if (reqId !== analyticsRequestId.current) return;
+      if (response?.data?.kpis) {
+        setAnalyticsData((prev) => ({ ...prev, [key]: response.data }));
+      }
+    } catch {
+      // Retain existing data or static fallback gracefully
+    } finally {
+      if (reqId === analyticsRequestId.current) {
+        setAnalyticsLoading(false);
+      }
+    }
+  }
+
   async function runReport(event) {
-    event.preventDefault();
+    if (event?.preventDefault) event.preventDefault();
     if (report.dateRange && fromDate && toDate && fromDate > toDate) {
-      setError('Choose a valid date range.');
+      setError('Choose a valid date range (From Date must not be after To Date).');
       return;
     }
-    await loadReport(0, rowsPerPage);
+    setError('');
+    await Promise.all([
+      loadReport(0, rowsPerPage),
+      loadAnalytics(selectedKey, fromDate, toDate),
+    ]);
   }
 
   async function exportReport() {
@@ -144,6 +256,7 @@ export default function ReportsPage() {
 
   useEffect(() => {
     loadReport(0, rowsPerPage);
+    loadAnalytics(selectedKey, fromDate, toDate);
   }, [selectedKey]);
 
   return (
@@ -180,37 +293,103 @@ export default function ReportsPage() {
           {reports.map((item) => <Tab key={item.key} value={item.key} label={item.title} />)}
         </Tabs>
 
-        {/* Tier 1 & Tier 2: KPIs and Visual Graphical Charts */}
-        <ReportChartsSection selectedKey={selectedKey} />
-
-        {/* Tier 3: Records Data Table & Filters */}
-        <Paper className="table-panel report-panel" elevation={0}>
+        {/* Dedicated Date Range & Filter Toolbar */}
+        <Paper className="table-panel report-panel" elevation={0} sx={{ mb: 3 }}>
           <Box className="table-panel-heading">
-            <Typography variant="h3">{tabConfig.tableTitle || report.title}</Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <CalendarTodayOutlinedIcon fontSize="small" sx={{ color: '#E06D2E' }} />
+              <Typography variant="h3">
+                {report.dateRange ? 'Select Date Range & Filters' : `${report.title} Filters`}
+              </Typography>
+            </Box>
             <Typography variant="body2" color="text.secondary">
-              {hasRun ? `${total} records` : (tabConfig.tableCounter || 'Filters')}
+              {report.dateRange
+                ? (fromDate && toDate ? `${fromDate} to ${toDate}` : 'Default: Last 14 days')
+                : (tabConfig.tableCounter || 'Filters')}
             </Typography>
           </Box>
-          <Box component="form" className="report-filters" onSubmit={runReport}>
+          <Box component="form" className="report-filters" onSubmit={runReport} sx={{ borderBottom: 0, p: 2 }}>
             {report.dateRange && (
               <>
-                <TextField label="From" type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} InputLabelProps={{ shrink: true }} inputProps={{ 'aria-label': 'From' }} />
-                <TextField label="To" type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} InputLabelProps={{ shrink: true }} inputProps={{ 'aria-label': 'To' }} />
+                <Box sx={{ width: '100%', display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 1.5 }}>
+                  <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mr: 0.5 }}>
+                    Quick date range:
+                  </Typography>
+                  {datePresets.map((preset) => {
+                    const isActive = isPresetActive(preset);
+                    return (
+                      <Chip
+                        key={preset.label}
+                        label={preset.label}
+                        size="small"
+                        clickable
+                        color={isActive ? 'primary' : 'default'}
+                        variant={isActive ? 'filled' : 'outlined'}
+                        onClick={() => applyPreset(preset)}
+                        sx={{ fontSize: '12px', fontWeight: isActive ? 600 : 400 }}
+                      />
+                    );
+                  })}
+                </Box>
+                <TextField
+                  label="From"
+                  type="date"
+                  value={fromDate}
+                  onChange={(event) => setFromDate(event.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                  inputProps={{ 'aria-label': 'From' }}
+                  size="small"
+                />
+                <TextField
+                  label="To"
+                  type="date"
+                  value={toDate}
+                  onChange={(event) => setToDate(event.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                  inputProps={{ 'aria-label': 'To' }}
+                  size="small"
+                />
               </>
             )}
             {report.status && (
-              <TextField label="Status" value={status} onChange={(event) => setStatus(event.target.value)} select sx={{ minWidth: 180 }}>
+              <TextField
+                label="Status"
+                value={status}
+                onChange={(event) => setStatus(event.target.value)}
+                select
+                size="small"
+                sx={{ minWidth: 180 }}
+              >
                 <MenuItem value="">All statuses</MenuItem>
                 {statusOptions.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
               </TextField>
             )}
             {report.category && (
-              <TextField label="Category ID" type="number" value={categoryId} onChange={(event) => setCategoryId(event.target.value)} inputProps={{ min: 1, step: 1 }} />
+              <TextField
+                label="Category ID"
+                type="number"
+                value={categoryId}
+                onChange={(event) => setCategoryId(event.target.value)}
+                inputProps={{ min: 1, step: 1 }}
+                size="small"
+              />
             )}
             {report.key === 'blacklist' && (
               <>
-                <TextField label="Name" value={blacklistName} onChange={(event) => setBlacklistName(event.target.value)} inputProps={{ maxLength: 100 }} />
-                <TextField label="Category" value={blacklistCategory} onChange={(event) => setBlacklistCategory(event.target.value)} inputProps={{ maxLength: 100 }} />
+                <TextField
+                  label="Name"
+                  value={blacklistName}
+                  onChange={(event) => setBlacklistName(event.target.value)}
+                  inputProps={{ maxLength: 100 }}
+                  size="small"
+                />
+                <TextField
+                  label="Category"
+                  value={blacklistCategory}
+                  onChange={(event) => setBlacklistCategory(event.target.value)}
+                  inputProps={{ maxLength: 100 }}
+                  size="small"
+                />
               </>
             )}
             {report.key === 'approvals' && (
@@ -219,6 +398,7 @@ export default function ReportsPage() {
                 value={approvalUser}
                 onChange={(event) => setApprovalUser(event.target.value)}
                 inputProps={{ maxLength: 100 }}
+                size="small"
               />
             )}
             {report.key === 'staff' && (
@@ -228,12 +408,14 @@ export default function ReportsPage() {
                   value={staffName}
                   onChange={(event) => setStaffName(event.target.value)}
                   inputProps={{ maxLength: 100 }}
+                  size="small"
                 />
                 <TextField
                   label="Job Role"
                   value={staffJobRole}
                   onChange={(event) => setStaffJobRole(event.target.value)}
                   inputProps={{ maxLength: 100 }}
+                  size="small"
                 />
               </>
             )}
@@ -242,7 +424,35 @@ export default function ReportsPage() {
                 {loading && <CircularProgress size={18} sx={{ mr: 1 }} />}
                 Run report
               </Button>
+              {hasActiveFilters && (
+                <Button
+                  variant="outlined"
+                  color="inherit"
+                  onClick={resetFilters}
+                  disabled={loading}
+                  startIcon={<RestartAltOutlinedIcon />}
+                >
+                  Reset
+                </Button>
+              )}
             </Box>
+          </Box>
+        </Paper>
+
+        {/* Tier 1 & Tier 2: KPIs and Visual Graphical Charts */}
+        <ReportChartsSection
+          selectedKey={selectedKey}
+          liveConfig={currentAnalytics}
+          loading={analyticsLoading}
+        />
+
+        {/* Tier 3: Records Data Table */}
+        <Paper className="table-panel report-panel" elevation={0}>
+          <Box className="table-panel-heading">
+            <Typography variant="h3">{tabConfig.tableTitle || report.title}</Typography>
+            <Typography variant="body2" color="text.secondary">
+              {hasRun ? `${total} records` : (tabConfig.tableCounter || 'Records')}
+            </Typography>
           </Box>
           {loading ? (
             <Box className="loading-state"><CircularProgress size={28} /></Box>
