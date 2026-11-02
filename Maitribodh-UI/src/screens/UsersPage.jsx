@@ -41,8 +41,9 @@ import { api } from '../api.js';
 import InternationalPhoneField from '../components/InternationalPhoneField.jsx';
 import { splitPhoneNumber, toE164Phone } from '../utils/phone.js';
 import { requestMessage } from '../utils/resources.js';
+import { getRoles, hasRole, USER_ROLES } from '../constants/roles.js';
 
-const roles = ['SUPER_ADMIN', 'ADMIN', 'APPROVER', 'REG_OFFICER', 'SECURITY_GUARD', 'VIEWER'];
+const roles = USER_ROLES;
 const userStatuses = ['ACTIVE', 'INACTIVE'];
 const userSchema = z.object({
   firstName: z.string().trim().min(1, 'Enter a first name').max(100),
@@ -50,7 +51,7 @@ const userSchema = z.object({
   mobile: z.string().trim().min(1, 'Enter a mobile number'),
   email: z.union([z.string().trim().email('Enter a valid email').max(150), z.literal('')]),
   username: z.string().trim().min(1, 'Enter a username').max(50),
-  role: z.enum(roles),
+  roles: z.array(z.enum(roles)).min(1, 'Select at least one role'),
   isSecurityHead: z.boolean(),
   canBulkUpload: z.boolean(),
 });
@@ -62,13 +63,13 @@ const emptyUser = {
   mobileCountry: 'IN',
   email: '',
   username: '',
-  role: 'REG_OFFICER',
+  roles: ['REG_OFFICER'],
   isSecurityHead: false,
   canBulkUpload: false,
 };
 
 export default function UsersPage() {
-  const role = useSelector((state) => state.auth.user?.role);
+  const currentUser = useSelector((state) => state.auth.user);
   const [users, setUsers] = useState([]);
   const [totalUsers, setTotalUsers] = useState(0);
   const [page, setPage] = useState(0);
@@ -112,8 +113,10 @@ export default function UsersPage() {
         else if (trimmed.length > 50) fieldError = 'Username cannot exceed 50 characters';
         else if (!/^[a-zA-Z0-9._-]+$/.test(trimmed)) fieldError = 'Username can only contain letters, numbers, dots, and underscores';
         break;
-      case 'role':
-        if (!roles.includes(trimmed)) fieldError = 'Select a valid role';
+      case 'roles':
+        if (!Array.isArray(value) || !value.length || value.some((role) => !roles.includes(role))) {
+          fieldError = 'Select at least one valid role';
+        }
         break;
       default:
         break;
@@ -301,7 +304,7 @@ export default function UsersPage() {
       mobileCountry: phone.country || 'IN',
       email: user.email ?? '',
       username: user.username,
-      role: user.role,
+      roles: getRoles(user),
       isSecurityHead: user.is_security_head,
       canBulkUpload: user.can_bulk_upload,
     });
@@ -334,13 +337,15 @@ export default function UsersPage() {
     setFormError('');
     setError('');
     try {
-      await api.patch(`/users/${editTarget.user_id}`, { ...parsed.data, mobile: payloadMobile });
+      const payload = { ...parsed.data, mobile: payloadMobile };
+      if (getRoles(editTarget).join(',') === getRoles(payload).join(',')) delete payload.roles;
+      await api.patch(`/users/${editTarget.user_id}`, payload);
       setCreateOpen(false);
       setEditTarget(null);
       setUserForm(emptyUser);
       setFieldErrors({});
       await loadUsers();
-      setNotice(`${parsed.data.username} updated`);
+      setNotice(`${parsed.data.username} updated. If roles changed, the user must sign in again.`);
     } catch (requestError) {
       setFormError(requestMessage(requestError, 'User could not be updated.'));
     } finally {
@@ -406,7 +411,7 @@ export default function UsersPage() {
     }
   }
 
-  const availableRoles = role === 'SUPER_ADMIN' ? roles : roles.filter((item) => item !== 'SUPER_ADMIN');
+  const availableRoles = hasRole(currentUser, 'SUPER_ADMIN') ? roles : roles.filter((item) => item !== 'SUPER_ADMIN');
 
   return (
     <Box className="users-page">
@@ -444,7 +449,7 @@ export default function UsersPage() {
               <TableHead>
                 <TableRow>
                   <TableCell>User</TableCell>
-                  <TableCell>Role</TableCell>
+                  <TableCell>Roles</TableCell>
                   <TableCell>Status</TableCell>
                   <TableCell>Bulk upload</TableCell>
                   <TableCell align="right">Actions</TableCell>
@@ -457,7 +462,7 @@ export default function UsersPage() {
                       <Typography fontWeight={600}>{user.first_name} {user.last_name}</Typography>
                       <Typography variant="caption" color="text.secondary">{user.username} · {user.mobile}</Typography>
                     </TableCell>
-                    <TableCell>{user.role.replaceAll('_', ' ')}</TableCell>
+                    <TableCell>{getRoles(user).map((role) => role.replaceAll('_', ' ')).join(', ')}</TableCell>
                     <TableCell>{user.status}</TableCell>
                     <TableCell>{user.can_bulk_upload ? 'Enabled' : 'Disabled'}</TableCell>
                     <TableCell align="right" className="user-actions">
@@ -523,30 +528,32 @@ export default function UsersPage() {
         <Box component="form" onSubmit={editTarget ? saveUser : createUser} noValidate>
           <DialogContent className="category-form-grid">
             {formError && <Alert severity="error" sx={{ gridColumn: '1 / -1' }}>{formError}</Alert>}
-            <TextField
-              name="firstName"
-              label="First name"
-              value={userForm.firstName}
-              onChange={updateForm}
-              onBlur={() => validateField('firstName')}
-              onKeyDown={handleFieldKeyDown('firstName')}
-              error={Boolean(fieldErrors.firstName)}
-              helperText={fieldErrors.firstName}
-              required
-              fullWidth
-            />
-            <TextField
-              name="lastName"
-              label="Last name"
-              value={userForm.lastName}
-              onChange={updateForm}
-              onBlur={() => validateField('lastName')}
-              onKeyDown={handleFieldKeyDown('lastName')}
-              error={Boolean(fieldErrors.lastName)}
-              helperText={fieldErrors.lastName}
-              required
-              fullWidth
-            />
+            <Box sx={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '14px' }}>
+              <TextField
+                name="firstName"
+                label="First name"
+                value={userForm.firstName}
+                onChange={updateForm}
+                onBlur={() => validateField('firstName')}
+                onKeyDown={handleFieldKeyDown('firstName')}
+                error={Boolean(fieldErrors.firstName)}
+                helperText={fieldErrors.firstName}
+                required
+                fullWidth
+              />
+              <TextField
+                name="lastName"
+                label="Last name"
+                value={userForm.lastName}
+                onChange={updateForm}
+                onBlur={() => validateField('lastName')}
+                onKeyDown={handleFieldKeyDown('lastName')}
+                error={Boolean(fieldErrors.lastName)}
+                helperText={fieldErrors.lastName}
+                required
+                fullWidth
+              />
+            </Box>
             <InternationalPhoneField
               label="Mobile"
               country={userForm.mobileCountry || 'IN'}
@@ -590,18 +597,27 @@ export default function UsersPage() {
               fullWidth
             />
             <TextField
-              name="role"
-              label="Role"
-              value={userForm.role}
+              name="roles"
+              label="Roles"
+              value={userForm.roles}
               onChange={updateForm}
-              onBlur={() => validateField('role')}
-              onKeyDown={handleFieldKeyDown('role')}
-              error={Boolean(fieldErrors.role)}
-              helperText={fieldErrors.role}
+              onBlur={() => validateField('roles')}
+              error={Boolean(fieldErrors.roles)}
+              helperText={fieldErrors.roles || 'Permissions from all selected roles are combined.'}
               select
+              disabled={Boolean(editTarget && hasRole(editTarget, 'SUPER_ADMIN') && !hasRole(currentUser, 'SUPER_ADMIN'))}
+              SelectProps={{
+                multiple: true,
+                renderValue: (selected) => selected.map((role) => role.replaceAll('_', ' ')).join(', '),
+              }}
               fullWidth
             >
-              {availableRoles.map((item) => <MenuItem key={item} value={item}>{item.replaceAll('_', ' ')}</MenuItem>)}
+              {roles.filter((item) => availableRoles.includes(item) || userForm.roles.includes(item)).map((item) => (
+                <MenuItem key={item} value={item} disabled={!availableRoles.includes(item)}>
+                  <Checkbox checked={userForm.roles.includes(item)} />
+                  {item.replaceAll('_', ' ')}
+                </MenuItem>
+              ))}
             </TextField>
             <FormControlLabel control={<Checkbox name="isSecurityHead" checked={userForm.isSecurityHead} onChange={updateForm} />} label="Security head" />
             <FormControlLabel control={<Checkbox name="canBulkUpload" checked={userForm.canBulkUpload} onChange={updateForm} />} label="Can upload bulk registrations" />

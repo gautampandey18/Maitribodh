@@ -38,6 +38,21 @@ test('login issues other roles tokens with a two-hour expiry', async () => {
   assert.equal(result.expiresIn, 7200);
 });
 
+test('login returns every assigned role and a deterministic representative role', async () => {
+  const service = createAuthService({
+    repository: createRepository({
+      role: ROLES.SECURITY_GUARD,
+      loginOverrides: { roles: [ROLES.SECURITY_GUARD, ROLES.APPROVER] },
+    }),
+    comparePassword: async () => true,
+    issueToken: async () => 'signed-token',
+  });
+  const session = await service.login({ username: 'approver.guard', password: 'valid-password' });
+  assert.deepEqual(session.user.roles, [ROLES.APPROVER, ROLES.SECURITY_GUARD]);
+  assert.equal(session.user.role, ROLES.APPROVER);
+  assert.equal(session.expiresIn, 7200);
+});
+
 test('first login consumes a valid temporary password and requires password change', async () => {
   const expiresAt = new Date('2026-10-10T00:00:00.000Z');
   let issuedUser;

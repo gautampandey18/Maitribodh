@@ -38,7 +38,7 @@ export default function LoginPage() {
   });
 
   if (auth.accessToken) {
-    return <Navigate to={auth.mustChangePassword ? '/password' : landingPath(auth.user?.role)} replace />;
+    return <Navigate to={auth.mustChangePassword ? '/password' : landingPath(auth.user)} replace />;
   }
 
   async function onSubmit(values) {
@@ -46,7 +46,7 @@ export default function LoginPage() {
     try {
       const { data } = await api.post('/auth/login', values);
       dispatch(sessionStarted(data));
-      const destination = canAccessPath(data.user?.role, location.state?.from ?? '') ? location.state.from : landingPath(data.user?.role);
+      const destination = canAccessPath(data.user, location.state?.from ?? '') ? location.state.from : landingPath(data.user);
       navigate(data.mustChangePassword ? '/password' : destination, { replace: true });
     } catch (error) {
       const status = error.response?.status;

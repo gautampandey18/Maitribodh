@@ -13,6 +13,7 @@ import { downloadBlob, requestMessage, useResource } from '../utils/resources.js
 import InternationalPhoneField from '../components/InternationalPhoneField.jsx';
 import PersonIdentityCard, { QrPreview } from '../components/PersonIdentityCard.jsx';
 import { formatPhoneNumber, splitPhoneNumber, toE164Phone } from '../utils/phone.js';
+import { getRoles } from '../constants/roles.js';
 
 /* ── Section card wrapper ───────────────────────────────────────────── */
 function SectionCard({ id, title, action, wide, children, editing }) {
@@ -122,7 +123,7 @@ export default function PersonDetailPage() {
   const navigate = useNavigate();
   const autoEditStarted = useRef(false);
   const { data: person, error, reload } = useResource(`/persons/${personId}`);
-  const role = useSelector((state) => state.auth.user?.role);
+  const role = useSelector((state) => getRoles(state.auth.user)[0]);
   const photoSrc = usePersonPhoto(person?.person_id, person?.photo_key);
 
   /* state */

@@ -162,6 +162,7 @@ Do not manually edit an applied migration. Add a new numbered migration for futu
 | [0008_international_person_mobile.sql](../Maitribodh-API/db/migrations/0008_international_person_mobile.sql) | Expands person primary mobile to 16 characters, normalizes existing Indian values to `+91` E.164 form, and enforces an E.164 database check |
 | [0009_drop_overstay_cutoff.sql](../Maitribodh-API/db/migrations/0009_drop_overstay_cutoff.sql) | Removes the category `overstay_cutoff` column |
 | [0010_remove_permission_levels.sql](../Maitribodh-API/db/migrations/0010_remove_permission_levels.sql) | Removes permission-level lookup values and category/person columns and removes configured permission-level fields from saved schemas and drafts |
+| [0015_multiple_user_roles.sql](../Maitribodh-API/db/migrations/0015_multiple_user_roles.sql) | Backfills `app_user.roles` from each existing role, validates assignments, and synchronizes the representative role while preserving the one-Super-Admin constraint |
 
 **Final photo behavior:** existing records are not retroactively forced to have a photograph. New non-draft rows normally require a photo through `photo_required=true`. The registration API independently requires a valid photo.
 
@@ -230,7 +231,8 @@ Purpose: administrative and operational accounts, role permissions, password sta
 | `mobile` | varchar(10) | No | Unique operator mobile |
 | `email` | varchar(150) | Yes | Optional email |
 | `username` | varchar(50) | No | Case-insensitively unique username |
-| `role` | varchar(20) | No | Role enum below |
+| `role` | varchar(20) | No | Highest-precedence assigned role; maintained for audit and legacy compatibility |
+| `roles` | varchar(20)[] | No | Non-empty built-in role list, backfilled for existing users; API permissions combine all roles |
 | `is_security_head` | boolean | No | `false`; security-head flag |
 | `can_bulk_upload` | boolean | No | `false`; bulk-upload permission flag |
 | `status` | varchar(10) | No | `ACTIVE`; `ACTIVE` / `INACTIVE` |
@@ -724,12 +726,12 @@ Source: [user routes](../Maitribodh-API/src/modules/users/users.routes.js).
 | Method | Path | Access | Input / filters | Success |
 |---|---|---|---|---|
 | GET | `/api/v1/users` | ADMIN | `query`, `role`, `status`, pagination | `200`, user list |
-| POST | `/api/v1/users` | ADMIN | Required: `firstName`, `lastName`, `mobile`, `username`, `role`; optional: `email`, `isSecurityHead`, `canBulkUpload` | `201`, created user |
+| POST | `/api/v1/users` | ADMIN | Required: `firstName`, `lastName`, `mobile`, `username`, `roles` (non-empty array); optional: `email`, `isSecurityHead`, `canBulkUpload` | `201`, created user |
 | GET | `/api/v1/users/:userId` | ADMIN | User ID | `200`, user detail |
-| PATCH | `/api/v1/users/:userId` | ADMIN | `deactivate: true` and/or `canBulkUpload` | `200`, updated user |
+| PATCH | `/api/v1/users/:userId` | ADMIN | Profile fields, `roles`, `isSecurityHead`, `canBulkUpload`, `activate: true` or `deactivate: true` | `200`, updated user |
 | POST | `/api/v1/users/:userId/password-reset` | ADMIN | User ID; no required body | `201`, `temporaryPassword`, `expiresAt`; no-store headers |
 
-User PATCH is not a general profile editor. It accepts deactivation and bulk-upload permission changes only. Newly created accounts need the implemented credential issuance flow before login.
+Create and PATCH accept either the legacy `role` string or the new `roles` array, never both. Arrays must contain one or more distinct built-in roles; for example, `{"roles":["APPROVER","SECURITY_GUARD"]}` grants approvals and Security Gate access. The role filter matches any assignment, not just the representative role. User responses include both `role` and `roles`. Only a Super Admin may assign `SUPER_ADMIN` or change the roles of the existing Super Admin; the existing single-Super-Admin limit is retained. Changing assignments increments the token version and requires the affected user to sign in again. Newly created accounts still require credential issuance before login.
 
 ### 8.4 Categories
 

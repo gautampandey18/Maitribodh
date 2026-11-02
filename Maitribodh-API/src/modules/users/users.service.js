@@ -1,5 +1,5 @@
 import { ApiError } from '../../errors/ApiError.js';
-import { ROLES } from '../../constants/roles.js';
+import { getRoles, hasRole, ROLES } from '../../constants/roles.js';
 import { paginatedResult } from '../../utils/pagination.js';
 
 export function createUsersService({ repository }) {
@@ -17,13 +17,15 @@ export function createUsersService({ repository }) {
     },
 
     async createUser({ input, actor }) {
-      if (input.role === ROLES.SUPER_ADMIN && actor.role !== ROLES.SUPER_ADMIN) {
+      if (hasRole(input, ROLES.SUPER_ADMIN) && !hasRole(actor, ROLES.SUPER_ADMIN)) {
         throw new ApiError(403, 'FORBIDDEN', 'Only a Super Admin can assign the Super Admin role');
       }
 
       try {
         return await repository.createUser({
           ...input,
+          role: getRoles(input)[0],
+          roles: getRoles(input),
           createdBy: actor.userId,
           actorRole: actor.role,
           ipAddress: actor.ipAddress,
@@ -38,10 +40,14 @@ export function createUsersService({ repository }) {
     },
 
     async updateUser({ targetUserId, input, actor }) {
+      if (hasRole(input, ROLES.SUPER_ADMIN) && !hasRole(actor, ROLES.SUPER_ADMIN)) {
+        throw new ApiError(403, 'FORBIDDEN', 'Only a Super Admin can assign the Super Admin role');
+      }
       try {
         const user = await repository.updateUser({
           targetUserId,
           ...input,
+          ...(input.role || input.roles ? { role: getRoles(input)[0], roles: getRoles(input) } : {}),
           deactivate: input.deactivate === true,
           activate: input.activate === true,
           canBulkUpload: input.canBulkUpload,

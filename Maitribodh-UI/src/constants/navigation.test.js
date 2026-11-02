@@ -2,6 +2,23 @@ import { describe, expect, it } from 'vitest';
 import { canAccessPath, landingPath, NAVIGATION } from './navigation.js';
 
 describe('screen permissions', () => {
+  it('combines Approver and Security Guard screens without granting administrator access', () => {
+    const user = { role: 'APPROVER', roles: ['APPROVER', 'SECURITY_GUARD'] };
+    expect(NAVIGATION.filter((screen) => canAccessPath(user, screen.path)).map((screen) => screen.path)).toEqual([
+      '/dashboard', '/persons', '/register', '/approvals', '/gate', '/reports',
+    ]);
+    expect(canAccessPath(user, '/users')).toBe(false);
+    expect(landingPath(user)).toBe('/dashboard');
+  });
+  it('recognizes roles regardless of assignment order and does not infer extra access', () => {
+    const user = { role: 'VIEWER', roles: ['VIEWER', 'SECURITY_GUARD'] };
+    expect(canAccessPath(user, '/reports')).toBe(true);
+    expect(canAccessPath(user, '/gate')).toBe(true);
+    expect(canAccessPath(user, '/approvals')).toBe(false);
+    expect(canAccessPath(user, '/persons')).toBe(false);
+    expect(landingPath(user)).toBe('/gate');
+    expect(canAccessPath({ role: 'ADMIN', roles: [] }, '/users')).toBe(false);
+  });
   it.each(['SUPER_ADMIN', 'ADMIN'])('%s can access every screen', (role) => {
     expect(NAVIGATION.every((screen) => canAccessPath(role, screen.path))).toBe(true);
   });

@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { ApiError } from '../../errors/ApiError.js';
+import { getRoles } from '../../constants/roles.js';
 const SESSION_EXPIRY_SECONDS = 2 * 60 * 60;
 
 export function createAuthService({
@@ -47,7 +48,8 @@ export function createAuthService({
         expiresIn,
         user: {
           id: authenticatedUser.user_id,
-          role: authenticatedUser.role,
+          role: getRoles(authenticatedUser)[0],
+          roles: getRoles(authenticatedUser),
         },
         mustChangePassword: authenticatedUser.must_change_password === true,
       };

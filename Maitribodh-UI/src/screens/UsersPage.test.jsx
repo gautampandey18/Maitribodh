@@ -1,6 +1,6 @@
 import { Provider } from 'react-redux';
 import { MemoryRouter } from 'react-router-dom';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import { api } from '../api.js';
@@ -12,6 +12,68 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+it.each(['Add user', 'Update user'])('keeps both name inputs in one row in the %s dialog', async (dialogTitle) => {
+  const record = {
+    user_id: 25, first_name: 'Asha', last_name: 'Patel', mobile: '9876543210',
+    username: 'asha.patel', role: 'APPROVER', status: 'ACTIVE',
+    is_security_head: false, can_bulk_upload: false,
+  };
+  vi.spyOn(api, 'get').mockResolvedValue({ data: { items: [record], total: 1 } });
+  const user = userEvent.setup();
+  render(<Provider store={store}><MemoryRouter><UsersPage /></MemoryRouter></Provider>);
+
+  if (dialogTitle === 'Add user') {
+    await user.click(await screen.findByRole('button', { name: 'Add user' }));
+  } else {
+    await user.click(await screen.findByRole('button', { name: 'Actions for asha.patel' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Update' }));
+  }
+  const dialog = within(screen.getByRole('dialog', { name: dialogTitle }));
+  const firstField = dialog.getByRole('textbox', { name: /First name/ }).closest('.MuiFormControl-root');
+  const lastField = dialog.getByRole('textbox', { name: /Last name/ }).closest('.MuiFormControl-root');
+  expect(firstField.parentElement).toBe(lastField.parentElement);
+  expect(firstField.parentElement).toHaveStyle({
+    display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+  });
+}, 30_000);
+
+it('adds Security Guard to an existing Approver while retaining both role selections', async () => {
+  const record = {
+    user_id: 25, first_name: 'Asha', last_name: 'Patel', mobile: '9876543210',
+    username: 'asha.patel', role: 'APPROVER', roles: ['APPROVER'],
+    is_security_head: false, can_bulk_upload: false, status: 'ACTIVE',
+  };
+  vi.spyOn(api, 'get').mockResolvedValue({ data: { items: [record], total: 1 } });
+  const patch = vi.spyOn(api, 'patch').mockResolvedValue({
+    data: { ...record, roles: ['APPROVER', 'SECURITY_GUARD'] },
+  });
+  store.dispatch(sessionStarted({ accessToken: 'test-token', user: { id: 4, role: 'ADMIN' } }));
+  const user = userEvent.setup();
+  render(<Provider store={store}><MemoryRouter><UsersPage /></MemoryRouter></Provider>);
+
+  await user.click(await screen.findByRole('button', { name: 'Actions for asha.patel' }));
+  await user.click(screen.getByRole('menuitem', { name: 'Update' }));
+  const dialog = within(screen.getByRole('dialog', { name: 'Update user' }));
+  await user.click(dialog.getByRole('combobox', { name: 'Roles' }));
+  expect(screen.getByRole('option', { name: 'APPROVER' })).toHaveAttribute('aria-selected', 'true');
+  await user.click(screen.getByRole('option', { name: 'SECURITY GUARD' }));
+  expect(screen.getByRole('option', { name: 'APPROVER' })).toHaveAttribute('aria-selected', 'true');
+  expect(screen.getByRole('option', { name: 'SECURITY GUARD' })).toHaveAttribute('aria-selected', 'true');
+  await user.keyboard('{Escape}');
+  await user.click(dialog.getByRole('button', { name: 'Save changes' }));
+  await waitFor(() => expect(patch).toHaveBeenCalledWith('/users/25', expect.objectContaining({
+    roles: ['APPROVER', 'SECURITY_GUARD'],
+  })));
+}, 30_000);
+
+it('shows all assigned roles in the user list', async () => {
+  vi.spyOn(api, 'get').mockResolvedValue({ data: { items: [{
+    user_id: 25, first_name: 'Asha', last_name: 'Patel', username: 'asha.patel',
+    mobile: '9876543210', role: 'APPROVER', roles: ['APPROVER', 'SECURITY_GUARD'], status: 'ACTIVE',
+  }], total: 1 } });
+  render(<Provider store={store}><MemoryRouter><UsersPage /></MemoryRouter></Provider>);
+  expect(await screen.findByRole('cell', { name: 'APPROVER, SECURITY GUARD' })).toBeInTheDocument();
+});
 it('creates an account, issues its initial credential, and reveals it once', async () => {
   vi.spyOn(api, 'get').mockResolvedValue({ data: { items: [] } });
   const post = vi.spyOn(api, 'post')
@@ -34,10 +96,12 @@ it('creates an account, issues its initial credential, and reveals it once', asy
   );
 
   await user.click(await screen.findByRole('button', { name: 'Add user' }));
-  await user.click(screen.getByRole('combobox', { name: 'Role' }));
+  await user.click(screen.getByRole('combobox', { name: 'Roles' }));
   expect(screen.getByRole('option', { name: 'ADMIN' })).toBeInTheDocument();
   expect(screen.queryByRole('option', { name: 'SUPER ADMIN' })).not.toBeInTheDocument();
   await user.click(screen.getByRole('option', { name: 'ADMIN' }));
+  await user.click(screen.getByRole('option', { name: 'REG OFFICER' }));
+  await user.keyboard('{Escape}');
   await user.type(screen.getByRole('textbox', { name: /First name/ }), 'Asha');
   await user.type(screen.getByRole('textbox', { name: /Last name/ }), 'Patel');
   await user.type(screen.getByRole('textbox', { name: /Mobile/ }), '9876543210');
@@ -52,7 +116,7 @@ it('creates an account, issues its initial credential, and reveals it once', asy
     mobile: '9876543210',
     email: '',
     username: 'asha.patel',
-    role: 'ADMIN',
+    roles: ['ADMIN'],
     isSecurityHead: false,
     canBulkUpload: false,
   }));

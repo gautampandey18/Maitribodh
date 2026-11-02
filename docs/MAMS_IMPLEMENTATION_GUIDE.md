@@ -80,6 +80,10 @@ The exact column definitions, constraints, indexes, and foreign keys are in the 
 
 Client navigation and route guards use a shared built-in role matrix in `Maitribodh-UI/src/constants/navigation.js`, and the API separately applies route-level role checks. The roles currently present are `SUPER_ADMIN`, `ADMIN`, `APPROVER`, `REG_OFFICER`, `SECURITY_GUARD`, and `VIEWER`.
 
+Accounts may hold multiple roles. **Users → Add user / Update → Roles** allows multiple selections, and the sidebar and API grant the union of those permissions without role switching. For example, Approver + Security Guard has Approval Center and Security Gate access, including check-in/check-out, but gains no administrator-only access. Authentication loads assignments from the current database user, not untrusted token role claims. Role changes revoke existing sessions; the user signs in again to load the updated sidebar.
+
+Run migration `0015_multiple_user_roles.sql` before deploying this API. It backfills `app_user.roles` from existing accounts and maintains the legacy `role` as the first role in precedence order: Super Admin, Admin, Approver, Registration Officer, Security Guard, Viewer. That representative role preserves audit fields, notification compatibility, administrator mobile visibility, and management-versus-guard registration workflows; route authorization always checks the complete role list. The one-Super-Admin database constraint is retained.
+
 Implemented access behavior includes:
 
 - Security Guard users land on the Gate screen.
@@ -307,12 +311,12 @@ This section follows the screens as a user experiences them and explains what th
 
 ### 9.1 Portal account creation and temporary password
 
-Only Admin and Super Admin can use the Users screen and the user-management APIs. A new portal user account is created with identity/contact data and one of the built-in roles: Super Admin, Admin, Approver, Registration Officer, Security Guard, or Viewer.
+Only Admin and Super Admin can use the Users screen and the user-management APIs. A new portal user account is created with identity/contact data and one or more built-in roles: Super Admin, Admin, Approver, Registration Officer, Security Guard, or Viewer.
 
 **Create flow**
 
-1. Admin opens **Users → Add user** and enters first/last name, mobile, optional email, username, role, and the security-head/bulk-upload flags.
-2. UI validation requires non-empty names and username (up to 100/100/50 characters respectively), a 10-digit mobile, valid optional email, a supported role, and boolean flags.
+1. Admin opens **Users → Add user** and enters first/last name, mobile, optional email, username, roles, and the security-head/bulk-upload flags.
+2. UI validation requires non-empty names and username (up to 100/100/50 characters respectively), a valid mobile, valid optional email, at least one supported role, and boolean flags.
 3. UI posts `POST /api/v1/users`. The API validates the same core fields and rejects a Super Admin role assignment unless the caller is itself Super Admin.
 4. The database creates the user without accepting a plaintext password from the client. Duplicate username/email/mobile values are translated to a conflict response.
 5. After account creation succeeds, the UI immediately posts `POST /api/v1/users/{userId}/password-reset` to issue a temporary password.

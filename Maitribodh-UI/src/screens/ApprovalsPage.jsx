@@ -30,6 +30,7 @@ import CloseOutlinedIcon from '@mui/icons-material/CloseOutlined';
 import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined';
 import { api } from '../api.js';
 import { requestMessage } from '../utils/resources.js';
+import { hasRole } from '../constants/roles.js';
 
 const NON_APPROVAL_NAMES = new Set(['visitor', 'vendor', 'contractor', 'participant']);
 const NON_APPROVAL_TYPES = new Set(['VISITOR', 'VENDOR', 'CONTRACTOR', 'PARTICIPANT']);
@@ -44,8 +45,8 @@ function isApprovalRequiredPerson(item) {
 }
 
 export default function ApprovalsPage() {
-  const role = useSelector((state) => state.auth.user?.role);
-  const isAdmin = ['ADMIN', 'SUPER_ADMIN'].includes(String(role ?? '').toUpperCase());
+  const user = useSelector((state) => state.auth.user);
+  const isAdmin = hasRole(user, 'ADMIN', 'SUPER_ADMIN');
   const [tab, setTab] = useState('PENDING');
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);

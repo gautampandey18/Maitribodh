@@ -1,3 +1,5 @@
+import { getRoles, hasRole } from './roles.js';
+
 export const NAVIGATION = [
   { path: '/dashboard', label: 'Dashboard', group: 'Overview', roles: ['SUPER_ADMIN', 'ADMIN', 'REG_OFFICER', 'APPROVER', 'VIEWER', 'SECURITY_GUARD'] },
   { path: '/persons', label: 'Person Management', group: 'Operations', roles: ['SUPER_ADMIN', 'ADMIN', 'REG_OFFICER', 'APPROVER'] },
@@ -12,16 +14,16 @@ export const NAVIGATION = [
   { path: '/audit', label: 'Audit & Compliance', group: 'Administration', roles: ['SUPER_ADMIN', 'ADMIN'] },
 ];
 
-export function landingPath(role) {
-  return role === 'SECURITY_GUARD' ? '/gate' : '/dashboard';
+export function landingPath(user) {
+  return getRoles(user)[0] === 'SECURITY_GUARD' ? '/gate' : '/dashboard';
 }
 
-export function canAccessPath(role, path) {
-  if (path === '/password') return Boolean(role);
-  if (path === '/locations' || path.startsWith('/locations/')) return role === 'SUPER_ADMIN' || role === 'ADMIN';
+export function canAccessPath(user, path) {
+  if (path === '/password') return getRoles(user).length > 0;
+  if (path === '/locations' || path.startsWith('/locations/')) return hasRole(user, 'SUPER_ADMIN', 'ADMIN');
   if (path === '/categories' || path.startsWith('/categories/')) {
-    return role === 'SUPER_ADMIN' || role === 'ADMIN';
+    return hasRole(user, 'SUPER_ADMIN', 'ADMIN');
   }
   const screen = NAVIGATION.find((item) => path === item.path || path.startsWith(`${item.path}/`));
-  return screen?.roles.includes(role) ?? false;
+  return screen ? hasRole(user, ...screen.roles) : false;
 }

@@ -47,6 +47,49 @@ test('Admin cannot assign the Super Admin role', async () => {
   assert.equal(inserted, false);
 });
 
+test('Admin can assign multiple operational roles on creation and update', async () => {
+  const calls = [];
+  const repository = {
+    async createUser(input) { calls.push(input); return input; },
+    async updateUser(input) { calls.push(input); return input; },
+  };
+  const service = createUsersService({ repository });
+  const input = { roles: [ROLES.SECURITY_GUARD, ROLES.APPROVER] };
+  const actor = { userId: 7, role: ROLES.ADMIN };
+  await service.createUser({ input, actor });
+  await service.updateUser({ targetUserId: 25, input, actor });
+  for (const call of calls) {
+    assert.deepEqual(call.roles, [ROLES.APPROVER, ROLES.SECURITY_GUARD]);
+    assert.equal(call.role, ROLES.APPROVER);
+  }
+});
+
+test('Admin cannot add Super Admin through a multi-role create or update', async () => {
+  const service = createUsersService({
+    repository: {
+      async createUser() { assert.fail('must not insert'); },
+      async updateUser() { assert.fail('must not update'); },
+    },
+  });
+  const input = { roles: [ROLES.APPROVER, ROLES.SUPER_ADMIN] };
+  const actor = { userId: 7, role: ROLES.ADMIN };
+  await assert.rejects(service.createUser({ input, actor }), { code: 'FORBIDDEN' });
+  await assert.rejects(service.updateUser({ targetUserId: 25, input, actor }), { code: 'FORBIDDEN' });
+});
+
+test('Super Admin can assign multiple roles containing Super Admin', async () => {
+  const service = createUsersService({
+    repository: { async updateUser(input) { return input; } },
+  });
+  const user = await service.updateUser({
+    targetUserId: 1,
+    input: { roles: [ROLES.SECURITY_GUARD, ROLES.SUPER_ADMIN] },
+    actor: { userId: 1, role: ROLES.SUPER_ADMIN },
+  });
+  assert.deepEqual(user.roles, [ROLES.SUPER_ADMIN, ROLES.SECURITY_GUARD]);
+  assert.equal(user.role, ROLES.SUPER_ADMIN);
+});
+
 test('Admin may create Admin and other roles; Super Admin may assign Super Admin', async () => {
   const createdRoles = [];
   const service = createUsersService({

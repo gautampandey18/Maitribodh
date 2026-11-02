@@ -50,6 +50,7 @@ import MasterDataPage from './screens/MasterDataPage.jsx';
 import PersonDetailPage from './screens/PersonDetailPage.jsx';
 import ActivityPage, { NotificationsBell } from './screens/ActivityPage.jsx';
 import { NAVIGATION, canAccessPath, landingPath } from './constants/navigation.js';
+import { getRoles, hasRole } from './constants/roles.js';
 
 const drawerWidth = 238;
 const collapsedDrawerWidth = 76;
@@ -97,36 +98,36 @@ function RequireSession() {
   if (auth.mustChangePassword && location.pathname !== '/password') {
     return <Navigate to="/password" replace />;
   }
-  if (!canAccessPath(auth.user?.role, location.pathname)) {
-    return <Navigate to={landingPath(auth.user?.role)} replace />;
+  if (!canAccessPath(auth.user, location.pathname)) {
+    return <Navigate to={landingPath(auth.user)} replace />;
   }
   return <Outlet />;
 }
 
 function AdminOnly({ children }) {
-  const role = useSelector((state) => state.auth.user?.role);
-  return role === 'ADMIN' || role === 'SUPER_ADMIN'
+  const user = useSelector((state) => state.auth.user);
+  return hasRole(user, 'ADMIN', 'SUPER_ADMIN')
     ? children
     : <Navigate to="/dashboard" replace />;
 }
 
 function ApprovalAccess({ children }) {
-  const role = useSelector((state) => state.auth.user?.role);
-  return role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'APPROVER'
+  const user = useSelector((state) => state.auth.user);
+  return hasRole(user, 'ADMIN', 'SUPER_ADMIN', 'APPROVER')
     ? children
     : <Navigate to="/dashboard" replace />;
 }
 
 function RegistrationAccess({ children }) {
-  const role = useSelector((state) => state.auth.user?.role);
-  return role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'APPROVER' || role === 'REG_OFFICER'
+  const user = useSelector((state) => state.auth.user);
+  return hasRole(user, 'ADMIN', 'SUPER_ADMIN', 'APPROVER', 'REG_OFFICER')
     ? children
     : <Navigate to="/dashboard" replace />;
 }
 
 function ReportAccess({ children }) {
-  const role = useSelector((state) => state.auth.user?.role);
-  return role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'APPROVER' || role === 'REG_OFFICER' || role === 'VIEWER'
+  const user = useSelector((state) => state.auth.user);
+  return hasRole(user, 'ADMIN', 'SUPER_ADMIN', 'APPROVER', 'REG_OFFICER', 'VIEWER')
     ? children
     : <Navigate to="/dashboard" replace />;
 }
@@ -140,8 +141,8 @@ function AppShell() {
   const isWide = useMediaQuery(theme.breakpoints.up('md'));
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const visibleNavigation = NAVIGATION.filter((item) => canAccessPath(auth.user?.role, item.path));
-  const userRole = auth.user?.role?.replaceAll('_', ' ') ?? 'Unknown';
+  const visibleNavigation = NAVIGATION.filter((item) => canAccessPath(auth.user, item.path));
+  const userRole = getRoles(auth.user).map((role) => role.replaceAll('_', ' ')).join(', ') || 'Unknown';
   const icons = { '/dashboard': <DashboardOutlinedIcon />, '/persons': <SearchOutlinedIcon />, '/register': <PeopleAltOutlinedIcon />, '/approvals': <FactCheckOutlinedIcon />, '/qr': <KeyOutlinedIcon />, '/gate': <PlaceOutlinedIcon />, '/blacklist': <GppBadOutlinedIcon />, '/reports': <AssessmentOutlinedIcon />, '/users': <PeopleAltOutlinedIcon />, '/master': <TuneOutlinedIcon />, '/audit': <FactCheckOutlinedIcon /> };
   const navigationWidth = sidebarCollapsed ? collapsedDrawerWidth : drawerWidth;
 

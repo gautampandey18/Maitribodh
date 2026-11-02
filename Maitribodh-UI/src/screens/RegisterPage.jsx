@@ -16,6 +16,7 @@ import { api } from '../api.js';
 import { requestMessage, useResource } from '../utils/resources.js';
 import InternationalPhoneField from '../components/InternationalPhoneField.jsx';
 import { formatPhoneNumber, splitPhoneNumber, toE164Phone } from '../utils/phone.js';
+import { getRoles } from '../constants/roles.js';
 
 const initialValues = {
   firstName: '',
@@ -70,7 +71,7 @@ const commonFields = [
 export default function RegisterPage() {
   const { data: options, error: loadError } = useResource('/persons/registration/options');
   const { data: drafts, reload: reloadDrafts } = useResource('/persons/drafts');
-  const role = useSelector((state) => state.auth.user?.role);
+  const role = useSelector((state) => getRoles(state.auth.user)[0]);
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const fromGate = params.get('from') === 'gate' || role === 'SECURITY_GUARD';

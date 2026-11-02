@@ -73,7 +73,7 @@ export function createGateRepository(pool) {
       if (hasBlacklistedMatch) {
         await pool.query(`INSERT INTO mams.notification (user_id, type, title, body, entity_type)
           SELECT user_id, 'BLACKLIST_ALERT', 'Blacklist Alert', 'Blacklisted match blocked at the security gate', 'PERSON'
-          FROM mams.app_user WHERE status = 'ACTIVE' AND (role IN ('ADMIN', 'SUPER_ADMIN') OR is_security_head = true)`);
+          FROM mams.app_user WHERE status = 'ACTIVE' AND (roles && ARRAY['ADMIN', 'SUPER_ADMIN']::varchar[] OR is_security_head = true)`);
       }
     },
   };
