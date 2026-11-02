@@ -12,7 +12,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-it('submits credentials and keeps the returned token in memory state', async () => {
+it('submits credentials and persists the session for refresh', async () => {
   vi.spyOn(api, 'post').mockResolvedValue({
     data: {
       accessToken: 'test-token',
@@ -35,6 +35,7 @@ it('submits credentials and keeps the returned token in memory state', async () 
   await user.click(screen.getByRole('button', { name: 'Sign in' }));
 
   await waitFor(() => expect(store.getState().auth.accessToken).toBe('test-token'));
+  expect(JSON.parse(sessionStorage.getItem('mams.session')).accessToken).toBe('test-token');
   expect(api.post).toHaveBeenCalledWith('/auth/login', { username: 'admin', password: 'secret123' });
 }, 30_000);
 

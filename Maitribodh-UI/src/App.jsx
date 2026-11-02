@@ -33,6 +33,7 @@ import ChevronLeftOutlinedIcon from '@mui/icons-material/ChevronLeftOutlined';
 import ChevronRightOutlinedIcon from '@mui/icons-material/ChevronRightOutlined';
 import { api } from './api.js';
 import { sessionEnded } from './store.js';
+import SessionManager from './components/SessionManager.jsx';
 import ApprovalsPage from './screens/ApprovalsPage.jsx';
 import DashboardPage from './screens/DashboardPage.jsx';
 import LoginPage from './screens/LoginPage.jsx';
@@ -55,6 +56,8 @@ const collapsedDrawerWidth = 76;
 
 export default function App() {
   return (
+    <>
+    <SessionManager />
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/public-qr" element={<PublicQrPage />} />
@@ -80,6 +83,7 @@ export default function App() {
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
+    </>
   );
 }
 

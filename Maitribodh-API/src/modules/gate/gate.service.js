@@ -69,6 +69,8 @@ export function createGateService({ repository, qrService }) {
         actorRole: actor.role,
         resultCount: items.length,
         outcomes,
+        personIds: items.map((item) => item.personId),
+        blockedPersonIds: items.filter((item) => item.outcome === 'BLOCKED_BLACKLIST').map((item) => item.personId),
         mobileMasked: mobile ? maskMobile(mobile) : null,
         ipAddress: actor.ipAddress,
         device: actor.device,

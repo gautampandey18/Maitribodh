@@ -73,6 +73,7 @@ export function getIstDateRange({ fromDate, toDate } = {}) {
   return {
     startStr,
     endStr,
+    todayStr,
     diffDays,
     prevStartStr,
     prevEndStr,
@@ -80,8 +81,46 @@ export function getIstDateRange({ fromDate, toDate } = {}) {
   };
 }
 
-export function formatSubtitle({ tab, startStr, endStr, isDefault, diffDays, now = new Date() }) {
-  if (tab === 'occupancy') {
+/**
+ * Builds a zero-filled day axis for daily charts so days without activity still render.
+ * @param {Array<{day: string}>} daily Rows returned by a daily aggregate query.
+ * @param {{startStr?: string, endStr?: string}} dateRange Selected IST date range.
+ * @returns {{days: string[], xLabels: string[]}} ISO day keys and day-of-month labels.
+ */
+export function buildDayAxis(daily = [], dateRange = {}) {
+  const rangeDays = getDaysList(dateRange?.startStr, dateRange?.endStr);
+  const days = rangeDays.length ? rangeDays : [...new Set(daily.map((d) => d.day))];
+  const xLabels = days.map((d) => String(Number(String(d).split('-')[2])));
+  return { days, xLabels };
+}
+
+/**
+ * Assigns one color per category so stacked bars and donut segments always agree.
+ * @param {string[]} names Category names in display order.
+ * @returns {Map<string, string>} Category name to color.
+ */
+export function buildCategoryColorMap(names = []) {
+  return new Map(names.map((name, index) => [name, getCategoryColor(name, index)]));
+}
+
+function periodDeltaLabel(dateRange) {
+  const diffDays = dateRange?.diffDays ?? 14;
+  return diffDays === 1 ? 'vs previous day' : `vs previous ${diffDays} days`;
+}
+
+function formatHourLabel(hour) {
+  if (hour === 0) return '12a';
+  if (hour === 12) return '12p';
+  return hour > 12 ? `${hour - 12}p` : `${hour}a`;
+}
+
+function formatFullDate(dateStr) {
+  const [year, month, day] = String(dateStr).split('-').map(Number);
+  return `${day} ${MONTHS[month - 1] || ''} ${year}`;
+}
+
+export function formatSubtitle({ tab, startStr, endStr, todayStr, isDefault, diffDays, now = new Date() }) {
+  if (tab === 'occupancy' && (!todayStr || endStr === todayStr)) {
     const timeFormatter = new Intl.DateTimeFormat('en-IN', {
       timeZone: 'Asia/Kolkata',
       day: 'numeric',
@@ -92,6 +131,9 @@ export function formatSubtitle({ tab, startStr, endStr, isDefault, diffDays, now
       hour12: true,
     });
     return `Live · updated ${timeFormatter.format(now)} IST`;
+  }
+  if (tab === 'occupancy') {
+    return `${formatFullDate(endStr)} · times in IST`;
   }
 
   const startFormatted = formatDisplayDate(startStr);
@@ -147,63 +189,54 @@ export function formatDelta(current, previous, { unit = '%', label = 'vs previou
   return `${sign}${pct}${unit} ${label}`;
 }
 
+/**
+ * Shapes Visit History analytics rows into KPI cards and chart configs.
+ * @param {object} input Summary, daily, and per-category rows plus the selected date range.
+ * @returns {object} Analytics payload for the Visit History tab.
+ */
 export function buildVisitsAnalytics({ summary = {}, daily = [], byCategory = [], dateRange = {} }) {
   const subtitle = formatSubtitle({ tab: 'visits', ...dateRange });
-
-  // Group daily by day and category
-  const daysFromRange = getDaysList(dateRange?.startStr, dateRange?.endStr);
-  const daysSet = daysFromRange.length ? daysFromRange : [...new Set(daily.map((d) => d.day))];
-  const xLabels = daysSet.map((d) => {
-    const [, , day] = String(d).split('-').map(Number);
-    return String(day);
-  });
+  const { days, xLabels } = buildDayAxis(daily, dateRange);
 
   const catNames = [...new Set([
-    ...daily.map((d) => d.category_name),
     ...byCategory.map((c) => c.category_name),
+    ...daily.map((d) => d.category_name),
   ])].filter(Boolean);
+  const colors = buildCategoryColorMap(catNames);
 
-  const series = catNames.map((cat, idx) => {
-    const values = daysSet.map((day) => {
+  const series = catNames.map((cat) => ({
+    name: cat,
+    color: colors.get(cat),
+    values: days.map((day) => {
       const match = daily.find((d) => d.day === day && d.category_name === cat);
       return match ? Number(match.checkin_count) || 0 : 0;
-    });
-    return {
-      name: cat,
-      color: getCategoryColor(cat, idx),
-      values,
-    };
-  });
+    }),
+  }));
 
-  // Calculate yMax from stacked sum per day
-  const maxStackedSum = Math.max(0, ...daysSet.map((_, i) => series.reduce((sum, s) => sum + (s.values[i] || 0), 0)));
+  const maxStackedSum = Math.max(0, ...days.map((_, i) => series.reduce((sum, s) => sum + (s.values[i] || 0), 0)));
   const { yMax, yTicks } = calculateTicks(maxStackedSum);
 
-  // Segments for donut
-  const total = Number(summary.current_visits) || byCategory.reduce((sum, c) => sum + (Number(c.count) || 0), 0) || 0;
+  const total = Number(summary.current_visits) || 0;
   const segments = total > 0
-    ? byCategory.map((c, i) => ({
+    ? byCategory.map((c) => ({
       label: c.category_name,
       count: Number(c.count) || 0,
       percentage: Math.round(((Number(c.count) || 0) / total) * 100),
-      color: getCategoryColor(c.category_name, i),
+      color: colors.get(c.category_name),
     }))
     : [{ label: 'No visits', count: 0, percentage: 100, color: '#E5E7EB' }];
 
-  const durationDelta = (summary.avg_duration_min || 0) - (summary.prev_avg_duration_min || 0);
+  const durationDelta = (Number(summary.avg_duration_min) || 0) - (Number(summary.prev_avg_duration_min) || 0);
   const durationSign = durationDelta >= 0 ? '+' : '';
   const openOver24hStr = (summary.open_over_24h || 0) > 0
     ? `${summary.open_over_24h} open more than 24 h`
     : (summary.inside_now > 0 ? 'All within 24 h' : 'None inside');
 
-  const diffDays = dateRange?.diffDays ?? 14;
-  const deltaLabel = diffDays === 1 ? 'vs previous day' : `vs previous ${diffDays} days`;
-
   const kpis = [
     {
       label: 'Total visits',
-      value: String(summary.current_visits || 0),
-      delta: formatDelta(summary.current_visits, summary.prev_visits, { label: deltaLabel }),
+      value: String(total),
+      delta: formatDelta(summary.current_visits, summary.prev_visits, { label: periodDeltaLabel(dateRange) }),
       isTotal: true,
     },
     {
@@ -246,55 +279,54 @@ export function buildVisitsAnalytics({ summary = {}, daily = [], byCategory = []
   };
 }
 
+/**
+ * Shapes Person Registrations analytics rows into KPI cards and chart configs.
+ * @param {object} input Summary, daily, and per-category rows plus the selected date range.
+ * @returns {object} Analytics payload for the Person Registrations tab.
+ */
 export function buildRegistrationsAnalytics({ summary = {}, daily = [], byCategory = [], dateRange = {} }) {
   const subtitle = formatSubtitle({ tab: 'registrations', ...dateRange });
+  const { days, xLabels } = buildDayAxis(daily, dateRange);
 
-  const daysSet = [...new Set(daily.map((d) => d.day))];
-  const xLabels = daysSet.map((d) => {
-    const [, , day] = String(d).split('-').map(Number);
-    return String(day);
-  });
+  const catNames = [...new Set([
+    ...byCategory.map((c) => c.category_name),
+    ...daily.map((d) => d.category_name),
+  ])].filter(Boolean);
+  const colors = buildCategoryColorMap(catNames);
 
-  const catNames = [...new Set(daily.map((d) => d.category_name))];
-
-  const series = catNames.map((cat, idx) => {
-    const values = daysSet.map((day) => {
+  const series = catNames.map((cat) => ({
+    name: cat,
+    color: colors.get(cat),
+    values: days.map((day) => {
       const match = daily.find((d) => d.day === day && d.category_name === cat);
       return match ? Number(match.count) || 0 : 0;
-    });
-    return {
-      name: cat,
-      color: getCategoryColor(cat, idx),
-      values,
-    };
-  });
+    }),
+  }));
 
-  const maxStackedSum = Math.max(0, ...daysSet.map((_, i) => series.reduce((sum, s) => sum + (s.values[i] || 0), 0)));
+  const maxStackedSum = Math.max(0, ...days.map((_, i) => series.reduce((sum, s) => sum + (s.values[i] || 0), 0)));
   const { yMax, yTicks } = calculateTicks(maxStackedSum);
 
-  const total = Number(summary.current_registrations) || byCategory.reduce((sum, c) => sum + (Number(c.count) || 0), 0) || 0;
+  const total = Number(summary.current_registrations) || 0;
   const segments = total > 0
-    ? byCategory.map((c, i) => ({
+    ? byCategory.map((c) => ({
       label: c.category_name,
       count: Number(c.count) || 0,
       percentage: Math.round(((Number(c.count) || 0) / total) * 100),
-      color: getCategoryColor(c.category_name, i),
+      color: colors.get(c.category_name),
     }))
     : [{ label: 'No registrations', count: 0, percentage: 100, color: '#E5E7EB' }];
 
   const visitorPct = total > 0 ? Math.round(((summary.visitor_count || 0) / total) * 100) : 0;
+  const oldestDays = Number(summary.oldest_pending_days) || 0;
   const pendingDelta = (summary.pending_approvals || 0) > 0
-    ? `Oldest waiting ${summary.oldest_pending_days || 0} ${(summary.oldest_pending_days === 1) ? 'day' : 'days'}`
+    ? `Oldest waiting ${oldestDays} ${oldestDays === 1 ? 'day' : 'days'}`
     : 'None waiting';
-
-  const diffDays = dateRange?.diffDays ?? 14;
-  const deltaLabel = diffDays === 1 ? 'vs previous day' : `vs previous ${diffDays} days`;
 
   const kpis = [
     {
       label: 'New registrations',
       value: String(total),
-      delta: formatDelta(summary.current_registrations, summary.prev_registrations, { label: deltaLabel }),
+      delta: formatDelta(summary.current_registrations, summary.prev_registrations, { label: periodDeltaLabel(dateRange) }),
       isTotal: true,
     },
     {
@@ -308,7 +340,7 @@ export function buildRegistrationsAnalytics({ summary = {}, daily = [], byCatego
       delta: 'This period',
     },
     {
-      label: 'Pending ID verification',
+      label: 'Pending approvals',
       value: String(summary.pending_approvals || 0),
       delta: pendingDelta,
     },
@@ -337,25 +369,21 @@ export function buildRegistrationsAnalytics({ summary = {}, daily = [], byCatego
   };
 }
 
+/**
+ * Shapes Occupancy analytics rows for the selected day (live when the day is today).
+ * @param {object} input Summary, hourly, and per-location rows plus the selected date range.
+ * @returns {object} Analytics payload for the Occupancy tab.
+ */
 export function buildOccupancyAnalytics({ summary = {}, hourly = [], byLocation = [], dateRange = {} }) {
   const subtitle = formatSubtitle({ tab: 'occupancy', ...dateRange });
+  const isToday = !dateRange?.todayStr || dateRange.endStr === dateRange.todayStr;
+  const dayLabel = isToday ? 'today' : `on ${formatDisplayDate(dateRange.endStr)}`;
 
-  const xLabels = hourly.map((h) => {
-    const hr = h.hour;
-    if (hr === 12) return '12p';
-    if (hr > 12) return `${hr - 12}p`;
-    return `${hr}a`;
-  });
+  const xLabels = hourly.map((h) => formatHourLabel(Number(h.hour)));
   const points = hourly.map((h) => Number(h.count) || 0);
   const maxPoint = Math.max(0, ...points);
-  let peakIndex = 0;
-  for (let i = 0; i < points.length; i += 1) {
-    if (points[i] === maxPoint) {
-      peakIndex = i;
-      break;
-    }
-  }
-  const peakLabel = `Peak ${maxPoint} at ${xLabels[peakIndex] || '11a'}`;
+  const peakIndex = Math.max(0, points.indexOf(maxPoint));
+  const peakLabel = maxPoint > 0 ? `Peak ${maxPoint} at ${xLabels[peakIndex]}` : `Nobody on campus ${dayLabel}`;
   const { yMax, yTicks } = calculateTicks(maxPoint);
 
   const items = byLocation.map((loc, i) => ({
@@ -364,9 +392,7 @@ export function buildOccupancyAnalytics({ summary = {}, hourly = [], byLocation 
     color: i === 0 && (Number(loc.count) || 0) > 0 ? '#B91C1C' : '#E06D2E',
   }));
   const maxLocVal = Math.max(5, ...items.map((it) => it.value));
-
-  const fullestLoc = summary.fullest_location || (items.length ? items[0].label : 'Campus');
-  const fullestDelta = summary.fullest_count ? `${summary.fullest_count} inside` : 'None inside';
+  const fullest = items[0]?.value > 0 ? items[0] : null;
 
   const kpis = [
     {
@@ -375,14 +401,14 @@ export function buildOccupancyAnalytics({ summary = {}, hourly = [], byLocation 
       delta: peakLabel,
     },
     {
-      label: 'Fullest location',
-      value: fullestLoc,
-      delta: fullestDelta,
+      label: isToday ? 'Fullest location' : 'Busiest location',
+      value: fullest ? fullest.label : 'None',
+      delta: fullest ? `${fullest.value} ${isToday ? 'inside' : 'checked in'}` : 'No activity',
     },
     {
-      label: 'Checked in today',
-      value: String(summary.checked_in_today || 0),
-      delta: `${summary.on_campus_now || 0} still inside`,
+      label: `Checked in ${dayLabel}`,
+      value: String(summary.checked_in_day || 0),
+      delta: `${summary.still_inside_from_day || 0} still inside`,
     },
     {
       label: 'Open > 24 h',
@@ -398,7 +424,7 @@ export function buildOccupancyAnalytics({ summary = {}, hourly = [], byLocation 
     kpis,
     chartLeft: {
       type: 'area-line',
-      title: 'People on campus today',
+      title: isToday ? 'People on campus today' : `People on campus · ${formatFullDate(dateRange.endStr)}`,
       xLabels,
       yMax,
       yTicks,
@@ -409,7 +435,7 @@ export function buildOccupancyAnalytics({ summary = {}, hourly = [], byLocation 
     },
     chartRight: {
       type: 'horizontal-bar',
-      title: 'Occupancy by location',
+      title: isToday ? 'Occupancy by location (now)' : 'Check-ins by location',
       isPercentage: false,
       maxVal: maxLocVal,
       items,
@@ -417,23 +443,23 @@ export function buildOccupancyAnalytics({ summary = {}, hourly = [], byLocation 
   };
 }
 
+/**
+ * Shapes Staff analytics rows into attendance KPIs and charts.
+ * @param {object} input Summary, daily attendance, and on-duty rows plus the selected date range.
+ * @returns {object} Analytics payload for the Staff tab.
+ */
 export function buildStaffAnalytics({ summary = {}, daily = [], onDutyByLocation = [], dateRange = {} }) {
   const subtitle = formatSubtitle({ tab: 'staff', ...dateRange });
-
-  const daysSet = [...new Set(daily.map((d) => d.day))];
-  const xLabels = daysSet.map((d) => {
-    const [, , day] = String(d).split('-').map(Number);
-    return String(day);
-  });
+  const { days, xLabels } = buildDayAxis(daily, dateRange);
 
   const activeStaff = Number(summary.active_staff) || 0;
-  const presentValues = daysSet.map((day) => {
+  const presentValues = days.map((day) => {
     const match = daily.find((d) => d.day === day);
     return match ? Number(match.present_count) || 0 : 0;
   });
   const absentValues = presentValues.map((p) => Math.max(0, activeStaff - p));
 
-  const maxAttendance = Math.max(activeStaff, ...presentValues, 4);
+  const maxAttendance = Math.max(activeStaff, ...presentValues);
   const { yMax, yTicks } = calculateTicks(maxAttendance);
 
   const series = [
@@ -457,7 +483,7 @@ export function buildStaffAnalytics({ summary = {}, daily = [], onDutyByLocation
     {
       label: 'Active staff',
       value: String(activeStaff),
-      delta: `${summary.joined_this_period || 0} joined this period`,
+      delta: `${summary.joined_this_period || 0} registered this period`,
     },
     {
       label: 'Present today',
@@ -467,7 +493,7 @@ export function buildStaffAnalytics({ summary = {}, daily = [], onDutyByLocation
     {
       label: 'Avg. hours on site',
       value: `${(Number(summary.avg_hours) || 0).toFixed(1)} h`,
-      delta: 'Completed visits',
+      delta: `${summary.completed_visits || 0} completed visits`,
     },
     {
       label: 'Missed checkouts',
@@ -478,7 +504,7 @@ export function buildStaffAnalytics({ summary = {}, daily = [], onDutyByLocation
 
   return {
     subtitle,
-    tableTitle: 'Staff attendance',
+    tableTitle: 'Staff',
     tableCounter: `${activeStaff} staff`,
     kpis,
     chartLeft: {
@@ -499,87 +525,71 @@ export function buildStaffAnalytics({ summary = {}, daily = [], onDutyByLocation
   };
 }
 
+const APPROVAL_ACTION_STYLES = {
+  SUBMITTED: { label: 'Submitted', color: '#D97706' },
+  RESUBMITTED: { label: 'Resubmitted', color: '#F59E0B' },
+  APPROVED: { label: 'Approved', color: '#15803D' },
+  REJECTED: { label: 'Rejected', color: '#B91C1C' },
+};
+
+/**
+ * Shapes Approvals analytics rows. Requests are submissions; the approval rate uses decisions only.
+ * @param {object} input Summary, daily, and per-action rows plus the selected date range.
+ * @returns {object} Analytics payload for the Approvals tab.
+ */
 export function buildApprovalsAnalytics({ summary = {}, daily = [], byOutcome = [], dateRange = {} }) {
   const subtitle = formatSubtitle({ tab: 'approvals', ...dateRange });
+  const { days, xLabels } = buildDayAxis(daily, dateRange);
 
-  const daysSet = [...new Set(daily.map((d) => d.day))];
-  const xLabels = daysSet.map((d) => {
-    const [, , day] = String(d).split('-').map(Number);
-    return String(day);
+  const dailyValues = (field) => days.map((day) => {
+    const match = daily.find((d) => d.day === day);
+    return match ? Number(match[field]) || 0 : 0;
   });
-
   const series = [
-    {
-      name: 'Approved',
-      color: '#15803D',
-      values: daysSet.map((day) => {
-        const match = daily.find((d) => d.day === day);
-        return match ? Number(match.approved_count) || 0 : 0;
-      }),
-    },
-    {
-      name: 'Pending',
-      color: '#D97706',
-      values: daysSet.map((day) => {
-        const match = daily.find((d) => d.day === day);
-        return match ? Number(match.pending_count) || 0 : 0;
-      }),
-    },
-    {
-      name: 'Rejected',
-      color: '#B91C1C',
-      values: daysSet.map((day) => {
-        const match = daily.find((d) => d.day === day);
-        return match ? Number(match.rejected_count) || 0 : 0;
-      }),
-    },
+    { name: 'Approved', color: APPROVAL_ACTION_STYLES.APPROVED.color, values: dailyValues('approved_count') },
+    { name: 'Submitted', color: APPROVAL_ACTION_STYLES.SUBMITTED.color, values: dailyValues('submitted_count') },
+    { name: 'Rejected', color: APPROVAL_ACTION_STYLES.REJECTED.color, values: dailyValues('rejected_count') },
   ];
 
-  const maxStackedSum = Math.max(0, ...daysSet.map((_, i) => series.reduce((sum, s) => sum + (s.values[i] || 0), 0)));
+  const maxStackedSum = Math.max(0, ...days.map((_, i) => series.reduce((sum, s) => sum + (s.values[i] || 0), 0)));
   const { yMax, yTicks } = calculateTicks(maxStackedSum);
 
-  const total = Number(summary.total_requests) || byOutcome.reduce((sum, c) => sum + (Number(c.count) || 0), 0) || 0;
-  const segments = total > 0
+  const totalActions = byOutcome.reduce((sum, c) => sum + (Number(c.count) || 0), 0);
+  const segments = totalActions > 0
     ? byOutcome.map((c) => {
-      let color = '#15803D';
-      if (c.action === 'PENDING' || c.action === 'SUBMITTED') color = '#D97706';
-      if (c.action === 'REJECTED') color = '#B91C1C';
+      const style = APPROVAL_ACTION_STYLES[c.action] || { label: c.action, color: '#4B5563' };
       return {
-        label: c.action.charAt(0).toUpperCase() + c.action.slice(1).toLowerCase(),
+        label: style.label,
         count: Number(c.count) || 0,
-        percentage: Math.round(((Number(c.count) || 0) / total) * 100),
-        color,
+        percentage: Math.round(((Number(c.count) || 0) / totalActions) * 100),
+        color: style.color,
       };
     })
-    : [
-      { label: 'Approved', count: 0, percentage: 0, color: '#15803D' },
-      { label: 'Pending', count: 0, percentage: 0, color: '#D97706' },
-      { label: 'Rejected', count: 0, percentage: 0, color: '#B91C1C' },
-    ];
+    : [{ label: 'No activity', count: 0, percentage: 100, color: '#E5E7EB' }];
 
-  const approvalRate = total > 0 ? Math.round(((summary.approved_count || 0) / total) * 100) : 0;
+  const approved = Number(summary.approved_count) || 0;
+  const decisions = approved + (Number(summary.rejected_count) || 0);
+  const approvalRate = decisions > 0 ? Math.round((approved / decisions) * 100) : 0;
   const pendingDelta = (summary.pending_count || 0) > 0
     ? `${summary.waiting_over_1h || 0} waiting over 1 hour`
     : 'None waiting';
 
-  const decisionTimeStr = (summary.avg_decision_min || 0) >= 60
-    ? `${((summary.avg_decision_min || 0) / 60).toFixed(1)} h`
-    : `${summary.avg_decision_min || 0} min`;
-
-  const diffDays = dateRange?.diffDays ?? 14;
-  const deltaLabel = diffDays === 1 ? 'vs previous day' : `vs previous ${diffDays} days`;
+  const avgDecisionMin = Number(summary.avg_decision_min) || 0;
+  const decisionTimeStr = avgDecisionMin >= 60
+    ? `${(avgDecisionMin / 60).toFixed(1)} h`
+    : `${avgDecisionMin} min`;
 
   const kpis = [
     {
       label: 'Approval requests',
-      value: String(total),
-      delta: formatDelta(summary.total_requests, summary.prev_requests, { label: deltaLabel }),
+      value: String(summary.total_requests || 0),
+      delta: formatDelta(summary.total_requests, summary.prev_requests, { label: periodDeltaLabel(dateRange) }),
       isTotal: true,
     },
     {
       label: 'Approved',
-      value: String(summary.approved_count || 0),
-      delta: `${approvalRate}% approval rate`,
+      value: String(approved),
+      delta: decisions > 0 ? `${approvalRate}% approval rate` : 'No decisions yet',
     },
     {
       label: 'Pending',
@@ -587,20 +597,20 @@ export function buildApprovalsAnalytics({ summary = {}, daily = [], byOutcome = 
       delta: pendingDelta,
     },
     {
-      label: 'Median decision time',
-      value: decisionTimeStr,
-      delta: 'Average review time',
+      label: 'Avg. decision time',
+      value: decisions > 0 ? decisionTimeStr : '—',
+      delta: `${decisions} ${decisions === 1 ? 'decision' : 'decisions'} this period`,
     },
   ];
 
   return {
     subtitle,
-    tableTitle: 'Approval requests',
-    tableCounter: `${total} requests`,
+    tableTitle: 'Approval activity',
+    tableCounter: `${totalActions} actions`,
     kpis,
     chartLeft: {
       type: 'stacked-bar',
-      title: 'Requests per day by outcome',
+      title: 'Approval activity per day',
       xLabels,
       yMax,
       yTicks,
@@ -608,34 +618,28 @@ export function buildApprovalsAnalytics({ summary = {}, daily = [], byOutcome = 
     },
     chartRight: {
       type: 'donut',
-      title: 'Requests by outcome',
-      totalValue: String(total),
-      totalLabel: 'requests',
+      title: 'Activity by outcome',
+      totalValue: String(totalActions),
+      totalLabel: 'actions',
       segments,
     },
   };
 }
 
+/**
+ * Shapes Blacklist analytics rows into KPI cards and chart configs.
+ * @param {object} input Summary, daily blocked attempts, and reason rows plus the selected date range.
+ * @returns {object} Analytics payload for the Blacklist tab.
+ */
 export function buildBlacklistAnalytics({ summary = {}, daily = [], reasons = [], dateRange = {} }) {
   const subtitle = formatSubtitle({ tab: 'blacklist', ...dateRange });
+  const { days, xLabels } = buildDayAxis(daily, dateRange);
 
-  const daysSet = [...new Set(daily.map((d) => d.day))];
-  const xLabels = daysSet.map((d) => {
-    const [, , day] = String(d).split('-').map(Number);
-    return String(day);
-  });
-
-  const values = daysSet.map((day) => {
+  const values = days.map((day) => {
     const match = daily.find((d) => d.day === day);
     return match ? Number(match.count) || 0 : 0;
   });
-
-  const maxVal = Math.max(0, ...values);
-  const { yMax, yTicks } = calculateTicks(maxVal);
-
-  const series = [
-    { name: 'Blocked', color: '#B91C1C', values },
-  ];
+  const { yMax, yTicks } = calculateTicks(Math.max(0, ...values));
 
   const items = reasons.map((r) => ({
     label: r.label,
@@ -644,27 +648,31 @@ export function buildBlacklistAnalytics({ summary = {}, daily = [], reasons = []
   }));
   const maxReasonVal = Math.max(5, ...items.map((it) => it.value));
 
+  const blocked = Number(summary.blocked_attempts) || 0;
+  const screenings = Number(summary.gate_screenings) || 0;
+  const blockedPct = screenings > 0 ? Math.round((blocked / screenings) * 100) : 0;
+
   const kpis = [
     {
       label: 'On blacklist',
       value: String(summary.on_blacklist || 0),
-      delta: `${summary.on_blacklist || 0} active · ${summary.expiring_soon || 0} expiring`,
+      delta: `${summary.expiring_soon || 0} expiring in 7 days`,
       isTotal: true,
     },
     {
       label: 'Added this period',
       value: String(summary.added_this_period || 0),
-      delta: 'By admin review',
+      delta: `${summary.lifted_this_period || 0} lifted this period`,
     },
     {
       label: 'Blocked entry attempts',
-      value: String(summary.blocked_attempts || 0),
-      delta: (summary.blocked_attempts || 0) > 0 ? `${summary.blocked_attempts} at gate` : 'None this period',
+      value: String(blocked),
+      delta: blocked > 0 ? `${blockedPct}% of gate screenings` : 'None this period',
     },
     {
       label: 'Gate screenings',
-      value: String(summary.gate_screenings || 0),
-      delta: '100% screened',
+      value: String(screenings),
+      delta: screenings > 0 ? `${screenings - blocked} not blocked` : 'None this period',
     },
   ];
 
@@ -679,7 +687,7 @@ export function buildBlacklistAnalytics({ summary = {}, daily = [], reasons = []
       xLabels,
       yMax,
       yTicks,
-      series,
+      series: [{ name: 'Blocked', color: '#B91C1C', values }],
     },
     chartRight: {
       type: 'horizontal-bar',

@@ -10,103 +10,36 @@ import { parsePagination } from '../../utils/pagination.js';
 const reportRoles = [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.APPROVER, ROLES.REGISTRATION_OFFICER, ROLES.VIEWER];
 const dateSchema = z.iso.date();
 const reportStatus = z.enum(['PENDING', 'ACTIVE', 'REJECTED', 'DEACTIVATED']);
+const textFilter = z.string().trim().max(100).default('');
+const MASKED_MOBILE_REPORTS = new Set(['visit-history', 'registrations']);
+
+const REPORT_SERVICE_METHODS = {
+  'visit-history': 'visitHistory',
+  registrations: 'registrations',
+  occupancy: 'occupancy',
+  staff: 'staff',
+  approvals: 'approvals',
+  blacklist: 'blacklist',
+};
+
+const ANALYTICS_TAB_REPORTS = {
+  visits: 'visit-history',
+  registrations: 'registrations',
+  occupancy: 'occupancy',
+  staff: 'staff',
+  approvals: 'approvals',
+  blacklist: 'blacklist',
+};
 
 export function createReportsRouter({ reportsService, authenticate }) {
   const router = express.Router();
 
   router.get(
-    '/visit-history',
+    '/options',
     authenticate,
     authorize(...reportRoles),
-    asyncHandler(async (request, response) => {
-      const filters = parseDateRange(request.query);
-      const categoryId = optionalPositiveInteger(request.query.categoryId, 'categoryId');
-      const locationId = optionalPositiveInteger(request.query.locationId, 'locationId');
-      response.status(200).json(await reportsService.visitHistory({
-        filters: { ...filters, categoryId, locationId },
-        actorRole: request.auth.role,
-        pagination: parsePagination(request.query),
-      }));
-    }),
-  );
-
-  router.get(
-    '/registrations',
-    authenticate,
-    authorize(...reportRoles),
-    asyncHandler(async (request, response) => {
-      const categoryId = optionalPositiveInteger(request.query.categoryId, 'categoryId');
-      const status = request.query.status === undefined
-        ? undefined
-        : reportStatus.safeParse(request.query.status);
-      if (status && !status.success) {
-        throw new ApiError(400, 'VALIDATION_ERROR', 'Invalid report status');
-      }
-      response.status(200).json(await reportsService.registrations({
-        filters: { categoryId, status: status?.data },
-        actorRole: request.auth.role,
-        pagination: parsePagination(request.query),
-      }));
-    }),
-  );
-
-  router.get(
-    '/occupancy',
-    authenticate,
-    authorize(...reportRoles),
-    asyncHandler(async (request, response) => {
-      response.status(200).json(await reportsService.occupancy({
-        filters: parseDateRange(request.query),
-        pagination: parsePagination(request.query),
-      }));
-    }),
-  );
-
-  router.get(
-    '/staff',
-    authenticate,
-    authorize(...reportRoles),
-    asyncHandler(async (request, response) => {
-      const filters = z.object({
-        name: z.string().trim().max(100).default(''),
-        jobRole: z.string().trim().max(100).default(''),
-      }).safeParse(request.query);
-      if (!filters.success) throw new ApiError(400, 'VALIDATION_ERROR', 'Invalid staff report filters');
-      response.status(200).json(await reportsService.staff({
-        filters: filters.data,
-        pagination: parsePagination(request.query),
-      }));
-    }),
-  );
-
-  router.get(
-    '/approvals',
-    authenticate,
-    authorize(...reportRoles),
-    asyncHandler(async (request, response) => {
-      const userFilter = z.string().trim().max(100).default('').safeParse(request.query.user);
-      if (!userFilter.success) throw new ApiError(400, 'VALIDATION_ERROR', 'Invalid report user filter');
-      response.status(200).json(await reportsService.approvals({
-        filters: { ...parseDateRange(request.query), user: userFilter.data },
-        pagination: parsePagination(request.query),
-      }));
-    }),
-  );
-
-  router.get(
-    '/blacklist',
-    authenticate,
-    authorize(...reportRoles),
-    asyncHandler(async (request, response) => {
-      const filters = z.object({
-        name: z.string().trim().max(100).default(''),
-        category: z.string().trim().max(100).default(''),
-      }).safeParse(request.query);
-      if (!filters.success) throw new ApiError(400, 'VALIDATION_ERROR', 'Invalid report filters');
-      response.status(200).json(await reportsService.blacklist({
-        filters: filters.data,
-        pagination: parsePagination(request.query),
-      }));
+    asyncHandler(async (_request, response) => {
+      response.status(200).json(await reportsService.options());
     }),
   );
 
@@ -115,18 +48,32 @@ export function createReportsRouter({ reportsService, authenticate }) {
     authenticate,
     authorize(...reportRoles),
     asyncHandler(async (request, response) => {
-      const tabSchema = z.enum(['visits', 'registrations', 'occupancy', 'staff', 'approvals', 'blacklist']).default('visits');
-      const tabResult = tabSchema.safeParse(request.query.tab || 'visits');
-      if (!tabResult.success) {
+      const tab = request.query.tab || 'visits';
+      const reportKey = ANALYTICS_TAB_REPORTS[tab];
+      if (typeof tab !== 'string' || !reportKey) {
         throw new ApiError(400, 'VALIDATION_ERROR', 'Invalid report tab for analytics');
       }
-      const filters = parseDateRange(request.query);
       response.status(200).json(await reportsService.analytics({
-        tab: tabResult.data,
-        filters,
+        tab,
+        filters: parseReportFilters(reportKey, request.query),
       }));
     }),
   );
+
+  for (const [reportKey, method] of Object.entries(REPORT_SERVICE_METHODS)) {
+    router.get(
+      `/${reportKey}`,
+      authenticate,
+      authorize(...reportRoles),
+      asyncHandler(async (request, response) => {
+        response.status(200).json(await reportsService[method]({
+          filters: parseReportFilters(reportKey, request.query),
+          ...(MASKED_MOBILE_REPORTS.has(reportKey) ? { actorRole: request.auth.role } : {}),
+          pagination: parsePagination(request.query),
+        }));
+      }),
+    );
+  }
 
   router.get(
     '/:reportKey/export',
@@ -134,13 +81,14 @@ export function createReportsRouter({ reportsService, authenticate }) {
     authorize(...reportRoles),
     asyncHandler(async (request, response) => {
       const { reportKey } = request.params;
-      const rows = await exportRowsForReport(reportKey, request, reportsService);
+      const method = Object.hasOwn(REPORT_SERVICE_METHODS, reportKey) ? REPORT_SERVICE_METHODS[reportKey] : null;
+      if (!method) throw new ApiError(404, 'REPORT_NOT_FOUND', 'Report not found');
+      const filters = parseReportFilters(reportKey, request.query);
+      const rows = await reportsService[method]({
+        filters,
+        ...(MASKED_MOBILE_REPORTS.has(reportKey) ? { actorRole: request.auth.role } : {}),
+      });
       if (reportKey === 'visit-history') {
-        const filters = {
-          ...parseDateRange(request.query),
-          categoryId: optionalPositiveInteger(request.query.categoryId, 'categoryId'),
-          locationId: optionalPositiveInteger(request.query.locationId, 'locationId'),
-        };
         await reportsService.recordVisitHistoryExport({
           filters,
           rowCount: rows.length,
@@ -175,47 +123,52 @@ export function createReportsRouter({ reportsService, authenticate }) {
   return router;
 }
 
-async function exportRowsForReport(reportKey, request, reportsService) {
+/**
+ * Parses the filters a report accepts. The table, Excel export, and analytics all use this,
+ * so KPIs and charts always describe the same records as the table.
+ * @param {string} reportKey Report route key, for example `visit-history`.
+ * @param {object} query Express query object.
+ * @returns {object} Validated filters for the report.
+ */
+export function parseReportFilters(reportKey, query) {
+  const search = optionalText(query.search, 'search');
   if (reportKey === 'visit-history') {
-    const filters = {
-      ...parseDateRange(request.query),
-      categoryId: optionalPositiveInteger(request.query.categoryId, 'categoryId'),
-      locationId: optionalPositiveInteger(request.query.locationId, 'locationId'),
+    return {
+      ...parseDateRange(query),
+      categoryId: optionalPositiveInteger(query.categoryId, 'categoryId'),
+      locationId: optionalPositiveInteger(query.locationId, 'locationId'),
+      search,
     };
-    return reportsService.visitHistory({ filters, actorRole: request.auth.role });
   }
   if (reportKey === 'registrations') {
-    const categoryId = optionalPositiveInteger(request.query.categoryId, 'categoryId');
-    const status = request.query.status === undefined ? undefined : reportStatus.safeParse(request.query.status);
-    if (status && !status.success) throw new ApiError(400, 'VALIDATION_ERROR', 'Invalid report status');
-    return reportsService.registrations({
-      filters: { categoryId, status: status?.data },
-      actorRole: request.auth.role,
-    });
+    return {
+      ...parseDateRange(query),
+      categoryId: optionalPositiveInteger(query.categoryId, 'categoryId'),
+      status: optionalStatus(query.status),
+      search,
+    };
   }
   if (reportKey === 'occupancy') {
-    return reportsService.occupancy({ filters: parseDateRange(request.query) });
+    return { ...parseDateRange(query), search };
   }
   if (reportKey === 'staff') {
-    const filters = z.object({
-      name: z.string().trim().max(100).default(''),
-      jobRole: z.string().trim().max(100).default(''),
-    }).safeParse(request.query);
-    if (!filters.success) throw new ApiError(400, 'VALIDATION_ERROR', 'Invalid staff report filters');
-    return reportsService.staff({ filters: filters.data });
+    return {
+      ...parseDateRange(query),
+      name: optionalText(query.name, 'name'),
+      jobRole: optionalText(query.jobRole, 'jobRole'),
+      search,
+    };
   }
   if (reportKey === 'approvals') {
-    const user = z.string().trim().max(100).default('').safeParse(request.query.user);
-    if (!user.success) throw new ApiError(400, 'VALIDATION_ERROR', 'Invalid report user filter');
-    return reportsService.approvals({ filters: { ...parseDateRange(request.query), user: user.data } });
+    return { ...parseDateRange(query), user: optionalText(query.user, 'user'), search };
   }
   if (reportKey === 'blacklist') {
-    const filters = z.object({
-      name: z.string().trim().max(100).default(''),
-      category: z.string().trim().max(100).default(''),
-    }).safeParse(request.query);
-    if (!filters.success) throw new ApiError(400, 'VALIDATION_ERROR', 'Invalid report filters');
-    return reportsService.blacklist({ filters: filters.data });
+    return {
+      ...parseDateRange(query),
+      name: optionalText(query.name, 'name'),
+      category: optionalText(query.category, 'category'),
+      search,
+    };
   }
   throw new ApiError(404, 'REPORT_NOT_FOUND', 'Report not found');
 }
@@ -233,9 +186,22 @@ function parseDateRange(query) {
 }
 
 function optionalPositiveInteger(value, name) {
-  if (value === undefined) return undefined;
+  if (value === undefined || value === '') return undefined;
   const parsed = z.coerce.number().int().positive().safeParse(value);
   if (!parsed.success) throw new ApiError(400, 'VALIDATION_ERROR', `Invalid ${name}`);
+  return parsed.data;
+}
+
+function optionalText(value, name) {
+  const parsed = textFilter.safeParse(value);
+  if (!parsed.success) throw new ApiError(400, 'VALIDATION_ERROR', `Invalid ${name} filter`);
+  return parsed.data;
+}
+
+function optionalStatus(value) {
+  if (value === undefined || value === '') return undefined;
+  const parsed = reportStatus.safeParse(value);
+  if (!parsed.success) throw new ApiError(400, 'VALIDATION_ERROR', 'Invalid report status');
   return parsed.data;
 }
 

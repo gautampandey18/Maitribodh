@@ -76,10 +76,10 @@ Public QR lookup is an unauthenticated user-facing operation with reduced output
 | FR-AUTH-003 | System shall reject inactive, locked, password-less, missing, invalid, expired temporary, and already-used temporary credentials with a generic invalid-credentials response. | Implemented |
 | FR-AUTH-004 | System shall issue a signed bearer JWT only after successful credential verification and successful account-state update. | Implemented |
 | FR-AUTH-005 | System shall return user ID, role, token type, expiry, and first-login password-change state. | Implemented |
-| FR-AUTH-006 | A Security Guard session shall expire after 12 hours; sessions for other roles shall expire after 30 minutes. | Implemented |
+| FR-AUTH-006 | Sessions for every role shall expire after two hours. The client shall also sign out after 30 minutes without user activity; background requests shall not extend inactivity. | Implemented |
 | FR-AUTH-007 | Logout shall revoke sessions by incrementing the user's token version. | Implemented |
 | FR-AUTH-008 | Authentication shall verify the token and current account state/version before honoring protected requests. | Implemented |
-| FR-AUTH-009 | Client auth state shall exist in Redux memory only and shall not be persisted in browser local storage. | Implemented |
+| FR-AUTH-009 | Client auth state shall be restored from tab-scoped sessionStorage on refresh, preserving the original absolute and inactivity deadlines. Logout, password change, and invalid-session responses shall clear the saved credentials. Tokens shall not be stored in localStorage. | Implemented |
 | FR-AUTH-010 | Client shall force the user to `/password` before allowing other authenticated routes when `mustChangePassword` is true. | Implemented |
 | FR-AUTH-011 | Five failed account login attempts in the active 15-minute failure window shall result in a 15-minute account lock. Successful login shall clear the failure/lock state. | Implemented |
 | FR-AUTH-012 | Login shall also use an HTTP rate limiter whose window and limit are explicit deployment settings. | Implemented |

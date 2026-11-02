@@ -1,11 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { ApiError } from '../../errors/ApiError.js';
-import { ROLES } from '../../constants/roles.js';
-
-const SESSION_EXPIRY_SECONDS = Object.freeze({
-  SECURITY_GUARD: 12 * 60 * 60,
-  OTHER_ROLES: 30 * 60,
-});
+const SESSION_EXPIRY_SECONDS = 2 * 60 * 60;
 
 export function createAuthService({
   repository,
@@ -43,9 +38,7 @@ export function createAuthService({
         throw invalidCredentials();
       }
 
-      const expiresIn = authenticatedUser.role === ROLES.SECURITY_GUARD
-        ? SESSION_EXPIRY_SECONDS.SECURITY_GUARD
-        : SESSION_EXPIRY_SECONDS.OTHER_ROLES;
+      const expiresIn = SESSION_EXPIRY_SECONDS;
       const accessToken = await issueToken(authenticatedUser, expiresIn);
 
       return {

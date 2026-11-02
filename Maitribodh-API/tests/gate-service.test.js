@@ -30,6 +30,8 @@ test('gate decisions follow blacklist, status, inside, and location precedence',
     'BLOCKED_BLACKLIST', 'NOT_ACTIVE', 'ALREADY_INSIDE', 'LOCATION_WARNING', 'ELIGIBLE',
   ]);
   assert.equal(audit.mobileMasked, '******3210');
+  assert.deepEqual(audit.personIds, [1, 2, 3, 4, 5]);
+  assert.deepEqual(audit.blockedPersonIds, [1]);
   assert.deepEqual(result.items[4].assignedAreaIds, [2]);
 });
 

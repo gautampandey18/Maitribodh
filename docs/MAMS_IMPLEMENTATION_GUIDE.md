@@ -28,9 +28,11 @@ The API client in `src/api.js`:
 
 1. Uses `VITE_API_BASE_URL` when configured; otherwise it uses `/api/v1`.
 2. Reads the bearer token from the Redux auth state and attaches it to requests.
-3. Clears the in-memory session when a request returns `401` while a token is present.
+3. Clears the in-memory and saved session when a request returns `401` for the current token. A late response for an older token cannot end a newer login.
 
-Authentication state is held in Redux memory ([store.js](../Maitribodh-UI/src/store.js)); access tokens are not persisted to browser storage. Consequently, a page reload requires signing in again.
+Authentication state is held in Redux and persisted to tab-scoped `sessionStorage` ([store.js](../Maitribodh-UI/src/store.js)). Refresh restores the token, user, forced-password-change flag, original expiry, and last activity timestamp. Tokens are not stored in `localStorage`. Closing the tab ends its saved session.
+
+[SessionManager.jsx](../Maitribodh-UI/src/components/SessionManager.jsx) signs out after 30 minutes without pointer, keyboard, touch, or scrolling activity, or at the two-hour absolute limit, whichever comes first. Background polling does not extend the session. Focus, visibility, and page-resume events check elapsed wall time so suspended tabs cannot resume an expired session. Idle logout immediately clears local credentials and attempts server-side revocation through the existing logout endpoint; a network failure is logged and never prevents local logout. The API independently enforces the JWT expiry; idle timing is client-side. Refresh never extends a deadline.
 
 ### 2.2 API
 
@@ -156,9 +158,9 @@ Category status controls prevent disabling the last active category. Category ic
 3. Start the Vite UI. The development proxy forwards `/api` traffic to the API.
 4. The user submits credentials on `/login`.
 5. The API checks the account and password, applies login lock/rate-limit rules, then returns a token and user/first-login state on success.
-6. The UI stores session state in Redux memory. A forced password change routes to `/password`; otherwise the user is directed to their role landing route.
+6. The UI stores session state in Redux and tab-scoped `sessionStorage`. A forced password change routes to `/password`; otherwise the user is directed to their role landing route.
 7. Each subsequent protected request carries the bearer token. API middleware authenticates it and each protected route enforces its own role policy.
-8. A `401` response ends the in-memory UI session and requires a new sign-in.
+8. A `401` response for the current token clears both in-memory and saved UI credentials and requires a new sign-in.
 
 ### 4.2 New person registration and approval
 
@@ -330,7 +332,7 @@ Only Admin and Super Admin can use the Users screen and the user-management APIs
 1. User submits username/password to `POST /api/v1/auth/login`.
 2. API requires a username of 1–50 characters and password of 1–256 characters. It rejects missing, inactive, locked, password-less, expired temporary, or previously used temporary credentials with a generic invalid-credentials response.
 3. After bcrypt verification, the API marks the temporary password as used, clears failed-login state, records last login, issues a JWT, and returns `mustChangePassword: true`.
-4. UI stores the token in Redux memory and guards routes: while that flag is true, navigation redirects to `/password`.
+4. UI stores the token in Redux and tab-scoped `sessionStorage` and guards routes: while that flag is true, navigation redirects to `/password`, including after refresh.
 5. User supplies current and new password to `PUT /api/v1/auth/password`. New password is 10–256 characters and must include at least one ASCII letter and one digit. API verifies the current password and active account before hashing the new password.
 6. Successful change clears the forced-change/temporary credential flags and increments token version. The UI clears local auth and returns the user to sign in with the new permanent password.
 
@@ -340,7 +342,7 @@ The temporary credential can be used for only one successful login. If it has be
 
 - Wrong passwords are counted inside a 15-minute failure window. The fifth failed attempt locks the account for 15 minutes; a successful login clears the count/window/lock.
 - There is also an HTTP login rate limiter. Its time window and request limit are deployment settings (`LOGIN_RATE_LIMIT_WINDOW_MS`, `LOGIN_RATE_LIMIT_MAX`); configure them explicitly for the environment.
-- Security Guard JWT lifetime is 12 hours; other roles receive 30-minute tokens.
+- JWT lifetime is two hours for every role. The client also signs out after 30 minutes of inactivity, preserves deadlines across refresh, and shows the reason on the sign-in page.
 - Logout increments the account token version. Authentication resolves the account and checks current status/token version, so deactivated users and revoked tokens are not accepted.
 - Admins can list/search users with pagination and filters for role/status; set or clear the bulk-upload flag; and deactivate an active account. Deactivation and permission changes go through audited repository operations.
 
