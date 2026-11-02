@@ -184,3 +184,47 @@ test('activation restores an inactive account and revokes prior sessions transac
   assert.equal(JSON.parse(calls[3].values[3]).status, 'ACTIVE');
   assert.equal(calls[4].sql, 'COMMIT');
 });
+
+test('deleteUser decouples operational records and deletes user without cascading onto persons or visits', async () => {
+  const calls = [];
+  const client = {
+    async query(sql, values = []) {
+      calls.push({ sql, values });
+      if (sql.includes('DELETE FROM mams.app_user')) {
+        return { rows: [{ user_id: 25, username: 'admin.x' }], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 1 };
+    },
+    release() {},
+  };
+  const repository = createUsersRepository({
+    async connect() {
+      return client;
+    },
+  });
+
+  const deleted = await repository.deleteUser({
+    targetUserId: 25,
+    actorUserId: 1,
+    actorRole: 'SUPER_ADMIN',
+  });
+
+  assert.deepEqual(deleted, { user_id: 25, username: 'admin.x' });
+  assert.equal(calls[0].sql, 'BEGIN');
+  assert.match(calls[1].sql, /pg_advisory_xact_lock/);
+  assert.ok(calls.some((c) => c.sql.includes('ALTER TABLE IF EXISTS mams.approval_history ALTER COLUMN acted_by DROP NOT NULL')));
+  assert.ok(calls.some((c) => c.sql.includes('ck_person_consent_fields')));
+  assert.ok(calls.some((c) => c.sql.includes('DELETE FROM mams.notification WHERE user_id = $1')));
+  assert.ok(calls.some((c) => c.sql.includes('UPDATE mams.audit_log SET user_id = NULL WHERE user_id = $1')));
+  assert.ok(calls.some((c) => c.sql.includes('UPDATE mams.person SET registered_by = NULL WHERE registered_by = $1')));
+  assert.ok(calls.some((c) => c.sql.includes('UPDATE mams.person SET approved_by = NULL WHERE approved_by = $1')));
+  assert.ok(calls.some((c) => c.sql.includes('UPDATE mams.person_location SET assigned_by = NULL WHERE assigned_by = $1')));
+  assert.ok(calls.some((c) => c.sql.includes('UPDATE mams.approval_history SET acted_by = NULL WHERE acted_by = $1')));
+  assert.ok(calls.some((c) => c.sql.includes('UPDATE mams.visit SET checkin_by = NULL WHERE checkin_by = $1')));
+  assert.ok(calls.some((c) => c.sql.includes('UPDATE mams.blacklist SET added_by = NULL WHERE added_by = $1')));
+  assert.ok(calls.some((c) => c.sql.includes('UPDATE mams.bulk_upload SET uploaded_by = NULL WHERE uploaded_by = $1')));
+  assert.ok(calls.some((c) => c.sql.includes('UPDATE mams.app_user SET created_by = NULL WHERE created_by = $1')));
+  assert.ok(calls.some((c) => c.sql.includes('DELETE FROM mams.app_user WHERE user_id = $1')));
+  assert.ok(calls.some((c) => c.sql.includes('INSERT INTO mams.audit_log')));
+  assert.equal(calls.at(-1).sql, 'COMMIT');
+});

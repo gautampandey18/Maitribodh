@@ -1,6 +1,6 @@
 import { Provider } from 'react-redux';
 import { MemoryRouter } from 'react-router-dom';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import { api } from '../api.js';
@@ -181,4 +181,59 @@ it('offers activation for inactive users and updates the row after confirmation'
   expect(await screen.findByText('ACTIVE')).toBeInTheDocument();
   await user.click(await screen.findByRole('button', { name: 'Actions for ravi.shah' }));
   expect(screen.getByRole('menuitem', { name: 'Deactivate' })).toBeInTheDocument();
+}, 30_000);
+
+it('validates fields at runtime on blur and enter, and displays formatted debug errors', async () => {
+  vi.spyOn(api, 'get').mockResolvedValue({ data: { items: [] } });
+  const errorWithDebug = new Error('Request failed with status code 500');
+  errorWithDebug.response = {
+    status: 500,
+    data: {
+      error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred' },
+      debug: { code: '22001', message: 'value too long for type character varying(10)' },
+    },
+  };
+  vi.spyOn(api, 'post').mockRejectedValueOnce(errorWithDebug);
+
+  store.dispatch(sessionStarted({ accessToken: 'test-token', user: { id: 4, role: 'ADMIN' } }));
+  const user = userEvent.setup();
+
+  render(
+    <Provider store={store}>
+      <MemoryRouter>
+        <UsersPage />
+      </MemoryRouter>
+    </Provider>,
+  );
+
+  await user.click(await screen.findByRole('button', { name: 'Add user' }));
+  const firstNameInput = screen.getByRole('textbox', { name: /First name/ });
+  const mobileInput = screen.getByRole('textbox', { name: /Mobile/ });
+
+  // 1. Enter key validation on empty field
+  await user.type(firstNameInput, '{enter}');
+  expect(screen.getByText('Enter a first name')).toBeInTheDocument();
+
+  // 2. Typing clears error
+  await user.type(firstNameInput, 'Priya');
+  expect(screen.queryByText('Enter a first name')).not.toBeInTheDocument();
+
+  // 3. Blur validation on invalid phone
+  await user.type(mobileInput, '123');
+  fireEvent.blur(mobileInput);
+  expect(screen.getByText('Enter a valid mobile number for the selected country')).toBeInTheDocument();
+
+  // Fix mobile
+  await user.clear(mobileInput);
+  await user.type(mobileInput, '9876543210');
+  fireEvent.blur(mobileInput);
+  expect(screen.queryByText('Enter a valid mobile number for the selected country')).not.toBeInTheDocument();
+
+  // Fill remainder
+  await user.type(screen.getByRole('textbox', { name: /Last name/ }), 'Mehta');
+  await user.type(screen.getByRole('textbox', { name: /Username/ }), 'priya.mehta');
+
+  // Submit and verify formatted debug error message
+  await user.click(screen.getByRole('button', { name: 'Create and issue credential' }));
+  expect(await screen.findByText('An unexpected error occurred (22001 | value too long for type character varying(10))')).toBeInTheDocument();
 }, 30_000);

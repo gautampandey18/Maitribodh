@@ -13,7 +13,7 @@ export function createApprovalsService({ repository }) {
 
     async decide({ personId, decision, reason, actor }) {
       if (decision === 'REJECT' && (!reason || reason.trim().length < 10)) {
-        throw new ApiError(400, 'VALIDATION_ERROR', 'Rejection reason must contain at least 10 characters');
+        throw new ApiError(400, 'VALIDATION_ERROR', 'Rejection requires an explanatory reason with at least 10 characters for this approval decision');
       }
 
       try {

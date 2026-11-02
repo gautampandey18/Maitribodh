@@ -100,9 +100,13 @@ export function createApprovalsRepository(pool) {
         if (isNonApproval) {
           throw repositoryError('APPROVAL_NOT_REQUIRED', 'Approval is not required for this category');
         }
+        const roleUpper = String(actorRole ?? '').toUpperCase().trim();
+        const isAdminOrSuperAdmin = ['ADMIN', 'SUPER_ADMIN'].includes(roleUpper);
+
         const isPending = person.status === 'PENDING';
         const canRejectActive = decision === 'REJECT' && person.status === 'ACTIVE';
-        if (!isPending && !canRejectActive) {
+        const canAdminReapproveRejected = isAdminOrSuperAdmin && decision === 'APPROVE' && person.status === 'REJECTED';
+        if (!isPending && !canRejectActive && !canAdminReapproveRejected) {
           throw repositoryError('PERSON_NOT_PENDING', 'Person is not pending approval');
         }
 
@@ -115,11 +119,11 @@ export function createApprovalsRepository(pool) {
           [personId],
         );
         const submitterId = submissionResult.rows[0]?.acted_by ?? person.registered_by;
-        if (!submitterId) {
+        if (!submitterId && !isAdminOrSuperAdmin) {
           throw repositoryError('SUBMISSION_NOT_FOUND', 'Submission history is missing');
         }
 
-        if (isPending && String(submitterId) === String(actorUserId)) {
+        if (!isAdminOrSuperAdmin && isPending && String(submitterId) === String(actorUserId)) {
           throw repositoryError('SELF_APPROVAL_FORBIDDEN', 'Approvers cannot approve or reject their own submissions');
         }
 
@@ -127,9 +131,11 @@ export function createApprovalsRepository(pool) {
         const updatedResult = await client.query(
           approved
             ? `UPDATE mams.person
-                  SET status = 'ACTIVE', qr_version = 1, approved_by = $2,
+                  SET status = 'ACTIVE',
+                      qr_version = CASE WHEN qr_version < 1 THEN 1 ELSE qr_version END,
+                      approved_by = $2,
                       approved_at = now(), updated_at = now()
-                WHERE person_id = $1 AND status = 'PENDING'
+                WHERE person_id = $1 AND (status = 'PENDING' OR status = 'REJECTED')
               RETURNING person_id, person_code, status, qr_version, approved_by, approved_at`
             : `UPDATE mams.person
                   SET status = 'REJECTED',
@@ -152,12 +158,14 @@ export function createApprovalsRepository(pool) {
            VALUES ($1, $2, $3, $4)`,
           [personId, historyAction, reason ?? null, actorUserId],
         );
-        await client.query(
-          `INSERT INTO mams.notification
-             (user_id, type, title, body, entity_type, entity_id)
-           VALUES ($1, $2, $3, $4, 'PERSON', $5)`,
-          [submitterId, historyAction, `Registration ${approved ? 'approved' : 'rejected'}`, message, personId],
-        );
+        if (submitterId) {
+          await client.query(
+            `INSERT INTO mams.notification
+               (user_id, type, title, body, entity_type, entity_id)
+             VALUES ($1, $2, $3, $4, 'PERSON', $5)`,
+            [submitterId, historyAction, `Registration ${approved ? 'approved' : 'rejected'}`, message, personId],
+          );
+        }
         await client.query(
           `INSERT INTO mams.audit_log
              (user_id, user_role, module, activity, entity_type, entity_id,

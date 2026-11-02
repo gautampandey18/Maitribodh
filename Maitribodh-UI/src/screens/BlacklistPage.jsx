@@ -26,6 +26,7 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import PersonSearchOutlinedIcon from '@mui/icons-material/PersonSearchOutlined';
 import { api } from '../api.js';
+import { requestMessage } from '../utils/resources.js';
 
 export default function BlacklistPage() {
   const [entries, setEntries] = useState([]);
@@ -51,6 +52,20 @@ export default function BlacklistPage() {
   const [endDate, setEndDate] = useState('');
   const [liftNote, setLiftNote] = useState('');
   const [formError, setFormError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
+
+  function validateAdd(name, value) {
+    let err = '';
+    if (name === 'reasonId' && !value) err = 'Select a reason.';
+    if (name === 'remarks' && !(value ?? '').trim()) err = 'Enter remarks.';
+    setFieldErrors((prev) => {
+      if (err) return { ...prev, [name]: err };
+      const next = { ...prev };
+      delete next[name];
+      return next;
+    });
+    return !err;
+  }
   const requestId = useRef(0);
 
   async function loadData(nextPage = page, nextRowsPerPage = rowsPerPage, nextFilters = activeFilters) {
@@ -75,7 +90,7 @@ export default function BlacklistPage() {
       setReasons(reasonResponse.data.items);
     } catch (requestError) {
       if (currentRequestId !== requestId.current) return;
-      setError(requestError.response?.data?.error?.message ?? 'Blacklist data could not be loaded.');
+      setError(requestMessage(requestError, 'Blacklist data could not be loaded.'));
     } finally {
       if (currentRequestId === requestId.current) setLoading(false);
     }
@@ -122,7 +137,7 @@ export default function BlacklistPage() {
       setPersonResults(response.data.items);
       if (!response.data.items.length) setFormError('No registration matched that search.');
     } catch (requestError) {
-      setFormError(requestError.response?.data?.error?.message ?? 'Person search is unavailable.');
+      setFormError(requestMessage(requestError, 'Person search is unavailable.'));
     } finally {
       setSaving(false);
     }
@@ -156,7 +171,7 @@ export default function BlacklistPage() {
       setNotice('Blacklist entry added');
       await loadData(0);
     } catch (requestError) {
-      setFormError(requestError.response?.data?.error?.message ?? 'Blacklist entry could not be added.');
+      setFormError(requestMessage(requestError, 'Blacklist entry could not be added.'));
     } finally {
       setSaving(false);
     }
@@ -178,7 +193,7 @@ export default function BlacklistPage() {
       setNotice('Blacklist entry lifted');
       await loadData();
     } catch (requestError) {
-      setFormError(requestError.response?.data?.error?.message ?? 'Blacklist entry could not be lifted.');
+      setFormError(requestMessage(requestError, 'Blacklist entry could not be lifted.'));
     } finally {
       setSaving(false);
     }
@@ -304,11 +319,40 @@ export default function BlacklistPage() {
                 ))}
               </Box>
             )}
-            <TextField label="Reason" value={reasonId} onChange={(event) => setReasonId(event.target.value)} select required fullWidth>
+            <TextField
+              label="Reason"
+              value={reasonId}
+              onChange={(event) => {
+                setReasonId(event.target.value);
+                if (fieldErrors.reasonId) validateAdd('reasonId', event.target.value);
+              }}
+              onBlur={() => validateAdd('reasonId', reasonId)}
+              error={Boolean(fieldErrors.reasonId)}
+              helperText={fieldErrors.reasonId}
+              select
+              required
+              fullWidth
+            >
               <MenuItem value="">Select reason</MenuItem>
               {reasons.map((reason) => <MenuItem key={reason.lookup_id} value={String(reason.lookup_id)}>{reason.name}</MenuItem>)}
             </TextField>
-            <TextField label="Remarks" value={remarks} onChange={(event) => setRemarks(event.target.value)} required fullWidth multiline minRows={3} inputProps={{ maxLength: 500 }} />
+            <TextField
+              label="Remarks"
+              value={remarks}
+              onChange={(event) => {
+                setRemarks(event.target.value);
+                if (fieldErrors.remarks) validateAdd('remarks', event.target.value);
+              }}
+              onBlur={() => validateAdd('remarks', remarks)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); validateAdd('remarks', remarks); } }}
+              error={Boolean(fieldErrors.remarks)}
+              helperText={fieldErrors.remarks}
+              required
+              fullWidth
+              multiline
+              minRows={3}
+              inputProps={{ maxLength: 500 }}
+            />
             <Box className="blacklist-date-fields">
               <TextField label="Start date" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} fullWidth InputLabelProps={{ shrink: true }} />
               <TextField label="End date" type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} fullWidth InputLabelProps={{ shrink: true }} />

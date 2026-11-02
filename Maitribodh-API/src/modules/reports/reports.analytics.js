@@ -162,7 +162,6 @@ export function buildVisitsAnalytics({ summary = {}, daily = [], byCategory = []
     ...daily.map((d) => d.category_name),
     ...byCategory.map((c) => c.category_name),
   ])].filter(Boolean);
-  if (!catNames.length) catNames.push('Visitor', 'Staff', 'Vendor');
 
   const series = catNames.map((cat, idx) => {
     const values = daysSet.map((day) => {
@@ -257,7 +256,6 @@ export function buildRegistrationsAnalytics({ summary = {}, daily = [], byCatego
   });
 
   const catNames = [...new Set(daily.map((d) => d.category_name))];
-  if (!catNames.length) catNames.push('Visitor', 'Staff', 'Vendor');
 
   const series = catNames.map((cat, idx) => {
     const values = daysSet.map((day) => {
@@ -401,10 +399,10 @@ export function buildOccupancyAnalytics({ summary = {}, hourly = [], byLocation 
     chartLeft: {
       type: 'area-line',
       title: 'People on campus today',
-      xLabels: xLabels.length ? xLabels : ['6a', '7a', '8a', '9a', '10a', '11a', '12p', '1p', '2p', '3p'],
+      xLabels,
       yMax,
       yTicks,
-      points: points.length ? points : [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      points,
       peakIndex,
       peakLabel,
       color: '#E06D2E',
@@ -414,12 +412,7 @@ export function buildOccupancyAnalytics({ summary = {}, hourly = [], byLocation 
       title: 'Occupancy by location',
       isPercentage: false,
       maxVal: maxLocVal,
-      items: items.length ? items : [
-        { label: 'Admin Office', value: 0, color: '#E06D2E' },
-        { label: 'Goushala', value: 0, color: '#E06D2E' },
-        { label: 'Hostel', value: 0, color: '#E06D2E' },
-        { label: 'Gurukul', value: 0, color: '#E06D2E' },
-      ],
+      items,
     },
   };
 }
@@ -501,11 +494,7 @@ export function buildStaffAnalytics({ summary = {}, daily = [], onDutyByLocation
       title: 'Staff on duty by location (today)',
       isPercentage: false,
       maxVal: maxStaffLoc,
-      items: items.length ? items : [
-        { label: 'Admin Office', value: 0, color: '#2563EB' },
-        { label: 'Goushala', value: 0, color: '#2563EB' },
-        { label: 'Gurukul', value: 0, color: '#2563EB' },
-      ],
+      items,
     },
   };
 }
@@ -697,11 +686,7 @@ export function buildBlacklistAnalytics({ summary = {}, daily = [], reasons = []
       title: 'Reasons for blacklisting',
       isPercentage: false,
       maxVal: maxReasonVal,
-      items: items.length ? items : [
-        { label: 'Misconduct on campus', value: 0, color: '#B91C1C' },
-        { label: 'Unauthorised entry', value: 0, color: '#B91C1C' },
-        { label: 'Other', value: 0, color: '#B91C1C' },
-      ],
+      items,
     },
   };
 }

@@ -23,6 +23,7 @@ import CalendarTodayOutlinedIcon from '@mui/icons-material/CalendarTodayOutlined
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import RestartAltOutlinedIcon from '@mui/icons-material/RestartAltOutlined';
 import { api } from '../api.js';
+import { requestMessage } from '../utils/resources.js';
 import { REPORT_TABS_CONFIG, ReportChartsSection } from './ReportsCharts.jsx';
 
 function getIstToday() {
@@ -90,9 +91,11 @@ export default function ReportsPage() {
   const tabConfig = currentAnalytics || REPORT_TABS_CONFIG[selectedKey] || REPORT_TABS_CONFIG.visits;
 
   function isPresetActive(preset) {
+    if (!preset) return false;
     if (!fromDate && !toDate) {
       return preset.label === 'Last 14 days';
     }
+    if (typeof preset.getRange !== 'function') return false;
     const { from, to } = preset.getRange();
     return fromDate === from && toDate === to;
   }
@@ -117,7 +120,16 @@ export default function ReportsPage() {
     setStaffName('');
     setStaffJobRole('');
     setError('');
-    loadReport(0, rowsPerPage, { fromDate: undefined, toDate: undefined, categoryId: undefined, status: undefined });
+    loadReport(0, rowsPerPage, {
+      fromDate: undefined,
+      toDate: undefined,
+      categoryId: undefined,
+      status: undefined,
+      name: undefined,
+      category: undefined,
+      user: undefined,
+      jobRole: undefined,
+    });
     loadAnalytics(selectedKey, '', '');
   }
 
@@ -193,7 +205,7 @@ export default function ReportsPage() {
       setHasRun(true);
     } catch (requestError) {
       if (requestId !== reportRequestId.current) return;
-      setError(requestError.response?.data?.error?.message ?? 'Report could not be loaded.');
+      setError(requestMessage(requestError, 'Report could not be loaded.'));
     } finally {
       if (requestId === reportRequestId.current) setLoading(false);
     }
@@ -248,7 +260,7 @@ export default function ReportsPage() {
       link.click();
       URL.revokeObjectURL(url);
     } catch (requestError) {
-      setError(requestError.response?.data?.error?.message ?? `${report.title} export failed.`);
+      setError(requestMessage(requestError, `${report.title} export failed.`));
     } finally {
       setLoading(false);
     }
@@ -294,42 +306,37 @@ export default function ReportsPage() {
         </Tabs>
 
         {/* Dedicated Date Range & Filter Toolbar */}
-        <Paper className="table-panel report-panel" elevation={0} sx={{ mb: 3 }}>
-          <Box className="table-panel-heading">
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <CalendarTodayOutlinedIcon fontSize="small" sx={{ color: '#E06D2E' }} />
-              <Typography variant="h3">
-                {report.dateRange ? 'Select Date Range & Filters' : `${report.title} Filters`}
-              </Typography>
-            </Box>
-            <Typography variant="body2" color="text.secondary">
-              {report.dateRange
-                ? (fromDate && toDate ? `${fromDate} to ${toDate}` : 'Default: Last 14 days')
-                : (tabConfig.tableCounter || 'Filters')}
-            </Typography>
-          </Box>
-          <Box component="form" className="report-filters" onSubmit={runReport} sx={{ borderBottom: 0, p: 2 }}>
+        <Paper className="table-panel report-panel" elevation={0} sx={{ mb: 1.5 }}>
+          <Box component="form" className="report-filters" onSubmit={runReport} sx={{ borderBottom: 0, px: 2, py: 1.25 }}>
             {report.dateRange && (
               <>
-                <Box sx={{ width: '100%', display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 1.5 }}>
-                  <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mr: 0.5 }}>
-                    Quick date range:
+                <Box sx={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1, mb: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                    <CalendarTodayOutlinedIcon sx={{ fontSize: 16, color: '#E06D2E' }} />
+                    <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mr: 0.5 }}>
+                      Quick date range:
+                    </Typography>
+                    {datePresets.map((preset) => {
+                      const isActive = isPresetActive(preset);
+                      return (
+                        <Chip
+                          key={preset.label}
+                          label={preset.label}
+                          size="small"
+                          clickable
+                          color={isActive ? 'primary' : 'default'}
+                          variant={isActive ? 'filled' : 'outlined'}
+                          onClick={() => applyPreset(preset)}
+                          sx={{ fontSize: '12px', fontWeight: isActive ? 600 : 400, height: 24 }}
+                        />
+                      );
+                    })}
+                  </Box>
+                  <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto', fontWeight: 500 }}>
+                    {fromDate && toDate && !isPresetActive(datePresets[2])
+                      ? `${fromDate} to ${toDate}`
+                      : 'Default: Last 14 days'}
                   </Typography>
-                  {datePresets.map((preset) => {
-                    const isActive = isPresetActive(preset);
-                    return (
-                      <Chip
-                        key={preset.label}
-                        label={preset.label}
-                        size="small"
-                        clickable
-                        color={isActive ? 'primary' : 'default'}
-                        variant={isActive ? 'filled' : 'outlined'}
-                        onClick={() => applyPreset(preset)}
-                        sx={{ fontSize: '12px', fontWeight: isActive ? 600 : 400 }}
-                      />
-                    );
-                  })}
                 </Box>
                 <TextField
                   label="From"

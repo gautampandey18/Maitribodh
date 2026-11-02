@@ -40,6 +40,7 @@ import { z } from 'zod';
 import { api } from '../api.js';
 import InternationalPhoneField from '../components/InternationalPhoneField.jsx';
 import { splitPhoneNumber, toE164Phone } from '../utils/phone.js';
+import { requestMessage } from '../utils/resources.js';
 
 const roles = ['SUPER_ADMIN', 'ADMIN', 'APPROVER', 'REG_OFFICER', 'SECURITY_GUARD', 'VIEWER'];
 const userStatuses = ['ACTIVE', 'INACTIVE'];
@@ -78,6 +79,62 @@ export default function UsersPage() {
   const [activeFilters, setActiveFilters] = useState({ query: '', role: '', status: '' });
   const [userForm, setUserForm] = useState(emptyUser);
   const [formError, setFormError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
+
+  function validateField(name, value = userForm[name], country = userForm.mobileCountry) {
+    let fieldError = '';
+    const trimmed = typeof value === 'string' ? value.trim() : value;
+    switch (name) {
+      case 'firstName':
+        if (!trimmed) fieldError = 'Enter a first name';
+        else if (trimmed.length > 100) fieldError = 'First name cannot exceed 100 characters';
+        break;
+      case 'lastName':
+        if (!trimmed) fieldError = 'Enter a last name';
+        else if (trimmed.length > 100) fieldError = 'Last name cannot exceed 100 characters';
+        break;
+      case 'mobile':
+        if (!trimmed) {
+          fieldError = 'Enter a mobile number';
+        } else {
+          const e164 = toE164Phone(trimmed, country || 'IN');
+          if (!e164) fieldError = 'Enter a valid mobile number for the selected country';
+        }
+        break;
+      case 'email':
+        if (trimmed) {
+          if (trimmed.length > 150) fieldError = 'Email cannot exceed 150 characters';
+          else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) fieldError = 'Enter a valid email';
+        }
+        break;
+      case 'username':
+        if (!trimmed) fieldError = 'Enter a username';
+        else if (trimmed.length > 50) fieldError = 'Username cannot exceed 50 characters';
+        else if (!/^[a-zA-Z0-9._-]+$/.test(trimmed)) fieldError = 'Username can only contain letters, numbers, dots, and underscores';
+        break;
+      case 'role':
+        if (!roles.includes(trimmed)) fieldError = 'Select a valid role';
+        break;
+      default:
+        break;
+    }
+    setFieldErrors((prev) => {
+      if (fieldError) return { ...prev, [name]: fieldError };
+      const next = { ...prev };
+      delete next[name];
+      return next;
+    });
+    return !fieldError;
+  }
+
+  function handleFieldKeyDown(name) {
+    return (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        validateField(name);
+      }
+    };
+  }
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(true);
@@ -112,7 +169,7 @@ export default function UsersPage() {
       setTotalUsers(response.data.total ?? response.data.items.length);
     } catch (requestError) {
       if (currentRequestId !== requestId.current) return;
-      setError(requestError.response?.data?.error?.message ?? 'Users could not be loaded.');
+      setError(requestMessage(requestError, 'Users could not be loaded.'));
     } finally {
       if (currentRequestId === requestId.current) setLoading(false);
     }
@@ -134,19 +191,27 @@ export default function UsersPage() {
 
   function updateForm(event) {
     const { name, value, checked, type } = event.target;
-    setUserForm((current) => ({ ...current, [name]: type === 'checkbox' ? checked : value }));
+    const nextVal = type === 'checkbox' ? checked : value;
+    setUserForm((current) => ({ ...current, [name]: nextVal }));
+    if (fieldErrors[name]) {
+      validateField(name, nextVal);
+    }
   }
 
   async function createUser(event) {
     event.preventDefault();
     const parsed = userSchema.safeParse(userForm);
     if (!parsed.success) {
-      setFormError(parsed.error.issues[0].message);
+      const issue = parsed.error.issues[0];
+      const fieldName = issue.path[0];
+      setFieldErrors((prev) => ({ ...prev, [fieldName]: issue.message }));
+      setFormError(issue.message);
       return;
     }
 
     const e164 = toE164Phone(userForm.mobile, userForm.mobileCountry || 'IN');
     if (!e164) {
+      setFieldErrors((prev) => ({ ...prev, mobile: 'Enter a valid mobile number for the selected country' }));
       setFormError('Enter a valid mobile number for the selected country');
       return;
     }
@@ -164,6 +229,7 @@ export default function UsersPage() {
       const passwordResponse = await api.post(`/users/${response.data.user_id}/password-reset`);
       setCreateOpen(false);
       setUserForm(emptyUser);
+      setFieldErrors({});
       await loadUsers();
       setCredential({
         username: response.data.username,
@@ -174,10 +240,11 @@ export default function UsersPage() {
       if (createdUser) {
         setCreateOpen(false);
         setUserForm(emptyUser);
+        setFieldErrors({});
         await loadUsers();
         setError('User was created, but temporary password issuance failed. Issue it from the user list.');
       } else {
-        const message = requestError.response?.data?.error?.message ?? 'User could not be created.';
+        const message = requestMessage(requestError, 'User could not be created.');
         await loadUsers();
         setFormError(message);
       }
@@ -197,7 +264,7 @@ export default function UsersPage() {
         expiresAt: response.data.expiresAt,
       });
     } catch (requestError) {
-      setError(requestError.response?.data?.error?.message ?? 'Temporary password could not be issued.');
+      setError(requestMessage(requestError, 'Temporary password could not be issued.'));
     } finally {
       setSaving(false);
     }
@@ -210,7 +277,7 @@ export default function UsersPage() {
       setUsers((current) => current.map((item) => item.user_id === user.user_id ? response.data : item));
       setNotice(response.data.can_bulk_upload ? 'Bulk upload enabled' : 'Bulk upload disabled');
     } catch (requestError) {
-      setError(requestError.response?.data?.error?.message ?? 'Permission could not be updated.');
+      setError(requestMessage(requestError, 'Permission could not be updated.'));
     }
   }
 
@@ -239,6 +306,7 @@ export default function UsersPage() {
       canBulkUpload: user.can_bulk_upload,
     });
     setFormError('');
+    setFieldErrors({});
     setCreateOpen(true);
     closeUserActions();
   }
@@ -247,11 +315,15 @@ export default function UsersPage() {
     event.preventDefault();
     const parsed = userSchema.safeParse(userForm);
     if (!parsed.success) {
-      setFormError(parsed.error.issues[0].message);
+      const issue = parsed.error.issues[0];
+      const fieldName = issue.path[0];
+      setFieldErrors((prev) => ({ ...prev, [fieldName]: issue.message }));
+      setFormError(issue.message);
       return;
     }
     const e164 = toE164Phone(userForm.mobile, userForm.mobileCountry || 'IN');
     if (!e164) {
+      setFieldErrors((prev) => ({ ...prev, mobile: 'Enter a valid mobile number for the selected country' }));
       setFormError('Enter a valid mobile number for the selected country');
       return;
     }
@@ -266,10 +338,11 @@ export default function UsersPage() {
       setCreateOpen(false);
       setEditTarget(null);
       setUserForm(emptyUser);
+      setFieldErrors({});
       await loadUsers();
       setNotice(`${parsed.data.username} updated`);
     } catch (requestError) {
-      setFormError(requestError.response?.data?.error?.message ?? 'User could not be updated.');
+      setFormError(requestMessage(requestError, 'User could not be updated.'));
     } finally {
       setSaving(false);
     }
@@ -286,7 +359,7 @@ export default function UsersPage() {
       setNotice(`${actionUser.username} deleted`);
       closeUserActions();
     } catch (requestError) {
-      setError(requestError.response?.data?.error?.message ?? 'User could not be deleted.');
+      setError(requestMessage(requestError, 'User could not be deleted.'));
     } finally {
       setSaving(false);
     }
@@ -302,7 +375,7 @@ export default function UsersPage() {
       setNotice(`${deactivateTarget.username} deactivated`);
       setDeactivateTarget(null);
     } catch (requestError) {
-      setError(requestError.response?.data?.error?.message ?? 'User could not be deactivated.');
+      setError(requestMessage(requestError, 'User could not be deactivated.'));
     } finally {
       setSaving(false);
     }
@@ -318,7 +391,7 @@ export default function UsersPage() {
       setNotice(`${activateTarget.username} activated`);
       setActivateTarget(null);
     } catch (requestError) {
-      setError(requestError.response?.data?.error?.message ?? 'User could not be activated.');
+      setError(requestMessage(requestError, 'User could not be activated.'));
     } finally {
       setSaving(false);
     }
@@ -341,7 +414,7 @@ export default function UsersPage() {
         <Box>
           <Typography component="h1" variant="h1">Users</Typography>
         </Box>
-        <Button variant="contained" color="secondary" startIcon={<AddIcon />} onClick={() => { setFormError(''); setEditTarget(null); setUserForm(emptyUser); setCreateOpen(true); }}>
+        <Button variant="contained" color="secondary" startIcon={<AddIcon />} onClick={() => { setFormError(''); setFieldErrors({}); setEditTarget(null); setUserForm(emptyUser); setCreateOpen(true); }}>
           Add user
         </Button>
       </Box>
@@ -450,20 +523,84 @@ export default function UsersPage() {
         <Box component="form" onSubmit={editTarget ? saveUser : createUser} noValidate>
           <DialogContent className="category-form-grid">
             {formError && <Alert severity="error" sx={{ gridColumn: '1 / -1' }}>{formError}</Alert>}
-            <TextField name="firstName" label="First name" value={userForm.firstName} onChange={updateForm} required fullWidth />
-            <TextField name="lastName" label="Last name" value={userForm.lastName} onChange={updateForm} required fullWidth />
+            <TextField
+              name="firstName"
+              label="First name"
+              value={userForm.firstName}
+              onChange={updateForm}
+              onBlur={() => validateField('firstName')}
+              onKeyDown={handleFieldKeyDown('firstName')}
+              error={Boolean(fieldErrors.firstName)}
+              helperText={fieldErrors.firstName}
+              required
+              fullWidth
+            />
+            <TextField
+              name="lastName"
+              label="Last name"
+              value={userForm.lastName}
+              onChange={updateForm}
+              onBlur={() => validateField('lastName')}
+              onKeyDown={handleFieldKeyDown('lastName')}
+              error={Boolean(fieldErrors.lastName)}
+              helperText={fieldErrors.lastName}
+              required
+              fullWidth
+            />
             <InternationalPhoneField
               label="Mobile"
               country={userForm.mobileCountry || 'IN'}
               number={userForm.mobile}
-              onCountryChange={(country) => setUserForm((previous) => ({ ...previous, mobileCountry: country }))}
-              onNumberChange={(value) => setUserForm((previous) => ({ ...previous, mobile: value }))}
+              onCountryChange={(country) => {
+                setUserForm((previous) => ({ ...previous, mobileCountry: country }));
+                if (fieldErrors.mobile) validateField('mobile', userForm.mobile, country);
+              }}
+              onNumberChange={(value) => {
+                setUserForm((previous) => ({ ...previous, mobile: value }));
+                if (fieldErrors.mobile) validateField('mobile', value);
+              }}
+              onBlur={() => validateField('mobile')}
+              onKeyDown={handleFieldKeyDown('mobile')}
+              error={Boolean(fieldErrors.mobile)}
+              helperText={fieldErrors.mobile}
               required
               sx={{ gridColumn: '1 / -1' }}
             />
-            <TextField name="email" label="Email" value={userForm.email} onChange={updateForm} fullWidth />
-            <TextField name="username" label="Username" value={userForm.username} onChange={updateForm} required fullWidth />
-            <TextField name="role" label="Role" value={userForm.role} onChange={updateForm} select fullWidth>
+            <TextField
+              name="email"
+              label="Email"
+              value={userForm.email}
+              onChange={updateForm}
+              onBlur={() => validateField('email')}
+              onKeyDown={handleFieldKeyDown('email')}
+              error={Boolean(fieldErrors.email)}
+              helperText={fieldErrors.email}
+              fullWidth
+            />
+            <TextField
+              name="username"
+              label="Username"
+              value={userForm.username}
+              onChange={updateForm}
+              onBlur={() => validateField('username')}
+              onKeyDown={handleFieldKeyDown('username')}
+              error={Boolean(fieldErrors.username)}
+              helperText={fieldErrors.username}
+              required
+              fullWidth
+            />
+            <TextField
+              name="role"
+              label="Role"
+              value={userForm.role}
+              onChange={updateForm}
+              onBlur={() => validateField('role')}
+              onKeyDown={handleFieldKeyDown('role')}
+              error={Boolean(fieldErrors.role)}
+              helperText={fieldErrors.role}
+              select
+              fullWidth
+            >
               {availableRoles.map((item) => <MenuItem key={item} value={item}>{item.replaceAll('_', ' ')}</MenuItem>)}
             </TextField>
             <FormControlLabel control={<Checkbox name="isSecurityHead" checked={userForm.isSecurityHead} onChange={updateForm} />} label="Security head" />

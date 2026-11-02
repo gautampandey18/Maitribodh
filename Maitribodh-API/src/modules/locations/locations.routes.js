@@ -1,6 +1,7 @@
 import express from 'express';
 import { z } from 'zod';
 import { ApiError } from '../../errors/ApiError.js';
+import { formatZodError } from '../../utils/errorFormatter.js';
 import { asyncHandler } from '../../middleware/asyncHandler.js';
 import { authorize } from '../../middleware/authorize.js';
 import { ROLES } from '../../constants/roles.js';
@@ -33,7 +34,7 @@ export function createLocationsRouter({ locationsService, authenticate }) {
         query: z.string().trim().max(100).default(''),
         locationType: z.enum(['GATE', 'AREA']).optional(),
       }).safeParse(request.query);
-      if (!filters.success) throw new ApiError(400, 'VALIDATION_ERROR', 'Invalid location filters');
+      if (!filters.success) throw new ApiError(400, 'VALIDATION_ERROR', formatZodError(filters.error, 'location filtering'));
       response.status(200).json(await locationsService.listActiveLocations({ ...parsePagination(request.query), ...filters.data }));
     }),
   );
@@ -45,7 +46,7 @@ export function createLocationsRouter({ locationsService, authenticate }) {
     asyncHandler(async (request, response) => {
       const parsed = locationSchema.safeParse(request.body);
       if (!parsed.success) {
-        throw new ApiError(400, 'VALIDATION_ERROR', 'Invalid location details');
+        throw new ApiError(400, 'VALIDATION_ERROR', formatZodError(parsed.error, 'location creation'));
       }
 
       const location = await locationsService.createLocation({
@@ -85,7 +86,7 @@ export function createLocationsRouter({ locationsService, authenticate }) {
         throw new ApiError(404, 'LOCATION_NOT_FOUND', 'Location not found');
       }
       if (!parsedChanges.success) {
-        throw new ApiError(400, 'VALIDATION_ERROR', 'Provide valid location fields to update');
+        throw new ApiError(400, 'VALIDATION_ERROR', formatZodError(parsedChanges.error, 'location update'));
       }
 
       const location = await locationsService.updateLocation({

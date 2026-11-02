@@ -2,6 +2,7 @@ import express from 'express';
 import { z } from 'zod';
 import { isValidPhoneNumber } from 'libphonenumber-js';
 import { ApiError } from '../../errors/ApiError.js';
+import { formatZodError } from '../../utils/errorFormatter.js';
 import { asyncHandler } from '../../middleware/asyncHandler.js';
 import { authorize } from '../../middleware/authorize.js';
 import { ROLES } from '../../constants/roles.js';
@@ -49,7 +50,7 @@ export function createUsersRouter({ authService, usersService, authenticate }) {
         role: z.enum(Object.values(ROLES)).optional(),
         status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
       }).safeParse(request.query);
-      if (!filters.success) throw new ApiError(400, 'VALIDATION_ERROR', 'Invalid user filters');
+      if (!filters.success) throw new ApiError(400, 'VALIDATION_ERROR', formatZodError(filters.error, 'user filtering'));
       response.status(200).json(await usersService.listUsers({ ...parsePagination(request.query), ...filters.data }));
     }),
   );
@@ -61,7 +62,7 @@ export function createUsersRouter({ authService, usersService, authenticate }) {
     asyncHandler(async (request, response) => {
       const parsed = createUserSchema.safeParse(request.body);
       if (!parsed.success) {
-        throw new ApiError(400, 'VALIDATION_ERROR', 'Invalid user details');
+        throw new ApiError(400, 'VALIDATION_ERROR', formatZodError(parsed.error, 'user creation'));
       }
 
       const user = await usersService.createUser({
@@ -122,7 +123,7 @@ export function createUsersRouter({ authService, usersService, authenticate }) {
         throw new ApiError(404, 'USER_NOT_FOUND', 'Active user not found');
       }
       if (!parsedInput.success) {
-        throw new ApiError(400, 'VALIDATION_ERROR', 'Provide user details or an account action');
+        throw new ApiError(400, 'VALIDATION_ERROR', formatZodError(parsedInput.error, 'user update'));
       }
 
       const user = await usersService.updateUser({
@@ -142,12 +143,7 @@ export function createUsersRouter({ authService, usersService, authenticate }) {
       const parsedUserId = userIdSchema.safeParse(request.params.userId);
       if (!parsedUserId.success) throw new ApiError(404, 'USER_NOT_FOUND', 'User not found');
       if (parsedUserId.data === request.auth.userId) throw new ApiError(400, 'SELF_DELETE_FORBIDDEN', 'You cannot delete your own account');
-      try {
-        await usersService.deleteUser({ targetUserId: parsedUserId.data, actor: actorFromRequest(request) });
-      } catch (error) {
-        if (error.code === '23503') throw new ApiError(409, 'USER_IN_USE', 'This user is referenced by audit or operational records and cannot be deleted. Deactivate the user instead.');
-        throw error;
-      }
+      await usersService.deleteUser({ targetUserId: parsedUserId.data, actor: actorFromRequest(request) });
       response.status(204).send();
     }),
   );

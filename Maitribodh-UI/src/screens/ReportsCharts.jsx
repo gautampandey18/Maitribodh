@@ -17,11 +17,7 @@ export const REPORT_TABS_CONFIG = {
       xLabels: [],
       yMax: 4,
       yTicks: [0, 1, 2, 3, 4],
-      series: [
-        { name: 'Visitor', color: '#E06D2E', values: [] },
-        { name: 'Staff', color: '#2563EB', values: [] },
-        { name: 'Vendor', color: '#9CA3AF', values: [] },
-      ],
+      series: [],
     },
     chartRight: {
       type: 'donut',
@@ -49,11 +45,7 @@ export const REPORT_TABS_CONFIG = {
       xLabels: [],
       yMax: 4,
       yTicks: [0, 1, 2, 3, 4],
-      series: [
-        { name: 'Visitor', color: '#E06D2E', values: [] },
-        { name: 'Staff', color: '#2563EB', values: [] },
-        { name: 'Vendor', color: '#9CA3AF', values: [] },
-      ],
+      series: [],
     },
     chartRight: {
       type: 'donut',
@@ -71,17 +63,17 @@ export const REPORT_TABS_CONFIG = {
     tableCounter: '0 locations',
     kpis: [
       { label: 'On campus now', value: '0', delta: 'Peak today 0' },
-      { label: 'Fullest location', value: '—', delta: '0% of capacity' },
-      { label: 'Checked in today', value: '0', delta: '0% vs usual' },
-      { label: 'Open > 24 h', value: '0', delta: 'None open' },
+      { label: 'Fullest location', value: '—', delta: 'None inside' },
+      { label: 'Checked in today', value: '0', delta: '0 still inside' },
+      { label: 'Open > 24 h', value: '0', delta: 'All within 24 h' },
     ],
     chartLeft: {
       type: 'area-line',
       title: 'People on campus today',
-      xLabels: ['6a', '8a', '10a', '12p', '2p', '4p'],
+      xLabels: [],
       yMax: 4,
       yTicks: [0, 1, 2, 3, 4],
-      points: [0, 0, 0, 0, 0, 0],
+      points: [],
       peakIndex: 0,
       peakLabel: 'Peak 0',
       color: '#E06D2E',
@@ -89,7 +81,7 @@ export const REPORT_TABS_CONFIG = {
     chartRight: {
       type: 'horizontal-bar',
       title: 'Occupancy by location (% full)',
-      isPercentage: true,
+      isPercentage: false,
       items: [],
     },
   },
@@ -100,8 +92,8 @@ export const REPORT_TABS_CONFIG = {
     kpis: [
       { label: 'Active staff', value: '0', delta: '0 joined this period' },
       { label: 'Present today', value: '0', delta: '0% attendance' },
-      { label: 'Avg. hours on site', value: '0 h', delta: '0 h vs previous' },
-      { label: 'Missed checkouts', value: '0', delta: 'None open' },
+      { label: 'Avg. hours on site', value: '0 h', delta: 'Completed visits' },
+      { label: 'Missed checkouts', value: '0', delta: 'All checked out' },
     ],
     chartLeft: {
       type: 'stacked-bar',
@@ -109,10 +101,7 @@ export const REPORT_TABS_CONFIG = {
       xLabels: [],
       yMax: 4,
       yTicks: [0, 1, 2, 3, 4],
-      series: [
-        { name: 'Present', color: '#2563EB', values: [] },
-        { name: 'Absent / off', color: '#D1D5DB', values: [] },
-      ],
+      series: [],
     },
     chartRight: {
       type: 'horizontal-bar',
@@ -130,7 +119,7 @@ export const REPORT_TABS_CONFIG = {
       { label: 'Approval requests', value: '0', delta: '0% vs previous period', isTotal: true },
       { label: 'Approved', value: '0', delta: '0% approval rate' },
       { label: 'Pending', value: '0', delta: 'None waiting' },
-      { label: 'Median decision time', value: '0 min', delta: '0 min vs previous' },
+      { label: 'Median decision time', value: '0 min', delta: 'Average review time' },
     ],
     chartLeft: {
       type: 'stacked-bar',
@@ -138,11 +127,7 @@ export const REPORT_TABS_CONFIG = {
       xLabels: [],
       yMax: 4,
       yTicks: [0, 1, 2, 3, 4],
-      series: [
-        { name: 'Approved', color: '#15803D', values: [] },
-        { name: 'Pending', color: '#D97706', values: [] },
-        { name: 'Rejected', color: '#B91C1C', values: [] },
-      ],
+      series: [],
     },
     chartRight: {
       type: 'donut',
@@ -170,9 +155,7 @@ export const REPORT_TABS_CONFIG = {
       xLabels: [],
       yMax: 4,
       yTicks: [0, 1, 2, 3, 4],
-      series: [
-        { name: 'Blocked', color: '#B91C1C', values: [] },
-      ],
+      series: [],
     },
     chartRight: {
       type: 'horizontal-bar',
@@ -224,6 +207,11 @@ export function StackedBarChart({ chart }) {
           ))}
         </Box>
       </Box>
+      {xLabels.length === 0 || series.length === 0 ? (
+        <Box sx={{ py: 6, textAlign: 'center' }}>
+          <Typography variant="body2" color="text.secondary">No data available for this period</Typography>
+        </Box>
+      ) : (
       <svg
         viewBox={`0 0 ${width} ${height}`}
         style={{ width: '100%', height: 'auto', display: 'block' }}
@@ -297,6 +285,7 @@ export function StackedBarChart({ chart }) {
           );
         })}
       </svg>
+      )}
     </Box>
   );
 }
@@ -387,7 +376,7 @@ export function AreaLineChart({ chart }) {
   const margin = { left: 36, right: 24, top: 28, bottom: 28 };
   const plotWidth = width - margin.left - margin.right;
   const plotHeight = height - margin.top - margin.bottom;
-  const safeLabels = xLabels.length ? xLabels : ['6a', '12p', '6p'];
+  const safeLabels = xLabels.length ? xLabels : [];
   const safePoints = points.length ? points : safeLabels.map(() => 0);
   const slotWidth = safeLabels.length > 1 ? plotWidth / (safeLabels.length - 1) : plotWidth;
   const safeYMax = yMax > 0 ? yMax : 1;
@@ -414,6 +403,11 @@ export function AreaLineChart({ chart }) {
       <Box className="reports-chart-header">
         <Typography className="reports-chart-title">{title}</Typography>
       </Box>
+      {safeLabels.length === 0 ? (
+        <Box sx={{ py: 6, textAlign: 'center' }}>
+          <Typography variant="body2" color="text.secondary">No activity recorded for today</Typography>
+        </Box>
+      ) : (
       <svg
         viewBox={`0 0 ${width} ${height}`}
         style={{ width: '100%', height: 'auto', display: 'block' }}
@@ -493,6 +487,7 @@ export function AreaLineChart({ chart }) {
           </text>
         ))}
       </svg>
+      )}
     </Box>
   );
 }
@@ -507,7 +502,12 @@ export function HorizontalBarChart({ chart }) {
         <Typography className="reports-chart-title">{title}</Typography>
       </Box>
       <Box className="horizontal-bar-chart">
-        {items.map((item) => {
+        {items.length === 0 ? (
+          <Box sx={{ py: 4, textAlign: 'center' }}>
+            <Typography variant="body2" color="text.secondary">No data available for this period</Typography>
+          </Box>
+        ) : (
+        items.map((item) => {
           const pct = isPercentage ? item.value : (item.value / safeMax) * 100;
           return (
             <Box key={item.label} className="hbar-row">
@@ -523,7 +523,7 @@ export function HorizontalBarChart({ chart }) {
               </Typography>
             </Box>
           );
-        })}
+        }))}
       </Box>
     </Box>
   );
@@ -535,7 +535,7 @@ export function ReportChartsSection({ selectedKey, liveConfig, loading }) {
   const { kpis, chartLeft, chartRight } = config;
 
   return (
-    <Box sx={{ mb: 3, opacity: loading ? 0.7 : 1, transition: 'opacity 0.2s ease-in-out' }}>
+    <Box sx={{ mb: 1.5, opacity: loading ? 0.7 : 1, transition: 'opacity 0.2s ease-in-out' }}>
       <KpiGrid kpis={kpis} />
       <Box className="reports-charts-grid">
         {chartLeft?.type === 'stacked-bar' && <StackedBarChart chart={chartLeft} />}

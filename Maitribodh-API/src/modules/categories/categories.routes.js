@@ -1,6 +1,7 @@
 import express from 'express';
 import { z } from 'zod';
 import { ApiError } from '../../errors/ApiError.js';
+import { formatZodError } from '../../utils/errorFormatter.js';
 import { asyncHandler } from '../../middleware/asyncHandler.js';
 import { authorize } from '../../middleware/authorize.js';
 import { ROLES } from '../../constants/roles.js';
@@ -38,7 +39,7 @@ export function createCategoriesRouter({ categoriesService, authenticate }) {
         formType: z.enum(['STAFF', 'PARIVAR', 'VISITOR', 'VENDOR', 'CONTRACTOR', 'PARTICIPANT', 'GENERIC']).optional(),
         status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
       }).safeParse(request.query);
-      if (!filters.success) throw new ApiError(400, 'VALIDATION_ERROR', 'Invalid category filters');
+      if (!filters.success) throw new ApiError(400, 'VALIDATION_ERROR', formatZodError(filters.error, 'category filtering'));
       response.status(200).json(await categoriesService.listCategories({ ...parsePagination(request.query), ...filters.data }));
     }),
   );
@@ -50,7 +51,7 @@ export function createCategoriesRouter({ categoriesService, authenticate }) {
     asyncHandler(async (request, response) => {
       const parsed = categorySchema.safeParse(request.body);
       if (!parsed.success) {
-        throw new ApiError(400, 'VALIDATION_ERROR', 'Invalid category details');
+        throw new ApiError(400, 'VALIDATION_ERROR', formatZodError(parsed.error, 'category creation'));
       }
 
       const category = await categoriesService.createCategory({
@@ -91,7 +92,7 @@ export function createCategoriesRouter({ categoriesService, authenticate }) {
         throw new ApiError(404, 'CATEGORY_NOT_FOUND', 'Category not found');
       }
       if (!parsedChanges.success) {
-        throw new ApiError(400, 'VALIDATION_ERROR', 'Provide valid category fields to update');
+        throw new ApiError(400, 'VALIDATION_ERROR', formatZodError(parsedChanges.error, 'category update'));
       }
 
       const changes = { ...parsedChanges.data };

@@ -236,3 +236,36 @@ it('does not display non-approval categories like Visitor, Vendor, Contractor, P
   expect(screen.queryByText('Visitor Person')).not.toBeInTheDocument();
   expect(screen.queryByText('Vendor Person')).not.toBeInTheDocument();
 });
+
+it('allows Admin to re-approve a rejected registration directly from the Rejected tab', async () => {
+  const get = vi.spyOn(api, 'get')
+    .mockResolvedValueOnce({ data: { items: [], total: 0, page: 1, pageSize: 5 } })
+    .mockResolvedValueOnce({
+      data: {
+        items: [{ person_id: 42, person_code: 'MB-000042', name: 'Kavita Joshi', category: 'Staff', approval_required: true, has_photo: true, submitted_at: '2026-10-09T09:30:00Z' }],
+        total: 1,
+        page: 1,
+        pageSize: 5,
+      },
+    })
+    .mockResolvedValueOnce({ data: { items: [], total: 0, page: 1, pageSize: 5 } });
+  const post = vi.spyOn(api, 'post').mockResolvedValue({ data: { status: 'ACTIVE' } });
+  store.dispatch(sessionStarted({ accessToken: 'test-token', user: { id: 7, role: 'ADMIN' } }));
+  const user = userEvent.setup();
+
+  render(
+    <Provider store={store}>
+      <MemoryRouter>
+        <ApprovalsPage />
+      </MemoryRouter>
+    </Provider>,
+  );
+
+  await user.click(await screen.findByRole('tab', { name: 'Rejected' }));
+  expect(await screen.findByText('Kavita Joshi')).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Re-approve Kavita Joshi' }));
+  await user.click(screen.getByRole('button', { name: 'Confirm approval' }));
+
+  await waitFor(() => expect(post).toHaveBeenCalledWith('/approvals/42/decisions', { decision: 'APPROVE' }));
+  expect(get).toHaveBeenLastCalledWith('/approvals', { params: { status: 'REJECTED', page: 1, pageSize: 5 } });
+});

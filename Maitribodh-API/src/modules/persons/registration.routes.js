@@ -6,6 +6,7 @@ import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
 import { ApiError } from '../../errors/ApiError.js';
+import { formatZodError } from '../../utils/errorFormatter.js';
 import { asyncHandler } from '../../middleware/asyncHandler.js';
 import { authorize } from '../../middleware/authorize.js';
 import { REGISTRATION_LIMITS } from '../../constants/registration.js';
@@ -35,7 +36,7 @@ const idFrom = (value) => {
 };
 const parseInput = (schema, data) => {
   const parsed = schema.safeParse(data);
-  if (!parsed.success) throw new ApiError(400, 'VALIDATION_ERROR', parsed.error.issues[0].message);
+  if (!parsed.success) throw new ApiError(400, 'VALIDATION_ERROR', formatZodError(parsed.error, 'person registration'));
   return parsed.data;
 };
 

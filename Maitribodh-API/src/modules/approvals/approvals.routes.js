@@ -1,6 +1,7 @@
 import express from 'express';
 import { z } from 'zod';
 import { ApiError } from '../../errors/ApiError.js';
+import { formatZodError } from '../../utils/errorFormatter.js';
 import { asyncHandler } from '../../middleware/asyncHandler.js';
 import { authorize } from '../../middleware/authorize.js';
 import { ROLES } from '../../constants/roles.js';
@@ -24,12 +25,12 @@ export function createApprovalsRouter({ approvalsService, authenticate }) {
     authorize(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.APPROVER),
     asyncHandler(async (request, response) => {
       const status = queueStatusSchema.safeParse(request.query.status);
-      if (!status.success) throw new ApiError(400, 'VALIDATION_ERROR', 'Invalid approval queue status');
+      if (!status.success) throw new ApiError(400, 'VALIDATION_ERROR', 'Approval queue status must be PENDING, ACTIVE, or REJECTED');
       const filters = filterSchema.safeParse({
         name: request.query.name ?? '',
         category: request.query.category ?? '',
       });
-      if (!filters.success) throw new ApiError(400, 'VALIDATION_ERROR', 'Invalid approval queue filters');
+      if (!filters.success) throw new ApiError(400, 'VALIDATION_ERROR', formatZodError(filters.error, 'approval queue filtering'));
       const pagination = parsePagination(request.query);
       const result = status.data === 'PENDING'
         ? await approvalsService.listPending({ ...pagination, ...filters.data })
@@ -49,7 +50,7 @@ export function createApprovalsRouter({ approvalsService, authenticate }) {
         throw new ApiError(404, 'PERSON_NOT_FOUND', 'Person not found');
       }
       if (!input.success) {
-        throw new ApiError(400, 'VALIDATION_ERROR', 'Provide a valid decision and rejection reason');
+        throw new ApiError(400, 'VALIDATION_ERROR', formatZodError(input.error, 'approval decision'));
       }
 
       const result = await approvalsService.decide({

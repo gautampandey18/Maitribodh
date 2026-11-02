@@ -1,6 +1,7 @@
 import express from 'express';
 import { z } from 'zod';
 import { ApiError } from '../../errors/ApiError.js';
+import { formatZodError } from '../../utils/errorFormatter.js';
 import { asyncHandler } from '../../middleware/asyncHandler.js';
 import { authorize } from '../../middleware/authorize.js';
 import { ROLES } from '../../constants/roles.js';
@@ -28,7 +29,7 @@ export function createBlacklistRouter({ blacklistService, authenticate }) {
         name: z.string().trim().max(100).default(''),
         category: z.string().trim().max(100).default(''),
       }).safeParse(request.query);
-      if (!filters.success) throw new ApiError(400, 'VALIDATION_ERROR', 'Invalid blacklist filters');
+      if (!filters.success) throw new ApiError(400, 'VALIDATION_ERROR', formatZodError(filters.error, 'blacklist filtering'));
       response.status(200).json(await blacklistService.listEntries({
         ...parsePagination(request.query),
         ...filters.data,
@@ -43,7 +44,7 @@ export function createBlacklistRouter({ blacklistService, authenticate }) {
     asyncHandler(async (request, response) => {
       const input = entrySchema.safeParse(request.body);
       if (!input.success) {
-        throw new ApiError(400, 'VALIDATION_ERROR', 'Provide a person, active reason, remarks, and valid dates');
+        throw new ApiError(400, 'VALIDATION_ERROR', formatZodError(input.error, 'blacklist entry creation'));
       }
       const entry = await blacklistService.addEntry({
         input: input.data,
@@ -64,7 +65,7 @@ export function createBlacklistRouter({ blacklistService, authenticate }) {
         throw new ApiError(404, 'BLACKLIST_NOT_OPEN', 'No open blacklist entry found');
       }
       if (!input.success) {
-        throw new ApiError(400, 'VALIDATION_ERROR', 'Provide a reason for lifting the blacklist');
+        throw new ApiError(400, 'VALIDATION_ERROR', formatZodError(input.error, 'lifting blacklist entry'));
       }
       const entry = await blacklistService.liftEntry({
         blacklistId: blacklistId.data,
