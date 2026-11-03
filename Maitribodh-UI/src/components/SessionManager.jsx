@@ -39,7 +39,7 @@ export default function SessionManager() {
       const current = store.getState().auth;
       timer = window.setTimeout(
         () => checkSession(),
-        Math.min(current.expiresAt, current.lastActivityAt + SESSION_IDLE_MS) - now,
+        current.lastActivityAt + SESSION_IDLE_MS - now,
       );
     }
 

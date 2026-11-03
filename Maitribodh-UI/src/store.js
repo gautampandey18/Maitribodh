@@ -1,22 +1,20 @@
 import { configureStore, createSlice } from '@reduxjs/toolkit';
 
 export const SESSION_STORAGE_KEY = 'mams.session';
-export const SESSION_MAX_AGE_MS = 2 * 60 * 60 * 1000;
 export const SESSION_IDLE_MS = 30 * 60 * 1000;
 const emptySession = {
   accessToken: null, user: null, mustChangePassword: false,
-  expiresAt: null, lastActivityAt: null, logoutReason: null,
+  lastActivityAt: null, logoutReason: null,
 };
 
 /**
- * Checks absolute and inactivity deadlines without extending either on refresh.
+ * Checks the inactivity deadline without extending it on refresh.
  * @param {object} session Current authentication state.
  * @param {number} now Current timestamp in milliseconds.
  * @returns {string|null} Logout reason, or null while the session is valid.
  */
 export function getSessionEndReason(session, now = Date.now()) {
   if (!session.accessToken) return null;
-  if (now >= session.expiresAt) return 'expired';
   if (now >= session.lastActivityAt + SESSION_IDLE_MS) return 'inactive';
   return null;
 }
@@ -28,9 +26,7 @@ function restoreSession(storage) {
     const session = JSON.parse(saved);
     if (typeof session?.accessToken !== 'string' || !session.accessToken
       || !session.user || typeof session.user.role !== 'string'
-      || !Number.isFinite(session.expiresAt) || !Number.isFinite(session.lastActivityAt)
-      || session.expiresAt > Date.now() + SESSION_MAX_AGE_MS
-      || session.lastActivityAt > Date.now()) {
+      || !Number.isFinite(session.lastActivityAt) || session.lastActivityAt > Date.now()) {
       throw new Error('Invalid saved session');
     }
     const reason = getSessionEndReason(session);
@@ -38,7 +34,13 @@ function restoreSession(storage) {
       storage.removeItem(SESSION_STORAGE_KEY);
       return { ...emptySession, logoutReason: reason };
     }
-    return { ...emptySession, ...session };
+    return {
+      ...emptySession,
+      accessToken: session.accessToken,
+      user: session.user,
+      mustChangePassword: session.mustChangePassword === true,
+      lastActivityAt: session.lastActivityAt,
+    };
   } catch (error) {
     console.warn('Could not restore the saved session. Please sign in again.', error);
     try {
@@ -57,14 +59,10 @@ const authSlice = createSlice({
     sessionStarted: {
       prepare(session) {
         const now = Date.now();
-        const lifetime = Number.isFinite(session.expiresIn) && session.expiresIn > 0
-          ? Math.min(session.expiresIn * 1000, SESSION_MAX_AGE_MS)
-          : SESSION_MAX_AGE_MS;
         return { payload: {
           accessToken: session.accessToken,
           user: session.user,
           mustChangePassword: session.mustChangePassword === true,
-          expiresAt: now + lifetime,
           lastActivityAt: now,
         } };
       },
@@ -89,7 +87,7 @@ const authSlice = createSlice({
 export const { sessionStarted, sessionActivity, passwordChanged, sessionEnded } = authSlice.actions;
 
 /**
- * Restores and persists a tab's session, including its original timeout deadlines.
+ * Restores and persists a tab's session, including its inactivity deadline.
  * @param {Storage} storage Browser session storage.
  * @returns {object} Application Redux store.
  */

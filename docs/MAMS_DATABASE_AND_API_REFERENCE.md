@@ -717,7 +717,7 @@ Source: [auth routes](../Maitribodh-API/src/modules/auth/auth.routes.js).
 | POST | `/api/v1/auth/logout` | AUTHENTICATED | No required body | `204`; revokes sessions through token version |
 | PUT | `/api/v1/auth/password` | AUTHENTICATED | `currentPassword`, `newPassword` | `204`; password change |
 
-New passwords require 10-256 characters, at least one letter, and at least one digit. Successful sessions expire after two hours for every role. The UI also signs out after 30 minutes without user interaction; background API requests do not count as activity. The current tab's session survives refresh using `sessionStorage`, without extending either deadline. Temporary passwords expire after 24 hours and require password change at first login.
+New passwords require 10-256 characters, at least one letter, and at least one digit. JWTs have no absolute expiry. The UI signs out after 30 minutes without user interaction; background API requests do not count as activity. The current tab's session survives refresh using `sessionStorage`, preserving the inactivity deadline. Logout, password changes, and account changes revoke existing sessions through token-version checks. Temporary passwords expire after 24 hours and require password change at first login.
 
 ### 8.3 Users
 
@@ -958,7 +958,6 @@ Illustrative response:
 {
   "accessToken": "<JWT>",
   "tokenType": "Bearer",
-  "expiresIn": 1800,
   "user": {
     "id": "123",
     "role": "REG_OFFICER"
