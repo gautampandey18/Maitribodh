@@ -70,6 +70,9 @@ export function createUsersService({ repository }) {
     },
 
     async deleteUser({ targetUserId, actor }) {
+      if (Number(targetUserId) === Number(actor.userId)) {
+        throw new ApiError(400, 'SELF_DELETE_FORBIDDEN', 'You cannot delete your own account');
+      }
       const deleted = await repository.deleteUser({
         targetUserId,
         actorUserId: actor.userId,

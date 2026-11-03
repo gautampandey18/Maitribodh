@@ -1,12 +1,15 @@
 import { memo } from 'react';
-import { Box, TextField } from '@mui/material';
+import { Box, TextField, createFilterOptions } from '@mui/material';
 import { phoneCountries } from '../utils/phone.js';
 import SearchableSelect from './SearchableSelect.jsx';
 
 const countryOptions = phoneCountries.map((item) => ({
   value: item.country,
   label: `${item.name} (${item.callingCode})`,
+  callingCode: item.callingCode,
 }));
+
+const filterCountries = createFilterOptions({ stringify: (option) => `${option.label} ${option.value}` });
 
 const CountryCodeSelect = memo(function CountryCodeSelect({
   country = 'IN',
@@ -25,6 +28,10 @@ const CountryCodeSelect = memo(function CountryCodeSelect({
       required={required}
       size={size}
       disabled={disabled}
+      disableClearable
+      renderValue={(option) => `${option.value} (${option.callingCode})`}
+      filterOptions={filterCountries}
+      sx={{ '& .MuiAutocomplete-inputRoot .MuiAutocomplete-input': { fontSize: '.875rem' } }}
     />
   );
 });
@@ -55,7 +62,7 @@ export default function InternationalPhoneField({
     <Box
       sx={{
         display: 'grid',
-        gridTemplateColumns: size === 'small' ? '120px 1fr' : 'minmax(115px, 135px) 1fr',
+        gridTemplateColumns: size === 'small' ? '140px minmax(0, 1fr)' : 'minmax(140px, 150px) minmax(0, 1fr)',
         gap: 1,
         minWidth: 0,
         ...sx,

@@ -54,6 +54,32 @@ it('creates a restricted area with a department and prevents restricting gates',
   }));
 }, 30_000);
 
+it.each([
+  ['AREA', 'GATE', 'Gate'],
+  ['GATE', 'AREA', 'Area'],
+])('allows changing an existing %s to %s', async (initialType, nextType, optionLabel) => {
+  const location = { location_id: 4, name: 'Workshop', location_type: initialType, is_restricted: initialType === 'AREA', department_id: null };
+  vi.spyOn(api, 'get').mockImplementation((path) => Promise.resolve({
+    data: path === '/locations/4' ? location : { items: path === '/locations' ? [location] : [], total: 1 },
+  }));
+  const patch = vi.spyOn(api, 'patch').mockResolvedValue({ data: { ...location, location_type: nextType } });
+  const user = userEvent.setup();
+  render(<Provider store={store}><MemoryRouter><LocationsPage /></MemoryRouter></Provider>);
+  await user.click(await screen.findByRole('button', { name: 'Edit Workshop' }));
+  const type = await screen.findByRole('combobox', { name: 'Location type' });
+  expect(type).toBeEnabled();
+  await user.click(type);
+  await user.click(screen.getByRole('option', { name: optionLabel }));
+  if (nextType === 'GATE') {
+    expect(screen.getByRole('checkbox', { name: 'Restricted area' })).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Restricted area' })).toBeDisabled();
+  }
+  await user.click(screen.getByRole('button', { name: 'Save changes' }));
+  await waitFor(() => expect(patch).toHaveBeenCalledWith('/locations/4', {
+    name: 'Workshop', locationType: nextType, isRestricted: false, departmentId: null,
+  }));
+}, 30_000);
+
 it('requests only the remaining locations on page two at page size ten', async () => {
   const get = vi.spyOn(api, 'get').mockImplementation((path, config = {}) => {
     if (path !== '/locations') return Promise.resolve({ data: { items: [] } });

@@ -288,7 +288,7 @@ function LookupValuesPage({ type }) {
       </Paper>
       <Dialog open={Boolean(edit)} onClose={() => !busy && setEdit(null)} fullWidth maxWidth="sm">
         <Box component="form" onSubmit={save}>
-          <DialogTitle>{edit?.id ? 'Edit' : 'Add'} Master Value</DialogTitle>
+          <DialogTitle>{edit?.id ? 'Edit' : 'Add'} {currentType?.label} Value</DialogTitle>
           <DialogContent>
             <Box sx={{ display: 'grid', gap: 2, pt: 1 }}>
               {error && <Alert severity="error">{error}</Alert>}

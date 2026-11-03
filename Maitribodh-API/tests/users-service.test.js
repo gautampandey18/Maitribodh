@@ -3,6 +3,29 @@ import test from 'node:test';
 import { ROLES } from '../src/constants/roles.js';
 import { createUsersService } from '../src/modules/users/users.service.js';
 
+test('users cannot delete their own account even when ID types differ', async () => {
+  const service = createUsersService({ repository: {
+    async deleteUser() { assert.fail('Self-deletion must not reach the database'); },
+  } });
+  for (const targetUserId of [7, '7']) {
+    for (const userId of [7, '7']) {
+      await assert.rejects(service.deleteUser({ targetUserId, actor: { userId, role: ROLES.ADMIN } }),
+        (error) => error.statusCode === 400 && error.code === 'SELF_DELETE_FORBIDDEN'
+          && error.message === 'You cannot delete your own account');
+    }
+  }
+});
+
+test('deleting another account still forwards the audit actor', async () => {
+  let received;
+  const service = createUsersService({ repository: {
+    async deleteUser(input) { received = input; return { user_id: 8 }; },
+  } });
+  await service.deleteUser({ targetUserId: 8, actor: { userId: '7', role: ROLES.ADMIN } });
+  assert.equal(received.targetUserId, 8);
+  assert.equal(received.actorUserId, '7');
+});
+
 test('user list delegates to safe repository projection', async () => {
   const users = [{ user_id: 2, username: 'operator', role: 'VIEWER' }];
   const service = createUsersService({
