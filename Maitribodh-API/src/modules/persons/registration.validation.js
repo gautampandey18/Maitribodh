@@ -56,6 +56,10 @@ export function validateCategoryDetails(input, category, role, today = new Date(
     }
   }
   const details = input.categoryDetails;
+  if (category.form_type === 'PARTICIPANT' && details.future_checkin_access !== undefined
+    && !['YES', 'NO'].includes(details.future_checkin_access)) {
+    throw new ApiError(400, 'VALIDATION_ERROR', 'Select a valid future check-in access option');
+  }
   if (category.form_type === 'VISITOR') {
     if (details.driver_available && !['YES', 'NO'].includes(details.driver_available)) {
       throw new ApiError(400, 'VALIDATION_ERROR', 'Select Yes or No for driver availability');
@@ -74,7 +78,8 @@ export function validateCategoryDetails(input, category, role, today = new Date(
     }
   }
   if (details.start_date && details.end_date && details.end_date < details.start_date) throw new ApiError(400, 'VALIDATION_ERROR', 'Contract End Date cannot be before Contract Start Date.');
-  if (details.joining_date > today || details.member_since > today) throw new ApiError(400, 'VALIDATION_ERROR', 'Joining or membership date cannot be in the future');
+  if (category.form_type === 'STAFF' && details.joining_date && details.joining_date < today) throw new ApiError(400, 'VALIDATION_ERROR', 'Joining Date must be today or a future date');
+  if ((category.form_type !== 'STAFF' && details.joining_date > today) || details.member_since > today) throw new ApiError(400, 'VALIDATION_ERROR', 'Joining or membership date cannot be in the future');
   if (details.gstin && !/^[0-9A-Z]{15}$/.test(details.gstin)) throw new ApiError(400, 'VALIDATION_ERROR', 'GSTIN must contain 15 uppercase letters or digits');
   return schema;
 }

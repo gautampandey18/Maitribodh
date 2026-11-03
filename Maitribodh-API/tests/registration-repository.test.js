@@ -28,6 +28,35 @@ test('registration creates a versioned active profile, audit and notifications i
   assert.ok(calls.some((call) => call.sql.includes('INSERT INTO mams.notification')));
   assert.equal(calls.at(-1).sql, 'COMMIT');
 });
+test('participant registration persists future access without changing its active QR', async () => {
+  for (const permission of [undefined, 'YES', 'NO']) {
+    let insertedDetails;
+    const participant = { ...category, form_type: 'PARTICIPANT', name: 'Participant' };
+    const client = {
+      async query(sql, values) {
+        if (sql.includes('FOR SHARE')) return { rows: [participant] };
+        if (sql.includes('FROM mams.lookup_value')) return { rows: [{ lookup_id: 1 }], rowCount: 1 };
+        if (sql.includes('INSERT INTO mams.person')) {
+          insertedDetails = JSON.parse(values[15]);
+          return { rows: [{ person_id: 8, person_code: 'MB-000008', status: 'ACTIVE', qr_version: 1 }] };
+        }
+        return { rows: [], rowCount: 1 };
+      },
+      release() {},
+    };
+    const repository = createRegistrationRepository({ async connect() { return client; } });
+    const categoryDetails = { program_batch_id: 1, ...(permission ? { future_checkin_access: permission } : {}) };
+    const person = await repository.create({
+      input: { ...input, categoryDetails, emergencyName: 'Ravi', emergencyMobile: '+919876543210' },
+      category: participant, photoKey: 'participant.jpg', documents: [],
+      actor: { userId: 9, role: 'ADMIN' },
+    });
+    assert.deepEqual(insertedDetails, categoryDetails);
+    assert.equal(person.status, 'ACTIVE');
+    assert.equal(person.qr_version, 1);
+  }
+});
+
 test('registration category options omit legacy category hierarchy fields', async () => {
   const repository = createRegistrationRepository({
     async query(sql) {
@@ -128,6 +157,59 @@ test('profile updates commit the edited fields and audit the change', async () =
   assert.ok(calls.some((call) => call.sql.includes('INSERT INTO mams.audit_log')));
   assert.equal(calls.at(-1).sql, 'COMMIT');
 });
+test('admins can grant or revoke participant future entry without replacing event details', async () => {
+  for (const futureCheckinAccess of [undefined, true, false]) {
+    const calls = [];
+    const client = {
+      async query(sql, values) {
+        calls.push({ sql, values });
+        if (sql.includes('SELECT p.*, c.form_type')) return { rows: [{
+          form_type: 'PARTICIPANT', mobile: '+919820000000',
+          category_details: { program_batch_id: 7, future_checkin_access: 'NO' },
+        }] };
+        if (sql.includes('UPDATE mams.person SET first_name')) return { rows: [{ person_id: 8, qr_version: 1 }] };
+        return { rows: [], rowCount: 1 };
+      },
+      release() {},
+    };
+    const repository = createRegistrationRepository({ async connect() { return client; } });
+    await repository.update({ personId: 8, changes: {
+      firstName: 'Asha', lastName: 'Patel', mobile: '+919820000000', futureCheckinAccess,
+    }, actor: { userId: 9, role: 'ADMIN' } });
+    const update = calls.find((call) => call.sql.includes('UPDATE mams.person SET first_name'));
+    assert.equal(update.values[11], futureCheckinAccess ?? null);
+    assert.match(update.sql, /jsonb_set\(COALESCE\(category_details/);
+    assert.match(update.sql, /WHEN \$12::boolean IS NULL THEN category_details/);
+    const audit = calls.find((call) => call.sql.includes('INSERT INTO mams.audit_log'));
+    if (futureCheckinAccess !== undefined) {
+      assert.ok(audit.values.includes(JSON.stringify({ person_id: 8, qr_version: 1, future_checkin_access: futureCheckinAccess ? 'YES' : 'NO' })));
+    }
+    assert.equal(calls.at(-1).sql, 'COMMIT');
+  }
+});
+
+test('future entry changes are restricted to admins and participant profiles', async () => {
+  for (const [role, formType, code] of [
+    ['REG_OFFICER', 'PARTICIPANT', 'FORBIDDEN'],
+    ['APPROVER', 'PARTICIPANT', 'FORBIDDEN'],
+    ['ADMIN', 'VISITOR', 'VALIDATION_ERROR'],
+  ]) {
+    let updated = false;
+    const client = {
+      async query(sql) {
+        if (sql.includes('SELECT p.*, c.form_type')) return { rows: [{ form_type: formType }] };
+        if (sql.includes('UPDATE mams.person')) updated = true;
+        return { rows: [] };
+      },
+      release() {},
+    };
+    const repository = createRegistrationRepository({ async connect() { return client; } });
+    await assert.rejects(repository.update({ personId: 8, changes: { futureCheckinAccess: true },
+      actor: { userId: 9, role } }), (error) => error.code === code);
+    assert.equal(updated, false);
+  }
+});
+
 test('non-visitor profiles cannot be updated with an international mobile number', async () => {
   const client = {
     async query(sql) {

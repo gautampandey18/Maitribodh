@@ -23,6 +23,10 @@ it('renders fields from the API schema and saves a partial draft', async () => {
   expect(screen.getByText('General visitors and devotees')).toBeInTheDocument();
   await user.click(visitorTile);
   expect(screen.getByRole('textbox', { name: /Purpose of Visit/ })).toBeRequired();
+  const emergencyContact = screen.getByRole('group', { name: 'Emergency contact' });
+  expect(emergencyContact).toHaveClass('form-grid');
+  expect(emergencyContact).toContainElement(screen.getByRole('textbox', { name: 'Emergency Contact Name' }));
+  expect(emergencyContact).toContainElement(screen.getByRole('textbox', { name: 'Emergency Contact Mobile' }));
   await user.type(screen.getByRole('textbox', { name: /First Name/ }), 'Asha');
   await user.click(screen.getByRole('button', { name: 'Save Draft' }));
   await waitFor(() => expect(post).toHaveBeenCalledWith('/persons/drafts', expect.objectContaining({ firstName: 'Asha', categoryId: 1 })));
@@ -61,12 +65,58 @@ it('clears hidden driver details when driver availability changes to No', async 
     categoryDetails: expect.objectContaining({ driver_available: 'NO', driver_name: '', driver_mobile: '' }),
   })));
 }, 30_000);
+it('offers optional future access only for participants, unchecked by default, and saves the choice', async () => {
+  const post = vi.spyOn(api, 'post').mockResolvedValue({ data: { person_id: 8 } });
+  const user = userEvent.setup();
+  renderPage('ADMIN', { ...options, categories: [...options.categories, {
+    category_id: 3, form_type: 'PARTICIPANT', name: 'Participant', approval_required: false, schema: { fields: [] },
+  }] });
+  await user.click(await screen.findByRole('button', { name: /^Participant/ }));
+  const checkbox = screen.getByRole('checkbox', { name: 'Allow future check-ins after this event ends (optional)' });
+  expect(checkbox).not.toBeChecked();
+  expect(checkbox).not.toBeRequired();
+  await user.click(checkbox);
+  await user.click(screen.getByRole('button', { name: 'Save Draft' }));
+  await waitFor(() => expect(post).toHaveBeenLastCalledWith('/persons/drafts', expect.objectContaining({
+    categoryDetails: expect.objectContaining({ future_checkin_access: 'YES' }),
+  })));
+  await user.click(checkbox);
+  await user.click(screen.getByRole('button', { name: 'Save Draft' }));
+  await waitFor(() => expect(post).toHaveBeenLastCalledWith('/persons/drafts', expect.objectContaining({
+    categoryDetails: expect.objectContaining({ future_checkin_access: 'NO' }),
+  })));
+}, 30_000);
+
+it('allows today and future staff joining dates and marks past dates invalid', async () => {
+  renderPage('ADMIN', { ...options, categories: [{ ...options.categories[1], schema: {
+    fields: [{ key: 'joining_date', label: 'Joining Date', type: 'date', required: true }],
+  } }] });
+  await userEvent.click(await screen.findByRole('button', { name: /^Staff/ }));
+  const joiningDate = screen.getByLabelText(/Joining Date/);
+  const today = new Date().toISOString().slice(0, 10);
+  const date = new Date(`${today}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() - 1);
+  const yesterday = date.toISOString().slice(0, 10);
+  date.setUTCDate(date.getUTCDate() + 2);
+  const tomorrow = date.toISOString().slice(0, 10);
+  expect(joiningDate).toHaveAttribute('min', today);
+  expect(joiningDate).not.toHaveAttribute('max');
+  for (const value of [today, tomorrow]) {
+    fireEvent.change(joiningDate, { target: { value } });
+    expect(joiningDate).toBeValid();
+  }
+  fireEvent.change(joiningDate, { target: { value: yesterday } });
+  expect(joiningDate).toBeInvalid();
+  expect(joiningDate.validity.rangeUnderflow).toBe(true);
+});
+
 it('restricts guards to the visitor category', async () => {
   renderPage('SECURITY_GUARD', options, ['/register?from=gate&gate=1&area=2']);
   expect(await screen.findByRole('button', { name: /^Visitor/ })).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Staff' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Save Draft' })).not.toBeInTheDocument();
   await userEvent.click(screen.getByRole('button', { name: /^Visitor/ }));
+  expect(screen.queryByRole('checkbox', { name: /Allow future check-ins/ })).not.toBeInTheDocument();
   expect(screen.getByText('Category: Visitor')).toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Back to Security Gate' })).toHaveAttribute('href', '/gate?gate=1&area=2');
 });

@@ -209,20 +209,20 @@ export default function CategoriesPage() {
             <Table size="medium" aria-label="Registration categories">
               <TableHead>
                 <TableRow>
-                  <TableCell align="center">Category</TableCell>
-                  <TableCell align="center">Form</TableCell>
-                  <TableCell align="center">Approval</TableCell>
+                  <TableCell>Category</TableCell>
+                  <TableCell>Form</TableCell>
+                  <TableCell>Approval</TableCell>
                   <TableCell align="right">Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {categories.map((category) => (
                   <TableRow key={category.category_id ?? category.name} hover>
-                    <TableCell align="center">
+                    <TableCell>
                       <Typography fontWeight={600}>{category.name}</Typography>
                     </TableCell>
-                    <TableCell align="center">{category.form_type}</TableCell>
-                    <TableCell align="center">{category.approval_required === null ? 'Decision pending' : category.approval_required ? 'Required' : 'Not required'}</TableCell>
+                    <TableCell>{category.form_type}</TableCell>
+                    <TableCell>{category.approval_required === null ? 'Decision pending' : category.approval_required ? 'Required' : 'Not required'}</TableCell>
                     <TableCell align="right">
                       <Tooltip title="Edit category">
                         <IconButton aria-label={`Edit ${category.name}`} color="warning" onClick={() => openEdit(category)}>

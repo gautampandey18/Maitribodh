@@ -15,6 +15,9 @@ export function createGateRepository(pool) {
         `SELECT p.person_id, p.person_code, p.first_name, p.last_name,
                 c.name AS category, p.status, p.qr_version, p.photo_key, p.mobile,
                 p.expires_on < (now() AT TIME ZONE 'Asia/Kolkata')::date AS access_expired,
+                (c.form_type = 'PARTICIPANT' AND NULLIF(program.extra->>'end_date', '')::date
+                  < (now() AT TIME ZONE 'Asia/Kolkata')::date) AS event_expired,
+                p.category_details->>'future_checkin_access' = 'YES' AS future_checkin_access,
                 p.photo_key IS NOT NULL AS has_photo,
                 COALESCE(v.accompanying_count, p.accompanying_count) AS accompanying_count, p.accompanying,
                 ARRAY(SELECT pl.location_id FROM mams.person_location AS pl
@@ -33,6 +36,8 @@ export function createGateRepository(pool) {
                 )) AS location_warning
            FROM mams.person AS p
            JOIN mams.category AS c ON c.category_id = p.category_id
+           LEFT JOIN mams.lookup_value AS program ON program.lookup_type = 'PROGRAM_BATCH'
+             AND program.lookup_id::text = p.category_details->>'program_batch_id'
            LEFT JOIN mams.visit AS v ON v.person_id = p.person_id AND v.status = 'OPEN'
            JOIN mams.location AS l ON l.location_id = $3 AND l.status = 'ACTIVE'
           WHERE p.status <> 'DRAFT'

@@ -166,6 +166,14 @@ function statusLabel(status) {
   return status === 'DEACTIVATED' ? 'Inactive' : status || '—';
 }
 
+export function identityCardFilename(name, personCode) {
+  const base = [name, personCode]
+    .map((part) => String(part ?? '').replace(/[\\/:*?"<>|]+/g, ' ').trim().replace(/\s+/g, '-'))
+    .filter(Boolean)
+    .join('-');
+  return `${base || 'Maitribodh-ID-Card'}.png`;
+}
+
 function CardField({ label, value }) {
   return (
     <Box className="idc-row">
@@ -203,7 +211,7 @@ export default function PersonIdentityCard({
     setDownloadError('');
     try {
       const blob = await createIdentityCardPng({ name, personCode, category, status, mobile, photoSrc, qrBlob, fields });
-      downloadBlob(blob, `Maitribodh-ID-Card-${personCode}.png`);
+      downloadBlob(blob, identityCardFilename(name, personCode));
     } catch (failure) {
       setDownloadError(requestMessage(failure, 'Could not download the complete ID card.'));
     } finally {

@@ -2,12 +2,13 @@ import { ApiError } from '../../errors/ApiError.js';
 
 export function createVisitsService({ repository }) {
   return {
-    async checkIn({ personId, checkinGateId, checkinLocationId, accompanyingCount, actor }) {
+    async checkIn({ personId, checkinGateId, checkinLocationId, accompanyingCount, eventAcknowledged, actor }) {
       return repository.checkIn({
         personId,
         checkinGateId,
         checkinLocationId,
         accompanyingCount,
+        eventAcknowledged,
         actorUserId: actor.userId,
         actorRole: actor.role,
         device: actor.device,

@@ -3,7 +3,7 @@ import { useSelector } from 'react-redux';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   Alert, Avatar, Box, Button, Checkbox, CircularProgress, Dialog, DialogActions,
-  DialogContent, DialogTitle, FormControl, InputLabel, MenuItem, Select, TextField, Typography,
+  DialogContent, DialogTitle, FormControl, FormControlLabel, InputLabel, MenuItem, Select, TextField, Typography,
 } from '@mui/material';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
@@ -143,6 +143,7 @@ export default function PersonDetailPage() {
   }, []);
 
   const canEdit = person?.form_type !== 'STAFF' || ['ADMIN', 'SUPER_ADMIN'].includes(role);
+  const canEditFutureAccess = person?.form_type === 'PARTICIPANT' && ['ADMIN', 'SUPER_ADMIN'].includes(role);
 
   /* load access options + activity/audit once */
   useEffect(() => {
@@ -181,6 +182,7 @@ export default function PersonDetailPage() {
       emergencyMobileCountry: emergPhone.country,
       locationIds: person.location_ids ?? [],
       expiresOn: person.expires_on ? String(person.expires_on).slice(0, 10) : '',
+      ...(canEditFutureAccess ? { futureCheckinAccess: person.category_details?.future_checkin_access === 'YES' } : {}),
     });
   }
 
@@ -212,8 +214,8 @@ export default function PersonDetailPage() {
       await api.patch(`/persons/${personId}`, {
         ...profileChanges,
         mobile,
-        alternateMobile: alternateMobile || null,
-        emergencyMobile: emergencyMobile || null,
+        alternateMobile,
+        emergencyMobile,
       });
       profileSaved = true;
       if (profilePhoto) {
@@ -402,6 +404,11 @@ export default function PersonDetailPage() {
                   <Typography variant="caption">{profilePhoto?.name ?? (person.photo_key ? 'Leave empty to keep the current photo.' : 'Leave empty; Security will capture a photo at first check-in.')}</Typography>
                 </Box>
                 <Typography className="person-detail-subheading">Access details</Typography>
+                {canEditFutureAccess && <FormControlLabel
+                  sx={{ gridColumn: '1 / -1' }}
+                  control={<Checkbox checked={edit.futureCheckinAccess} onChange={(event) => setEdit({ ...edit, futureCheckinAccess: event.target.checked })} />}
+                  label="Allow future check-ins after this event ends (optional)"
+                />}
                 <FormControl>
                   <InputLabel id="assigned-areas-label">Assigned areas</InputLabel>
                   <Select labelId="assigned-areas-label" multiple value={edit.locationIds.map(Number)} label="Assigned areas" onChange={(e) => setEdit({ ...edit, locationIds: e.target.value.map(Number) })} renderValue={(sel) => sel.map((id) => locationNames.get(String(id)) ?? id).join(', ')}>

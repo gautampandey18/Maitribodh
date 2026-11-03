@@ -26,6 +26,20 @@ test('visitor driver details are optional but validated when supplied', () => {
   assert.throws(() => validateCategoryDetails({ ...input, categoryDetails: { ...visitorDetails, driver_available: 'YES', driver_mobile: '123' } }, category, 'ADMIN'), /valid 10-digit mobile/);
   assert.throws(() => validateCategoryDetails({ ...input, categoryDetails: { ...visitorDetails, driver_available: 'NO', driver_name: 'Ravi' } }, category, 'ADMIN'), /only be provided when a driver is available/);
 });
+test('participant future access is optional and accepts only explicit Yes or No', () => {
+  const participant = { ...category, form_type: 'PARTICIPANT' };
+  const participantInput = { ...input, emergencyName: 'Ravi', emergencyMobile: '+919876543210', categoryDetails: { program_batch_id: 1 } };
+  for (const permission of [undefined, 'YES', 'NO']) {
+    const categoryDetails = { ...participantInput.categoryDetails, ...(permission ? { future_checkin_access: permission } : {}) };
+    const parsed = registrationInputSchema.parse({ ...participantInput, categoryDetails });
+    assert.doesNotThrow(() => validateCategoryDetails(parsed, participant, 'ADMIN'));
+    assert.equal(parsed.categoryDetails.future_checkin_access, permission);
+  }
+  assert.throws(() => validateCategoryDetails({ ...participantInput, categoryDetails: {
+    ...participantInput.categoryDetails, future_checkin_access: 'MAYBE',
+  } }, participant, 'ADMIN'), /valid future check-in access/);
+});
+
 test('guards can register visitors only', () => {
   assert.doesNotThrow(() => validateCategoryDetails(input, category, 'SECURITY_GUARD'));
   assert.throws(() => validateCategoryDetails(input, { ...category, form_type: 'STAFF' }, 'SECURITY_GUARD'), /Visitor only/);
@@ -35,6 +49,25 @@ test('international profiles need a valid passport', () => {
 });
 test('staff requires address and emergency contact and valid job role fields', () => {
   assert.throws(() => validateCategoryDetails(input, { ...category, form_type: 'STAFF' }, 'ADMIN'), /Address/);
+});
+test('staff joining date allows today and future dates but rejects past dates', () => {
+  const staff = { ...category, form_type: 'STAFF' };
+  const staffInput = { ...input, address: 'Ashram Road', emergencyName: 'Ravi', emergencyMobile: '+919876543210',
+    categoryDetails: { department_id: 1, job_role_id: 2 } };
+  for (const joiningDate of ['2026-11-03', '2026-11-04', '2027-01-01']) {
+    assert.doesNotThrow(() => validateCategoryDetails({ ...staffInput,
+      categoryDetails: { ...staffInput.categoryDetails, joining_date: joiningDate },
+    }, staff, 'ADMIN', '2026-11-03'));
+  }
+  assert.throws(() => validateCategoryDetails({ ...staffInput,
+    categoryDetails: { ...staffInput.categoryDetails, joining_date: '2026-11-02' },
+  }, staff, 'ADMIN', '2026-11-03'), /Joining Date must be today or a future date/);
+});
+
+test('membership dates still cannot be in the future', () => {
+  assert.throws(() => validateCategoryDetails({ ...input, address: 'Ashram Road', emergencyName: 'Ravi',
+    emergencyMobile: '+919876543210', categoryDetails: { subcategory_id: 1, member_since: '2026-11-04' },
+  }, { ...category, form_type: 'PARIVAR' }, 'ADMIN', '2026-11-03'), /membership date cannot be in the future/);
 });
 test('contract dates must be ordered', () => {
   assert.throws(() => validateCategoryDetails({ ...input, categoryDetails: { agency_name: 'Agency', nature_of_work: 'Repairs', department_id: 1, start_date: '2026-10-10', end_date: '2026-10-09' } }, { ...category, form_type: 'CONTRACTOR' }, 'ADMIN'), /End Date/);

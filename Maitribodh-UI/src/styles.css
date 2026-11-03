@@ -1,6 +1,6 @@
 .registration-form {
-  max-width: 1060px;
-  margin: 0 auto;
+  width: 100%;
+  margin: 0;
   background: var(--th-surface);
   border: 1px solid var(--th-card-border);
   border-radius: var(--th-r);
@@ -293,8 +293,8 @@
 }
 
 .registration-form {
-  max-width: 1060px;
-  margin: 0 auto;
+  width: 100%;
+  margin: 0;
   background: var(--th-surface);
   border: 1px solid var(--th-card-border);
   border-radius: var(--th-r);
@@ -1359,8 +1359,7 @@ body.notifications-panel-open .top-bar .top-toolbar>.MuiIconButton-root {
   flex-wrap: wrap;
   gap: 4px 12px;
   margin: 0 0 8px;
-  padding: 2px 0 2px 10px;
-  border-left: 3px solid var(--th-accent);
+  padding: 2px 0;
 }
 
 .page-heading>* {
@@ -1369,6 +1368,18 @@ body.notifications-panel-open .top-bar .top-toolbar>.MuiIconButton-root {
 
 .page-heading h1 {
   overflow-wrap: anywhere;
+}
+
+.page-heading h1,
+.reports-header-row h1 {
+  padding-left: 10px;
+  border-left: 3px solid var(--th-accent);
+  line-height: 1.2;
+}
+
+.page-heading h1+*,
+.reports-header-row h1+* {
+  padding-left: 13px;
 }
 
 .section-nav-tabs.MuiTabs-root {
@@ -1562,7 +1573,7 @@ body.notifications-panel-open .top-bar .top-toolbar>.MuiIconButton-root {
 }
 
 .audit-table .MuiTableBody-root .MuiTableRow-root:not(:has(.empty-table)) {
-  cursor: pointer;
+  cursor: default;
 }
 
 .audit-table .MuiTableBody-root .MuiTableRow-root:nth-child(even) {
@@ -1571,12 +1582,6 @@ body.notifications-panel-open .top-bar .top-toolbar>.MuiIconButton-root {
 
 .audit-table .MuiTableBody-root .MuiTableRow-root:hover {
   background: var(--th-row-hover);
-}
-
-.audit-table .MuiTableBody-root .MuiTableRow-root:focus-visible {
-  outline: 2px solid var(--th-primary);
-  outline-offset: -2px;
-  background: var(--th-soft);
 }
 
 .audit-table .audit-timestamp {
@@ -2754,9 +2759,10 @@ body.notifications-panel-open .top-bar .top-toolbar>.MuiIconButton-root {
 }
 
 .reports-kpi-card {
-  background: #FFFFFF;
-  border: 1px solid #E5E7EB;
-  border-radius: 12px;
+  background: var(--report-kpi-background, #FFFFFF);
+  border: 1px solid var(--report-kpi-border, #E5E7EB);
+  border-top: 4px solid var(--report-kpi-accent, #E5E7EB);
+  border-radius: var(--th-r);
   padding: 12px 16px;
   display: flex;
   flex-direction: column;
@@ -2799,8 +2805,8 @@ body.notifications-panel-open .top-bar .top-toolbar>.MuiIconButton-root {
 
 .reports-chart-card {
   background: #FFFFFF;
-  border: 1px solid #E5E7EB;
-  border-radius: 12px;
+  border: 1px solid var(--th-card-border);
+  border-radius: var(--th-r);
   padding: 14px 18px;
   display: flex;
   flex-direction: column;
@@ -3162,82 +3168,6 @@ body.notifications-panel-open .top-bar .top-toolbar>.MuiIconButton-root {
   background: var(--th-surface);
 }
 
-.login-brand-panel {
-  min-height: 100vh;
-  padding: 42px 56px;
-  display: flex;
-  flex-direction: column;
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  background: linear-gradient(165deg, var(--th-soft), var(--th-canvas));
-}
-
-.login-brand-panel::after {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  right: -150px;
-  bottom: -240px;
-  width: 520px;
-  height: 560px;
-  border: 1px solid rgba(225, 115, 36, .2);
-  border-radius: 50% 50% 0 0;
-  box-shadow: 0 0 0 22px rgba(225, 115, 36, .035), 0 0 0 44px rgba(225, 115, 36, .025);
-}
-
-.login-brand-lockup {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--th-primary);
-  font-size: .84rem;
-  font-weight: 800;
-  letter-spacing: 0.2px;
-}
-
-.login-brand-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--th-accent);
-  animation: thPulse 1.8s infinite;
-}
-
-.login-brand-copy {
-  margin: auto 0;
-  max-width: 460px;
-  position: relative;
-  z-index: 1;
-}
-
-.login-brand-heading {
-  max-width: 440px;
-  margin: 10px 0 14px !important;
-  font: 800 2rem/1.28 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
-  color: var(--th-text);
-  letter-spacing: -0.5px;
-}
-
-.login-brand-description {
-  max-width: 390px;
-  color: var(--th-muted);
-  font-size: .92rem;
-  line-height: 1.6;
-}
-
-.login-security {
-  display: flex;
-  align-items: flex-start;
-  gap: 9px;
-  max-width: 440px;
-  padding-top: 16px;
-  border-top: 1px solid rgba(225, 115, 36, .16);
-  color: var(--th-muted);
-  font-size: .72rem;
-  line-height: 1.5;
-}
-
 .login-form-wrap {
   min-height: 100vh;
   padding: 32px;
@@ -3291,6 +3221,18 @@ body.notifications-panel-open .top-bar .top-toolbar>.MuiIconButton-root {
   color: var(--th-muted);
   font-size: .72rem;
   margin-top: 20px !important;
+}
+
+.login-title-mobile {
+  display: none;
+}
+
+.login-form .login-password-help {
+  align-self: flex-end;
+  min-height: 32px;
+  margin-top: -12px;
+  padding: 4px 0;
+  font-size: .75rem;
 }
 
 .password-page {
@@ -3349,7 +3291,7 @@ body.notifications-panel-open .top-bar .top-toolbar>.MuiIconButton-root {
   box-shadow: var(--th-shadow-card);
 }
 
-:where(.table-panel, .idc-sec, .idc-card, .gate-scanner, .gate-result-panel, .registration-form, .registration-review, .qr-identity-table-container, .password-panel, .login-form-column) {
+:where(.table-panel, .idc-sec, .idc-card, .gate-scanner, .gate-result-panel, .registration-form, .registration-review, .qr-identity-table-container, .password-panel, .login-form-column, .reports-chart-card) {
   transition: border-color 180ms ease, box-shadow 180ms ease;
 }
 
@@ -3370,7 +3312,8 @@ body.notifications-panel-open .top-bar .top-toolbar>.MuiIconButton-root {
 }
 
 @media (hover: hover) {
-  :where(.table-panel, .idc-card, .gate-scanner, .gate-result-panel, .registration-review, .qr-identity-table-container, .password-panel, .login-form-column):hover:not(:focus-within) {
+  :where(.table-panel, .idc-card, .gate-scanner, .gate-result-panel, .registration-review, .qr-identity-table-container, .password-panel, .login-form-column):hover:not(:focus-within),
+  .reports-chart-card:hover {
     border-color: var(--th-card-border-h);
     box-shadow: var(--th-shadow-hover);
   }
@@ -3427,8 +3370,7 @@ body.notifications-panel-open .top-bar .top-toolbar>.MuiIconButton-root {
 
 @media (prefers-reduced-motion: reduce) {
 
-  .brand-dot,
-  .login-brand-dot {
+  .brand-dot {
     animation: none;
   }
 
@@ -5506,9 +5448,10 @@ body.notifications-panel-open .app-navigation-drawer .MuiDrawer-paper::after {
 }
 
 .reports-kpi-card {
-  background: #FFFFFF;
-  border: 1px solid #E5E7EB;
-  border-radius: 12px;
+  background: var(--report-kpi-background, #FFFFFF);
+  border: 1px solid var(--report-kpi-border, #E5E7EB);
+  border-top: 4px solid var(--report-kpi-accent, #E5E7EB);
+  border-radius: var(--th-r);
   padding: 12px 16px;
   display: flex;
   flex-direction: column;
@@ -5551,8 +5494,8 @@ body.notifications-panel-open .app-navigation-drawer .MuiDrawer-paper::after {
 
 .reports-chart-card {
   background: #FFFFFF;
-  border: 1px solid #E5E7EB;
-  border-radius: 12px;
+  border: 1px solid var(--th-card-border);
+  border-radius: var(--th-r);
   padding: 14px 18px;
   display: flex;
   flex-direction: column;
@@ -5916,78 +5859,91 @@ body.notifications-panel-open .app-navigation-drawer .MuiDrawer-paper::after {
 
 .login-brand-panel {
   min-height: 100vh;
-  padding: 42px 56px;
+  padding: 40px 64px 56px;
   display: flex;
   flex-direction: column;
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  background: linear-gradient(165deg, var(--th-soft), var(--th-canvas));
-}
-
-.login-brand-panel::after {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  right: -150px;
-  bottom: -240px;
-  width: 520px;
-  height: 560px;
-  border: 1px solid rgba(225, 115, 36, .2);
-  border-radius: 50% 50% 0 0;
-  box-shadow: 0 0 0 22px rgba(225, 115, 36, .035), 0 0 0 44px rgba(225, 115, 36, .025);
+  color: #FFFFFF;
+  background:
+    linear-gradient(180deg, rgba(20, 15, 10, .42) 0%, rgba(20, 15, 10, .06) 28%, rgba(20, 15, 10, .4) 60%, rgba(20, 15, 10, .82) 100%),
+    url('/image-background.jfif') center / cover no-repeat #3B3027;
 }
 
 .login-brand-lockup {
   display: flex;
   align-items: center;
-  gap: 10px;
-  color: var(--th-primary);
-  font-size: .84rem;
-  font-weight: 800;
-  letter-spacing: 0.2px;
+  gap: 14px;
 }
 
-.login-brand-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--th-accent);
-  animation: thPulse 1.8s infinite;
+.login-brand-logo {
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+  padding: 3px;
+  border-radius: 12px;
+  background: #FFFFFF;
+  object-fit: contain;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .25);
+}
+
+.login-brand-panel .login-brand-name {
+  color: #FFFFFF;
+  font-size: 1.35rem !important;
+  line-height: 1.2 !important;
+  letter-spacing: .2px;
+}
+
+.login-brand-panel .MuiTypography-root {
+  font-weight: 600;
+}
+
+.login-brand-panel .login-brand-tagline {
+  margin-top: 3px !important;
+  color: rgba(255, 255, 255, .82);
+  font-size: .68rem !important;
+  letter-spacing: .18em;
 }
 
 .login-brand-copy {
-  margin: auto 0;
-  max-width: 460px;
-  position: relative;
-  z-index: 1;
+  margin-top: auto;
+  max-width: 640px;
 }
 
-.login-brand-heading {
-  max-width: 440px;
-  margin: 10px 0 14px !important;
-  font: 800 2rem/1.28 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
-  color: var(--th-text);
+.login-brand-panel .login-brand-eyebrow {
+  color: rgba(255, 255, 255, .85);
+  font-size: .78rem !important;
+  letter-spacing: .14em;
+}
+
+.login-brand-panel .login-brand-heading {
+  margin: 16px 0 18px !important;
+  font: 400 clamp(2.5rem, 4.6vw, 4.25rem)/1.12 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+  color: #FFFFFF;
   letter-spacing: -0.5px;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, .25);
 }
 
-.login-brand-description {
-  max-width: 390px;
-  color: var(--th-muted);
-  font-size: .92rem;
-  line-height: 1.6;
+.login-brand-panel .login-brand-description {
+  max-width: 580px;
+  color: rgba(255, 255, 255, .9);
+  font-size: 1.05rem !important;
+  line-height: 1.55 !important;
 }
 
-.login-security {
-  display: flex;
-  align-items: flex-start;
-  gap: 9px;
-  max-width: 440px;
-  padding-top: 16px;
-  border-top: 1px solid rgba(225, 115, 36, .16);
-  color: var(--th-muted);
-  font-size: .72rem;
-  line-height: 1.5;
+.login-brand-panel .login-brand-motto {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 28px !important;
+  color: rgba(255, 255, 255, .92);
+  font-size: .95rem !important;
+}
+
+.login-brand-panel .login-brand-motto span {
+  color: var(--th-accent);
+  font-size: .85rem;
 }
 
 .login-form-wrap {
@@ -5996,11 +5952,17 @@ body.notifications-panel-open .app-navigation-drawer .MuiDrawer-paper::after {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--th-surface);
+  background: #e1b6241c;
 }
 
 .login-form-column {
   width: min(100%, 360px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .14), 0 2px 8px rgba(0, 0, 0, .06);
+}
+
+.login-form-column:hover,
+.login-form-column:focus-within {
+  box-shadow: 0 16px 40px rgba(0, 0, 0, .18), 0 3px 10px rgba(0, 0, 0, .08);
 }
 
 .login-title {
@@ -6067,24 +6029,137 @@ body.notifications-panel-open .app-navigation-drawer .MuiDrawer-paper::after {
 @media (max-width: 760px) {
   .login-page {
     grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+    align-content: start;
+    min-height: 100svh;
   }
 
   .login-brand-panel {
-    min-height: 290px;
-    padding: 26px 24px 20px;
+    min-height: 260px;
+    padding: 40px 20px 52px;
+  }
+
+  .login-brand-lockup {
+    gap: 8px;
+  }
+
+  .login-brand-logo {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+  }
+
+  .login-brand-panel .login-brand-name {
+    font-size: .9rem !important;
+    letter-spacing: 0;
+  }
+
+  .login-brand-panel .login-brand-tagline {
+    font-size: .5rem !important;
+    letter-spacing: 0;
   }
 
   .login-brand-copy {
-    margin: 42px 0 28px;
+    margin-top: 20px;
+    padding-top: 0;
   }
 
-  .login-brand-heading {
-    font-size: 1.65rem !important;
+  .login-brand-panel .login-brand-heading {
+    margin: 0 !important;
+    font-size: 1.5rem !important;
+    line-height: 1.12 !important;
+    letter-spacing: 0;
+  }
+
+  .login-welcome-line {
+    display: block;
+  }
+
+  .login-brand-panel .login-brand-eyebrow,
+  .login-brand-panel .login-brand-description,
+  .login-brand-panel .login-brand-motto,
+  .login-form-column > .eyebrow,
+  .login-title-desktop,
+  .login-form .login-password-help {
+    display: none;
+  }
+
+  .login-title-mobile {
+    display: inline;
   }
 
   .login-form-wrap {
-    min-height: auto;
-    padding: 34px 22px 40px;
+    min-height: calc(100svh - 250px);
+    margin-top: -20px;
+    padding: 24px 20px 10px;
+    align-items: stretch;
+    background: #FFFFFF;
+    border-radius: 20px 20px 0 0;
+    position: relative;
+    z-index: 1;
+  }
+
+  .login-page .login-form-column {
+    width: 100%;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    display: flex;
+    flex-direction: column;
+    animation: none;
+  }
+
+  .login-title {
+    margin-top: 0 !important;
+    font-size: 1.125rem !important;
+  }
+
+  .login-subtitle {
+    font-size: .75rem;
+    margin: 4px 0 24px !important;
+  }
+
+  .login-form {
+    gap: 24px;
+  }
+
+  .login-form .MuiInputLabel-root {
+    transform: translate(0, -18px) scale(.8);
+    transform-origin: top left;
+    color: var(--th-text);
+    max-width: 125%;
+  }
+
+  .login-form .MuiOutlinedInput-notchedOutline legend {
+    display: none;
+  }
+
+  .login-form .MuiOutlinedInput-root {
+    border-radius: 8px;
+    min-height: 44px;
+  }
+
+  .login-form .MuiInputBase-input {
+    padding-block: 12px;
+    font-size: .8125rem;
+  }
+
+  .login-form .MuiButton-root[type="submit"] {
+    min-height: 44px;
+    border-radius: 8px;
+  }
+
+  .login-form .MuiButton-root[type="submit"] .MuiButton-endIcon {
+    display: none;
+  }
+
+  .login-footer {
+    margin-top: auto !important;
+    padding-top: 48px;
+    text-align: center;
+    font-size: .625rem;
   }
 }
 
@@ -6308,10 +6383,6 @@ body.notifications-panel-open .app-navigation-drawer .MuiDrawer-paper::after {
     gap: 20px;
   }
 
-  .registration-form {
-    max-width: 1140px;
-  }
-
   .gate-layout {
     grid-template-columns: 560px minmax(0, 1fr);
     gap: 32px;
@@ -6335,10 +6406,6 @@ body.notifications-panel-open .app-navigation-drawer .MuiDrawer-paper::after {
   .page-container {
     max-width: 1800px;
     padding: 36px 48px 64px;
-  }
-
-  .registration-form {
-    max-width: 1300px;
   }
 
   .dashboard-metrics {
@@ -6517,15 +6584,33 @@ body.notifications-panel-open .app-navigation-drawer .MuiDrawer-paper::after {
     max-width: 100%;
   }
 
-  .gate-scanner form {
-    flex-direction: column !important;
-    align-items: stretch !important;
+  .gate-scanner .gate-lookup-form {
+    gap: 8px !important;
+    align-items: flex-start !important;
   }
 
-  .gate-scanner form .MuiTextField-root,
-  .gate-scanner form .MuiButton-root {
-    width: 100% !important;
-    max-width: 100% !important;
+  .gate-scanner .gate-lookup-fields {
+    gap: 6px !important;
+    max-width: none !important;
+  }
+
+  .gate-scanner .gate-country-select {
+    width: 76px !important;
+  }
+
+  .gate-scanner .gate-country-select .MuiSelect-select {
+    padding-left: 10px;
+    padding-right: 26px !important;
+  }
+
+  .gate-scanner .gate-country-iso,
+  .gate-scanner .gate-lookup-fields .MuiInputAdornment-positionStart {
+    display: none;
+  }
+
+  .gate-scanner .gate-find-button.MuiButton-root {
+    padding-left: 12px;
+    padding-right: 12px;
   }
 
   .gate-person-panel .idc-card,
@@ -6674,4 +6759,24 @@ body.notifications-panel-open .app-navigation-drawer .MuiDrawer-paper::after {
   .person-detail-page .idc-badges {
     justify-content: center;
   }
+}
+
+@media (max-width: 400px) {
+  .gate-scanner .gate-find-label {
+    display: none;
+  }
+
+  .gate-scanner .gate-find-button.MuiButton-root {
+    min-width: 40px;
+    width: 40px;
+    padding: 0;
+  }
+
+  .gate-scanner .gate-find-button .MuiButton-startIcon {
+    margin: 0;
+  }
+}
+
+.gate-lookup-fields .MuiInputBase-root {
+  height: 40px;
 }

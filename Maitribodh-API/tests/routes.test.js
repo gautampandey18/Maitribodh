@@ -714,6 +714,18 @@ test('check-in route validates the registered person payload and forwards the ac
   assert.equal(response.body.locationWarning, true);
   assert.equal(checkinInput.personId, 8);
   assert.equal(checkinInput.actor.role, 'SECURITY_GUARD');
+  assert.equal(checkinInput.eventAcknowledged, false);
+  for (const eventAcknowledged of [true, false]) {
+    await request(app).post('/api/v1/visits').send({
+      personId: 8, checkinGateId: 2, checkinLocationId: 3, eventAcknowledged,
+    }).expect(201);
+    assert.equal(checkinInput.eventAcknowledged, eventAcknowledged);
+  }
+  for (const eventAcknowledged of ['true', 1, null]) {
+    await request(app).post('/api/v1/visits').send({
+      personId: 8, checkinGateId: 2, checkinLocationId: 3, eventAcknowledged,
+    }).expect(400);
+  }
 });
 
 function createRouteApp(prefix, router) {

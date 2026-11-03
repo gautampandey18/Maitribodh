@@ -33,7 +33,7 @@ it('opens notifications from the top and toggles closed from the bell', async ()
   expect(document.body).not.toHaveClass('notifications-panel-open');
 });
 
-it('summarizes audit values in the table and preserves full values in the detail drawer', async () => {
+it('summarizes audit values without making table rows interactive', async () => {
   vi.spyOn(api, 'get').mockResolvedValue({
     data: {
       items: [{
@@ -72,9 +72,15 @@ it('summarizes audit values in the table and preserves full values in the detail
   expect(screen.getByText('APPROVED')).toHaveClass('audit-action-badge');
   expect(screen.getByText('APPROVAL')).toHaveClass('audit-module-badge');
 
-  await userEvent.click(screen.getByText(summaryText('Status: PENDING')));
-  expect(screen.getByText('Audit Detail')).toBeInTheDocument();
-  expect(screen.getByText((_, element) => element?.tagName === 'PRE' && element.textContent.includes('"status": "PENDING"'))).toBeInTheDocument();
+  const summary = screen.getByText(summaryText('Status: PENDING'));
+  const row = summary.closest('tr');
+  expect(row).not.toHaveAttribute('tabindex');
+  expect(row).not.toHaveAttribute('aria-label');
+  await userEvent.click(summary);
+  fireEvent.keyDown(row, { key: 'Enter' });
+  fireEvent.keyDown(row, { key: ' ' });
+  expect(screen.queryByText('Audit Detail')).not.toBeInTheDocument();
+  expect(screen.getByRole('checkbox', { name: 'Select audit record 1' })).not.toBeChecked();
 });
 
 it('sends free-text search changes to the audit API', async () => {
@@ -137,6 +143,7 @@ it('supports multi-select, select-all checkbox, and deleting audit logs', async 
   // Select row 101 specifically
   await user.click(rowCheck1);
   expect(rowCheck1).toBeChecked();
+  expect(rowCheck1.closest('tr')).not.toHaveClass('Mui-selected');
   expect(rowCheck2).not.toBeChecked();
   expect(screen.getByText('(1 selected)')).toBeInTheDocument();
   // Ensure clicking the checkbox did NOT open the audit detail drawer
@@ -147,6 +154,8 @@ it('supports multi-select, select-all checkbox, and deleting audit logs', async 
   expect(selectAll).toBeChecked();
   expect(rowCheck1).toBeChecked();
   expect(rowCheck2).toBeChecked();
+  expect(rowCheck1.closest('tr')).not.toHaveClass('Mui-selected');
+  expect(rowCheck2.closest('tr')).not.toHaveClass('Mui-selected');
   expect(screen.getByText('(2 selected)')).toBeInTheDocument();
 
   // Click Delete button

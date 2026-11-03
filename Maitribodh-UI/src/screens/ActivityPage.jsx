@@ -149,7 +149,6 @@ export default function ActivityPage() {
   const [action, setAction] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(5);
-  const [selected, setSelected] = useState(null);
   const [selectedAuditIds, setSelectedAuditIds] = useState([]);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
@@ -272,15 +271,7 @@ export default function ActivityPage() {
             {data?.items?.map((item) => {
               const isChecked = selectedAuditIds.includes(item.audit_id);
               return (
-                <TableRow
-                  hover
-                  key={item.audit_id}
-                  selected={isChecked}
-                  onClick={() => setSelected(item)}
-                  tabIndex={0}
-                  onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelected(item); } }}
-                  aria-label={`View audit detail: ${item.activity}, ${item.entity}`}
-                >
+                <TableRow key={item.audit_id}>
                   <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()} sx={{ width: 48, textAlign: 'center' }}>
                     <Checkbox
                       color="primary"
@@ -306,7 +297,6 @@ export default function ActivityPage() {
       </TableContainer>
       <TablePagination component="div" count={data?.total ?? 0} page={page - 1} rowsPerPage={pageSize} rowsPerPageOptions={[5, 10, 25, 50, 100]} onPageChange={(_event, nextPage) => setPage(nextPage + 1)} onRowsPerPageChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }} />
     </Paper>
-    <Drawer anchor="right" open={Boolean(selected)} onClose={() => setSelected(null)}><Box sx={{ width: 'min(480px, 100vw)', p: 3 }}><IconButton aria-label="Close audit detail" onClick={() => setSelected(null)} sx={{ float: 'right' }}><CloseOutlinedIcon /></IconButton><Typography variant="h2">Audit Detail</Typography><Typography>{selected?.activity} · {selected?.entity}</Typography>{['old_value', 'new_value'].map((key) => <Box key={key} sx={{ mt: 3 }}><Typography variant="h3">{key === 'old_value' ? 'Before' : 'After'}</Typography><Box component="pre" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{JSON.stringify(selected?.[key], null, 2)}</Box></Box>)}<Typography>Actor: {selected?.actor ?? 'System'}</Typography></Box></Drawer>
     <Dialog open={confirmDeleteOpen} onClose={() => !deleteBusy && setConfirmDeleteOpen(false)} aria-labelledby="confirm-delete-dialog-title">
       <DialogTitle id="confirm-delete-dialog-title">Delete Audit Records</DialogTitle>
       <DialogContent>

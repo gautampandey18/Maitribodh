@@ -1,12 +1,12 @@
 import { memo } from 'react';
-import { Box, MenuItem, TextField } from '@mui/material';
+import { Box, TextField } from '@mui/material';
 import { phoneCountries } from '../utils/phone.js';
+import SearchableSelect from './SearchableSelect.jsx';
 
-const countryOptions = phoneCountries.map((item) => (
-  <MenuItem key={item.country} value={item.country}>
-    {item.name} ({item.callingCode})
-  </MenuItem>
-));
+const countryOptions = phoneCountries.map((item) => ({
+  value: item.country,
+  label: `${item.name} (${item.callingCode})`,
+}));
 
 const CountryCodeSelect = memo(function CountryCodeSelect({
   country = 'IN',
@@ -17,23 +17,15 @@ const CountryCodeSelect = memo(function CountryCodeSelect({
   label = 'Country code',
 }) {
   return (
-    <TextField
-      select
+    <SearchableSelect
       label={label}
       value={country}
-      onChange={(event) => onChange(event.target.value)}
+      onChange={onChange}
+      options={countryOptions}
       required={required}
       size={size}
       disabled={disabled}
-      SelectProps={{
-        renderValue: (selected) => {
-          const item = phoneCountries.find((c) => c.country === selected);
-          return item ? `${item.country} (${item.callingCode})` : selected;
-        },
-      }}
-    >
-      {countryOptions}
-    </TextField>
+    />
   );
 });
 

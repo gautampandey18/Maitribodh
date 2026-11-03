@@ -824,12 +824,14 @@ Further registration behavior:
 
 - Approval-required categories produce `PENDING`; others produce `ACTIVE`.
 - Category rules, lookup type/status, job-role department membership, and location eligibility are validated.
+- Participant registration optionally stores `categoryDetails.future_checkin_access` as `YES` or `NO`. The checkbox is unchecked by default and is not required; missing values, including older registrations, do not grant future access. The registration review shows the chosen permission.
 - Photo: JPG/PNG, at most 2 MiB; processed to JPEG with maximum dimensions 600 x 600 without enlargement.
 - Documents: PDF/JPG/PNG, at most 5 MiB each; at most 12 documents. Document images are converted to JPEG.
 - Files are stored under `UPLOAD_DIRECTORY`, not S3.
 - Person detail removes encrypted passport/ID values and draft payload from its response.
 - Draft payloads blank passport/ID numbers; photo/document bytes are not saved in drafts. Draft listing returns only the current user's drafts updated during the preceding seven days. The UI clears consent on resume and requires fresh consent at submission.
 - Profile PATCH requires `firstName`, `lastName`, and `mobile`; it is not a fully optional partial patch. Optional supported fields are `alternateMobile`, `email`, `address`, `emergencyName`, `emergencyMobile`; omitted optional fields receive validation defaults.
+- For an existing `PARTICIPANT`, Admin or Super Admin can enable or revoke future entry in Person Details > Edit details > Access details using "Allow future check-ins after this event ends (optional)". Profile PATCH accepts optional boolean `futureCheckinAccess`; omission preserves the existing permission. Only administrators may change it, and other categories cannot use it. The update changes only `category_details.future_checkin_access` (`YES`/`NO`), preserves the selected event and other details, and audits the previous and new permission. No re-registration is required. A fresh gate lookup uses the updated permission; permitted post-event check-ins still require the guard's completed-event acknowledgement.
 - File downloads must refer to that person's photo or a listed document key. Security guards can download photos only.
 
 ### 8.8 Approvals
@@ -863,6 +865,8 @@ Source: [gate routes](../Maitribodh-API/src/modules/gate/gate.routes.js).
 
 `qrPayload` is at most 256 characters; `mobile` is an Indian 10-digit or international E.164 number; `query` is 1-100 trimmed characters. Lookup does not itself create a visit; check-in uses the visits API. The UI Gate screen is provided to Admin, Super Admin, and Security Guard, while this API lookup route also permits Approver and Registration Officer roles.
 
+For `PARTICIPANT` profiles, the selected `PROGRAM_BATCH` lookup's `extra.end_date` is the event end date. Configure this date in master data to enforce completed-event access. The event is completed only when that date is before today's date in `Asia/Kolkata`, so entry on the event's final day is unaffected. After completion, missing or `NO` future access returns `EVENT_ACCESS_EXPIRED` and the gate displays "Access is not valid for this user. The event has ended." With `YES`, lookup returns `eventWarning: true` and the gate warns that the event has ended and future access was granted during registration. Existing blacklist, profile status, explicit access expiry, open-visit, photo-verification, and restricted-area rules remain in effect. Checkout remains available for an open visit even when event access has ended.
+
 ### 8.11 Visits
 
 Source: [visit routes](../Maitribodh-API/src/modules/visits/visits.routes.js).
@@ -874,6 +878,8 @@ Source: [visit routes](../Maitribodh-API/src/modules/visits/visits.routes.js).
 | POST | `/api/v1/visits/:visitId/reconciliation` | ADMIN | Required `note` (1-500 chars) | `200`, administratively reconciled visit |
 
 IDs in visit JSON bodies must be positive integer numbers. Visit workflows enforce person eligibility and open/closed state. There is no standalone GET visits endpoint; use reports and dashboard views.
+
+Check-in independently enforces the participant event rule inside its transaction; it returns HTTP `409` with `EVENT_ACCESS_EXPIRED` when future access was not granted. For permitted post-event entry, the gate displays "EVENT COMPLETED - CONFIRM CHECK-IN" and requires the guard to check "I acknowledge that the event has ended and confirm this participant may check in" in addition to photo verification and any restricted-area acknowledgement. This checkbox resets on every person selection. The request must include boolean `eventAcknowledged: true`; missing or false acknowledgement returns HTTP `409` with `EVENT_ACKNOWLEDGEMENT_REQUIRED`. Acknowledgement cannot override denied future access. Permitted post-event entries return `eventWarning: true` and record `event_warning: true` and `event_acknowledged: true` in the check-in audit payload. No re-registration or QR regeneration is needed for permitted future entry.
 
 ### 8.12 Blacklist
 

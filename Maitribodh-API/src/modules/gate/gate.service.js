@@ -36,6 +36,8 @@ export function createGateService({ repository, qrService }) {
           outcome = 'BLOCKED_BLACKLIST';
         } else if (candidate.status !== 'ACTIVE' || candidate.access_expired) {
           outcome = 'NOT_ACTIVE';
+        } else if (candidate.event_expired && !candidate.future_checkin_access) {
+          outcome = 'EVENT_ACCESS_EXPIRED';
         } else if (candidate.open_visit_id !== null) {
           outcome = 'ALREADY_INSIDE';
         } else if (candidate.location_warning) {
@@ -59,6 +61,8 @@ export function createGateService({ repository, qrService }) {
           openVisitId: candidate.open_visit_id,
           insideSince: candidate.inside_since,
           locationWarning: candidate.location_warning,
+          eventWarning: Boolean(candidate.event_expired && candidate.future_checkin_access
+            && candidate.status === 'ACTIVE' && !candidate.is_blacklisted && !candidate.access_expired),
           outcome,
         };
       });

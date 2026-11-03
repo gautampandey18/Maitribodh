@@ -99,6 +99,44 @@ test('check-in rejects blacklisted people without inserting a visit', async () =
   assert.equal(calls.at(-1), 'ROLLBACK');
 });
 
+test('completed events are enforced during check-in and permitted future entries are audited', async () => {
+  for (const futureAccess of [undefined, false, true]) {
+    const calls = [];
+    const client = {
+      async query(sql, values = []) {
+        calls.push({ sql, values });
+        if (sql.includes('FROM mams.person AS p')) return { rows: [{
+          status: 'ACTIVE', gate_valid: true, area_valid: true,
+          event_expired: true, future_checkin_access: futureAccess,
+        }] };
+        if (sql.includes('INSERT INTO mams.visit')) return { rows: [{ visit_id: 4, status: 'OPEN' }] };
+        return { rows: [] };
+      },
+      release() {},
+    };
+    const repository = createVisitsRepository({ async connect() { return client; } });
+    const input = { personId: 8, checkinGateId: 2, checkinLocationId: 3 };
+    if (futureAccess) {
+      for (const eventAcknowledged of [undefined, false, 'true']) {
+        await assert.rejects(repository.checkIn({ ...input, eventAcknowledged }),
+          (error) => error.code === 'EVENT_ACKNOWLEDGEMENT_REQUIRED');
+      }
+      assert.equal(calls.some((call) => call.sql.includes('INSERT INTO mams.visit')), false);
+      const visit = await repository.checkIn({ ...input, eventAcknowledged: true });
+      assert.equal(visit.eventWarning, true);
+      const audit = calls.find((call) => call.sql.includes('INSERT INTO mams.audit_log'));
+      assert.equal(JSON.parse(audit.values[3]).event_warning, true);
+      assert.equal(JSON.parse(audit.values[3]).event_acknowledged, true);
+      assert.equal(calls.at(-1).sql, 'COMMIT');
+    } else {
+      await assert.rejects(repository.checkIn(input), (error) => error.code === 'EVENT_ACCESS_EXPIRED'
+        && error.message === 'Access is not valid for this user. The event has ended.');
+      assert.equal(calls.some((call) => call.sql.includes('INSERT INTO mams.visit')), false);
+      assert.equal(calls.at(-1).sql, 'ROLLBACK');
+    }
+  }
+});
+
 test('checkout locks and closes the open visit with an audit row atomically', async () => {
   const calls = [];
   const client = {

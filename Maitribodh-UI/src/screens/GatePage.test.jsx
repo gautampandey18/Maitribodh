@@ -154,6 +154,58 @@ it('auto-selects an assigned area and warns when another restricted area is sele
   await user.click(screen.getByRole('checkbox', { name: 'I acknowledge this person is not assigned to the selected restricted area' }));
   expect(screen.getByRole('button', { name: 'Check-In' })).toBeEnabled();
 }, 30_000);
+it.each([
+  ['ELIGIBLE', true, true],
+  ['EVENT_ACCESS_EXPIRED', false, false],
+  ['ELIGIBLE', false, true],
+])('handles participant event access: %s, warning %s', async (outcome, eventWarning, allowed) => {
+  vi.stubGlobal('URL', { createObjectURL: vi.fn(() => 'blob:participant-photo'), revokeObjectURL: vi.fn() });
+  vi.spyOn(api, 'get').mockImplementation((url) => Promise.resolve({
+    data: url === '/persons/registration/options' ? options : new Blob(['photo'], { type: 'image/jpeg' }),
+  }));
+  const post = vi.spyOn(api, 'post').mockResolvedValue({ data: { items: [{
+    personId: 8, personCode: 'MB-000008', name: 'Asha Patel', category: 'Participant',
+    status: 'ACTIVE', outcome, eventWarning, hasPhoto: true, photoKey: 'asha.jpg', openVisitId: 10,
+  }] } });
+  const user = userEvent.setup();
+  render(<MemoryRouter><GatePage /></MemoryRouter>);
+  await screen.findByRole('combobox', { name: 'Area' });
+  await user.type(screen.getByRole('textbox', { name: 'Mobile number' }), '9876543210');
+  await user.click(screen.getByRole('button', { name: 'Find Person' }));
+  const verification = screen.getByRole('checkbox', { name: 'I verified the person against the profile photo' });
+  await waitFor(() => expect(verification).toBeEnabled());
+  expect(screen.getByRole('button', { name: 'Check-In' })).toBeDisabled();
+  await user.click(verification);
+  if (eventWarning) {
+    expect(screen.getByText('EVENT COMPLETED - CONFIRM CHECK-IN')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Check-In' })).toBeDisabled();
+    const acknowledgement = screen.getByRole('checkbox', { name: 'I acknowledge that the event has ended and confirm this participant may check in' });
+    expect(acknowledgement).not.toBeChecked();
+    await user.click(acknowledgement);
+    expect(screen.getByRole('button', { name: 'Check-In' })).toBeEnabled();
+    await user.click(acknowledgement);
+    expect(screen.getByRole('button', { name: 'Check-In' })).toBeDisabled();
+    await user.click(acknowledgement);
+  }
+  if (allowed) expect(screen.getByRole('button', { name: 'Check-In' })).toBeEnabled();
+  else {
+    expect(screen.getByRole('button', { name: 'Check-In' })).toBeDisabled();
+    expect(screen.getByText('Access is not valid for this user. The event has ended.')).toBeInTheDocument();
+  }
+  if (eventWarning) expect(screen.getByText(/This event has ended. Future check-in access was granted/)).toBeInTheDocument();
+  else expect(screen.queryByText(/This event has ended. Future check-in access was granted/)).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Check-Out' })).toBeEnabled();
+  if (eventWarning) {
+    await user.click(screen.getByRole('button', { name: 'Check-In' }));
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/visits', expect.objectContaining({ eventAcknowledged: true })));
+    const acknowledgement = await screen.findByRole('checkbox', { name: 'I acknowledge that the event has ended and confirm this participant may check in' });
+    expect(acknowledgement).not.toBeChecked();
+    expect(screen.getByRole('button', { name: 'Check-In' })).toBeDisabled();
+  } else {
+    expect(screen.queryByRole('checkbox', { name: /I acknowledge that the event has ended/ })).not.toBeInTheDocument();
+  }
+}, 30_000);
+
 it('blacklisted persons cannot check in but can leave an open visit', async () => {
   vi.spyOn(api, 'get').mockResolvedValue({ data: options });
   vi.spyOn(api, 'post').mockResolvedValue({ data: { items: [{ personId: 8, personCode: 'MB-000008', name: 'Asha Patel', category: 'Visitor', outcome: 'BLOCKED_BLACKLIST', status: 'ACTIVE', openVisitId: 10 }] } });

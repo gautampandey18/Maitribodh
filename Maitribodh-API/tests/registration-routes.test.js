@@ -177,6 +177,22 @@ test('person deletion reports a conflict when an unhandled database reference pr
   assert.equal(response.body.error.code, 'PERSON_IN_USE');
   assert.equal(response.body.error.message, 'The person still has linked records that could not be safely removed.');
 });
+test('profile update preserves optional boolean future access for participant edits', async () => {
+  let saved;
+  const app = appFor('ADMIN', { async update(value) { saved = value; return { person_id: 8 }; } });
+  const profile = { firstName: 'Asha', lastName: 'Patel', mobile: '+919820000000' };
+  for (const futureCheckinAccess of [undefined, true, false]) {
+    await request(app).patch('/api/v1/persons/8').send({
+      ...profile, ...(futureCheckinAccess === undefined ? {} : { futureCheckinAccess }),
+    }).expect(200);
+    assert.equal(saved.changes.futureCheckinAccess, futureCheckinAccess);
+    assert.equal(saved.actor.role, 'ADMIN');
+  }
+  for (const futureCheckinAccess of ['YES', 'true', 1, null]) {
+    await request(app).patch('/api/v1/persons/8').send({ ...profile, futureCheckinAccess }).expect(400);
+  }
+});
+
 test('profile update rejects email values longer than the database column', async () => {
   let saved = false;
   const repository = { async update() { saved = true; } };

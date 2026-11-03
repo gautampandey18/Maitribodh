@@ -222,25 +222,25 @@ function LookupValuesPage({ type }) {
           <Table size="medium" aria-label="Master data values">
             <TableHead>
               <TableRow>
-                <TableCell align="center">Name</TableCell>
-                {hasParentCategory && <TableCell align="center">Parent / Category</TableCell>}
-                <TableCell align="center">Status</TableCell>
-                <TableCell align="center">Actions</TableCell>
+                <TableCell>Name</TableCell>
+                {hasParentCategory && <TableCell>Parent / Category</TableCell>}
+                <TableCell>Status</TableCell>
+                <TableCell align="right">Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {data?.items?.map((item) => (
                 <TableRow key={item.lookup_id} hover>
-                  <TableCell align="center">{item.name}</TableCell>
+                  <TableCell>{item.name}</TableCell>
                   {hasParentCategory && (
-                    <TableCell align="center">
+                    <TableCell>
                       {options?.lookups?.find((lookup) => lookup.lookup_id === item.parent_id)?.name
                         ?? options?.categories?.find((category) => category.category_id === item.category_id)?.name
                         ?? '-'}
                     </TableCell>
                   )}
-                  <TableCell align="center">{item.status}</TableCell>
-                  <TableCell align="center">
+                  <TableCell>{item.status}</TableCell>
+                  <TableCell align="right">
                     <Tooltip title="Edit">
                       <IconButton aria-label={`Edit ${item.name}`} color="warning" onClick={() => open(item)}>
                         <EditOutlinedIcon fontSize="small" />

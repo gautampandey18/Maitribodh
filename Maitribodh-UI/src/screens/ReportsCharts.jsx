@@ -167,12 +167,23 @@ export const REPORT_TABS_CONFIG = {
   },
 };
 
+const kpiColors = [
+  ['#4F46E5', '#EEF2FF', '#C7D2FE'],
+  ['#E17324', '#FFF6EF', '#F6D5BA'],
+  ['#C98A0B', '#FFF9EA', '#F1DFAC'],
+  ['#2E9E6B', '#F0FAF5', '#C3E7D4'],
+];
+
 export function KpiGrid({ kpis }) {
   if (!kpis || !kpis.length) return null;
   return (
     <Box className="reports-kpi-grid" aria-label="Key Performance Indicators">
-      {kpis.map((kpi) => (
-        <Box key={kpi.label} className="reports-kpi-card">
+      {kpis.map((kpi, index) => (
+        <Box key={kpi.label} className="reports-kpi-card" style={{
+          '--report-kpi-accent': kpiColors[index % kpiColors.length][0],
+          '--report-kpi-background': kpiColors[index % kpiColors.length][1],
+          '--report-kpi-border': kpiColors[index % kpiColors.length][2],
+        }}>
           <Typography className="reports-kpi-label">{kpi.label}</Typography>
           <Typography className="reports-kpi-value">{kpi.value}</Typography>
           <Typography className="reports-kpi-delta">{kpi.delta}</Typography>

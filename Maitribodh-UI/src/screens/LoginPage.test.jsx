@@ -61,3 +61,18 @@ it('shows an account deactivated message from the login API', async () => {
   expect(await screen.findByText('Your account is deactivated. Contact the administrator to restore access.')).toBeInTheDocument();
   expect(store.getState().auth.accessToken).toBeNull();
 }, 30_000);
+
+it('toggles password visibility and provides administrator password assistance', async () => {
+  const user = userEvent.setup();
+  render(<Provider store={store}><MemoryRouter><LoginPage /></MemoryRouter></Provider>);
+  const password = screen.getByLabelText('Password');
+  expect(password).toHaveAttribute('type', 'password');
+  await user.click(screen.getByRole('button', { name: 'Show password' }));
+  expect(password).toHaveAttribute('type', 'text');
+  await user.click(screen.getByRole('button', { name: 'Hide password' }));
+  expect(password).toHaveAttribute('type', 'password');
+  await user.click(screen.getByRole('button', { name: 'Forgot password?' }));
+  expect(screen.getByRole('dialog', { name: 'Password assistance' })).toHaveTextContent('Contact your administrator to reset your password.');
+  await user.click(screen.getByRole('button', { name: 'Close' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+});
