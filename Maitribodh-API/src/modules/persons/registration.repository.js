@@ -159,6 +159,10 @@ export function createRegistrationRepository(pool) {
         const current = (await client.query('SELECT p.*, c.form_type FROM mams.person p JOIN mams.category c USING(category_id) WHERE person_id = $1 FOR UPDATE OF p', [personId])).rows[0];
         if (!current) throw new ApiError(404, 'PERSON_NOT_FOUND', 'Person not found');
         if (current.form_type === 'STAFF' && !['ADMIN', 'SUPER_ADMIN'].includes(actor.role)) throw new ApiError(403, 'FORBIDDEN', 'Only an administrator can edit Staff profiles');
+        if (changes.futureCheckinAccess !== undefined) {
+          if (!['ADMIN', 'SUPER_ADMIN'].includes(actor.role)) throw new ApiError(403, 'FORBIDDEN', 'Only an administrator can change future check-in access');
+          if (current.form_type !== 'PARTICIPANT' || typeof changes.futureCheckinAccess !== 'boolean') throw new ApiError(400, 'VALIDATION_ERROR', 'Future check-in access is available only for participants and must be Yes or No');
+        }
         if (current.form_type !== 'VISITOR' && !changes.mobile.startsWith('+91')) throw new ApiError(400, 'VALIDATION_ERROR', 'Only Visitor profiles can use a non-Indian mobile number');
         if (changes.mobile && changes.mobile !== current.mobile) {
           const duplicate = (await client.query(
@@ -177,11 +181,19 @@ export function createRegistrationRepository(pool) {
         const updated = (await client.query(`UPDATE mams.person SET first_name = $2, last_name = $3, mobile = $4::varchar(16), alternate_mobile = $5,
           email = $6, address = $7, emergency_contact_name = $8, emergency_contact_mobile = $9,
           qr_version = CASE WHEN mobile IS DISTINCT FROM $11::varchar(16) AND status = 'ACTIVE' THEN qr_version + 1 ELSE qr_version END,
+          category_details = CASE WHEN $12::boolean IS NULL THEN category_details
+            ELSE jsonb_set(COALESCE(category_details, '{}'::jsonb), '{future_checkin_access}',
+              to_jsonb(CASE WHEN $12::boolean THEN 'YES'::text ELSE 'NO'::text END)) END,
           updated_by = $10, updated_at = now() WHERE person_id = $1 RETURNING person_id, person_code, first_name, last_name, mobile, status, qr_version`,
         [personId, changes.firstName, changes.lastName, changes.mobile, changes.alternateMobile || null, changes.email || null, changes.address || null,
-          changes.emergencyName || null, changes.emergencyMobile || null, actor.userId, changes.mobile])).rows[0];
+          changes.emergencyName || null, changes.emergencyMobile || null, actor.userId, changes.mobile, changes.futureCheckinAccess ?? null])).rows[0];
         const before = { first_name: current.first_name, last_name: current.last_name, mobile: current.mobile, status: current.status, qr_version: current.qr_version };
-        await audit(client, actor, 'UPDATE', personId, before, updated);
+        const after = { ...updated };
+        if (changes.futureCheckinAccess !== undefined) {
+          before.future_checkin_access = current.category_details?.future_checkin_access ?? 'NO';
+          after.future_checkin_access = changes.futureCheckinAccess ? 'YES' : 'NO';
+        }
+        await audit(client, actor, 'UPDATE', personId, before, after);
         if (current.mobile !== changes.mobile) await audit(client, actor, 'QR_REGENERATION', personId, { qr_version: current.qr_version }, { qr_version: updated.qr_version });
         return updated;
       });

@@ -1573,7 +1573,7 @@ body.notifications-panel-open .top-bar .top-toolbar>.MuiIconButton-root {
 }
 
 .audit-table .MuiTableBody-root .MuiTableRow-root:not(:has(.empty-table)) {
-  cursor: pointer;
+  cursor: default;
 }
 
 .audit-table .MuiTableBody-root .MuiTableRow-root:nth-child(even) {
@@ -1582,12 +1582,6 @@ body.notifications-panel-open .top-bar .top-toolbar>.MuiIconButton-root {
 
 .audit-table .MuiTableBody-root .MuiTableRow-root:hover {
   background: var(--th-row-hover);
-}
-
-.audit-table .MuiTableBody-root .MuiTableRow-root:focus-visible {
-  outline: 2px solid var(--th-primary);
-  outline-offset: -2px;
-  background: var(--th-soft);
 }
 
 .audit-table .audit-timestamp {
@@ -2765,9 +2759,10 @@ body.notifications-panel-open .top-bar .top-toolbar>.MuiIconButton-root {
 }
 
 .reports-kpi-card {
-  background: #FFFFFF;
-  border: 1px solid #E5E7EB;
-  border-radius: 12px;
+  background: var(--report-kpi-background, #FFFFFF);
+  border: 1px solid var(--report-kpi-border, #E5E7EB);
+  border-top: 4px solid var(--report-kpi-accent, #E5E7EB);
+  border-radius: var(--th-r);
   padding: 12px 16px;
   display: flex;
   flex-direction: column;
@@ -2810,8 +2805,8 @@ body.notifications-panel-open .top-bar .top-toolbar>.MuiIconButton-root {
 
 .reports-chart-card {
   background: #FFFFFF;
-  border: 1px solid #E5E7EB;
-  border-radius: 12px;
+  border: 1px solid var(--th-card-border);
+  border-radius: var(--th-r);
   padding: 14px 18px;
   display: flex;
   flex-direction: column;
@@ -3228,6 +3223,18 @@ body.notifications-panel-open .top-bar .top-toolbar>.MuiIconButton-root {
   margin-top: 20px !important;
 }
 
+.login-title-mobile {
+  display: none;
+}
+
+.login-form .login-password-help {
+  align-self: flex-end;
+  min-height: 32px;
+  margin-top: -12px;
+  padding: 4px 0;
+  font-size: .75rem;
+}
+
 .password-page {
   min-height: calc(100vh - 68px);
   display: grid;
@@ -3284,7 +3291,7 @@ body.notifications-panel-open .top-bar .top-toolbar>.MuiIconButton-root {
   box-shadow: var(--th-shadow-card);
 }
 
-:where(.table-panel, .idc-sec, .idc-card, .gate-scanner, .gate-result-panel, .registration-form, .registration-review, .qr-identity-table-container, .password-panel, .login-form-column) {
+:where(.table-panel, .idc-sec, .idc-card, .gate-scanner, .gate-result-panel, .registration-form, .registration-review, .qr-identity-table-container, .password-panel, .login-form-column, .reports-chart-card) {
   transition: border-color 180ms ease, box-shadow 180ms ease;
 }
 
@@ -3305,7 +3312,8 @@ body.notifications-panel-open .top-bar .top-toolbar>.MuiIconButton-root {
 }
 
 @media (hover: hover) {
-  :where(.table-panel, .idc-card, .gate-scanner, .gate-result-panel, .registration-review, .qr-identity-table-container, .password-panel, .login-form-column):hover:not(:focus-within) {
+  :where(.table-panel, .idc-card, .gate-scanner, .gate-result-panel, .registration-review, .qr-identity-table-container, .password-panel, .login-form-column):hover:not(:focus-within),
+  .reports-chart-card:hover {
     border-color: var(--th-card-border-h);
     box-shadow: var(--th-shadow-hover);
   }
@@ -5440,9 +5448,10 @@ body.notifications-panel-open .app-navigation-drawer .MuiDrawer-paper::after {
 }
 
 .reports-kpi-card {
-  background: #FFFFFF;
-  border: 1px solid #E5E7EB;
-  border-radius: 12px;
+  background: var(--report-kpi-background, #FFFFFF);
+  border: 1px solid var(--report-kpi-border, #E5E7EB);
+  border-top: 4px solid var(--report-kpi-accent, #E5E7EB);
+  border-radius: var(--th-r);
   padding: 12px 16px;
   display: flex;
   flex-direction: column;
@@ -5485,8 +5494,8 @@ body.notifications-panel-open .app-navigation-drawer .MuiDrawer-paper::after {
 
 .reports-chart-card {
   background: #FFFFFF;
-  border: 1px solid #E5E7EB;
-  border-radius: 12px;
+  border: 1px solid var(--th-card-border);
+  border-radius: var(--th-r);
   padding: 14px 18px;
   display: flex;
   flex-direction: column;
@@ -5886,6 +5895,10 @@ body.notifications-panel-open .app-navigation-drawer .MuiDrawer-paper::after {
   letter-spacing: .2px;
 }
 
+.login-brand-panel .MuiTypography-root {
+  font-weight: 600;
+}
+
 .login-brand-panel .login-brand-tagline {
   margin-top: 3px !important;
   color: rgba(255, 255, 255, .82);
@@ -5906,7 +5919,7 @@ body.notifications-panel-open .app-navigation-drawer .MuiDrawer-paper::after {
 
 .login-brand-panel .login-brand-heading {
   margin: 16px 0 18px !important;
-  font: 300 clamp(2.5rem, 4.6vw, 4.25rem)/1.12 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+  font: 400 clamp(2.5rem, 4.6vw, 4.25rem)/1.12 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
   color: #FFFFFF;
   letter-spacing: -0.5px;
   text-shadow: 0 2px 18px rgba(0, 0, 0, .25);
@@ -5939,11 +5952,17 @@ body.notifications-panel-open .app-navigation-drawer .MuiDrawer-paper::after {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--th-surface);
+  background: #e1b6241c;
 }
 
 .login-form-column {
   width: min(100%, 360px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .14), 0 2px 8px rgba(0, 0, 0, .06);
+}
+
+.login-form-column:hover,
+.login-form-column:focus-within {
+  box-shadow: 0 16px 40px rgba(0, 0, 0, .18), 0 3px 10px rgba(0, 0, 0, .08);
 }
 
 .login-title {
@@ -6010,28 +6029,137 @@ body.notifications-panel-open .app-navigation-drawer .MuiDrawer-paper::after {
 @media (max-width: 760px) {
   .login-page {
     grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+    align-content: start;
+    min-height: 100svh;
   }
 
   .login-brand-panel {
-    min-height: 380px;
-    padding: 24px 22px 28px;
+    min-height: 260px;
+    padding: 40px 20px 52px;
+  }
+
+  .login-brand-lockup {
+    gap: 8px;
+  }
+
+  .login-brand-logo {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+  }
+
+  .login-brand-panel .login-brand-name {
+    font-size: .9rem !important;
+    letter-spacing: 0;
+  }
+
+  .login-brand-panel .login-brand-tagline {
+    font-size: .5rem !important;
+    letter-spacing: 0;
   }
 
   .login-brand-copy {
-    padding-top: 56px;
+    margin-top: 20px;
+    padding-top: 0;
   }
 
   .login-brand-panel .login-brand-heading {
-    font-size: 2.1rem !important;
+    margin: 0 !important;
+    font-size: 1.5rem !important;
+    line-height: 1.12 !important;
+    letter-spacing: 0;
   }
 
-  .login-brand-panel .login-brand-description {
-    font-size: .92rem !important;
+  .login-welcome-line {
+    display: block;
+  }
+
+  .login-brand-panel .login-brand-eyebrow,
+  .login-brand-panel .login-brand-description,
+  .login-brand-panel .login-brand-motto,
+  .login-form-column > .eyebrow,
+  .login-title-desktop,
+  .login-form .login-password-help {
+    display: none;
+  }
+
+  .login-title-mobile {
+    display: inline;
   }
 
   .login-form-wrap {
-    min-height: auto;
-    padding: 34px 22px 40px;
+    min-height: calc(100svh - 250px);
+    margin-top: -20px;
+    padding: 24px 20px 10px;
+    align-items: stretch;
+    background: #FFFFFF;
+    border-radius: 20px 20px 0 0;
+    position: relative;
+    z-index: 1;
+  }
+
+  .login-page .login-form-column {
+    width: 100%;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    display: flex;
+    flex-direction: column;
+    animation: none;
+  }
+
+  .login-title {
+    margin-top: 0 !important;
+    font-size: 1.125rem !important;
+  }
+
+  .login-subtitle {
+    font-size: .75rem;
+    margin: 4px 0 24px !important;
+  }
+
+  .login-form {
+    gap: 24px;
+  }
+
+  .login-form .MuiInputLabel-root {
+    transform: translate(0, -18px) scale(.8);
+    transform-origin: top left;
+    color: var(--th-text);
+    max-width: 125%;
+  }
+
+  .login-form .MuiOutlinedInput-notchedOutline legend {
+    display: none;
+  }
+
+  .login-form .MuiOutlinedInput-root {
+    border-radius: 8px;
+    min-height: 44px;
+  }
+
+  .login-form .MuiInputBase-input {
+    padding-block: 12px;
+    font-size: .8125rem;
+  }
+
+  .login-form .MuiButton-root[type="submit"] {
+    min-height: 44px;
+    border-radius: 8px;
+  }
+
+  .login-form .MuiButton-root[type="submit"] .MuiButton-endIcon {
+    display: none;
+  }
+
+  .login-footer {
+    margin-top: auto !important;
+    padding-top: 48px;
+    text-align: center;
+    font-size: .625rem;
   }
 }
 

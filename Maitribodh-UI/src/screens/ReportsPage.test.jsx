@@ -3,12 +3,34 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import { api } from '../api.js';
-import { REPORT_TABS_CONFIG } from './ReportsCharts.jsx';
+import { KpiGrid, REPORT_TABS_CONFIG } from './ReportsCharts.jsx';
 import ReportsPage from './ReportsPage.jsx';
 
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+});
+
+it('gives every report tab dashboard-colored KPI tiles', () => {
+  const colors = [
+    ['#4F46E5', '#EEF2FF', '#C7D2FE'],
+    ['#E17324', '#FFF6EF', '#F6D5BA'],
+    ['#C98A0B', '#FFF9EA', '#F1DFAC'],
+    ['#2E9E6B', '#F0FAF5', '#C3E7D4'],
+  ];
+  const { container, rerender } = render(<KpiGrid kpis={[]} />);
+  for (const config of Object.values(REPORT_TABS_CONFIG)) {
+    rerender(<KpiGrid kpis={config.kpis} />);
+    const tiles = container.querySelectorAll('.reports-kpi-card');
+    expect(tiles).toHaveLength(config.kpis.length);
+    tiles.forEach((tile, index) => {
+      const [accent, background, border] = colors[index % colors.length];
+      expect(tile.style.getPropertyValue('--report-kpi-accent')).toBe(accent);
+      expect(tile.style.getPropertyValue('--report-kpi-background')).toBe(background);
+      expect(tile.style.getPropertyValue('--report-kpi-border')).toBe(border);
+      expect(tile).toHaveTextContent(config.kpis[index].label);
+    });
+  }
 });
 
 it('automatically loads every report section without applying filters', async () => {

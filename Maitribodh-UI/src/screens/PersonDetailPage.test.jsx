@@ -161,7 +161,9 @@ it('edits profile inline and renders access details as readable fields', async (
   await user.clear(firstName);
   await user.type(firstName, 'Anya');
   await user.click(screen.getByRole('button', { name: 'Save details' }));
-  await waitFor(() => expect(patch).toHaveBeenCalledWith('/persons/8', expect.objectContaining({ firstName: 'Anya' })));
+  await waitFor(() => expect(patch).toHaveBeenCalledWith('/persons/8', expect.objectContaining({
+    firstName: 'Anya', alternateMobile: '', emergencyMobile: '',
+  })));
   expect(patch).toHaveBeenCalledWith('/persons/8/access', expect.objectContaining({ locationIds: [], expiresOn: '' }));
   expect(post).not.toHaveBeenCalled();
 
@@ -175,6 +177,41 @@ it('edits profile inline and renders access details as readable fields', async (
   expect(screen.queryByText(/\{\s*"purpose"/)).not.toBeInTheDocument();
   expect(get).toHaveBeenCalledWith('/persons/registration/options');
 }, 30_000);
+
+it.each([
+  ['ADMIN', undefined, false],
+  ['SUPER_ADMIN', 'NO', false],
+  ['ADMIN', 'YES', true],
+])('lets %s update participant future entry from %s', async (role, permission, initiallyChecked) => {
+  const person = {
+    person_id: 8, person_code: 'MB-000008', first_name: 'Asha', last_name: 'Patel', mobile: '+919820000000',
+    category: 'Participant', form_type: 'PARTICIPANT', status: 'ACTIVE', documents: [], location_ids: [], qr_version: 1,
+    category_details: { program_batch_id: 7, ...(permission ? { future_checkin_access: permission } : {}) },
+  };
+  mockPersonApi(person);
+  const patch = vi.spyOn(api, 'patch').mockResolvedValue({ data: person });
+  const user = userEvent.setup();
+  store.dispatch(sessionStarted({ accessToken: 'test', user: { role } }));
+  render(<Provider store={store}><MemoryRouter initialEntries={['/persons/8?edit=1']}><Routes><Route path="/persons/:personId" element={<PersonDetailPage />} /></Routes></MemoryRouter></Provider>);
+  const checkbox = await screen.findByRole('checkbox', { name: 'Allow future check-ins after this event ends (optional)' });
+  expect(checkbox.checked).toBe(initiallyChecked);
+  expect(checkbox).not.toBeRequired();
+  await user.click(checkbox);
+  await user.click(screen.getByRole('button', { name: 'Save details' }));
+  await waitFor(() => expect(patch).toHaveBeenCalledWith('/persons/8', expect.objectContaining({ futureCheckinAccess: !initiallyChecked })));
+}, 30_000);
+
+it.each([
+  ['REG_OFFICER', 'PARTICIPANT'],
+  ['ADMIN', 'VISITOR'],
+])('does not expose future entry editing for %s on %s', async (role, formType) => {
+  mockPersonApi({ person_id: 8, first_name: 'Asha', last_name: 'Patel', mobile: '+919820000000',
+    form_type: formType, category: formType, status: 'ACTIVE', documents: [], category_details: {}, location_ids: [] });
+  store.dispatch(sessionStarted({ accessToken: 'test', user: { role } }));
+  render(<Provider store={store}><MemoryRouter initialEntries={['/persons/8?edit=1']}><Routes><Route path="/persons/:personId" element={<PersonDetailPage />} /></Routes></MemoryRouter></Provider>);
+  await screen.findByRole('button', { name: 'Save details' });
+  expect(screen.queryByRole('checkbox', { name: /Allow future check-ins/ })).not.toBeInTheDocument();
+});
 
 it('uploads a profile photo only when one is selected during edit', async () => {
   const person = { person_id: 8, person_code: 'MB-000008', first_name: 'Asha', last_name: 'Patel', mobile: '+919820000000', category: 'Visitor', form_type: 'VISITOR', status: 'ACTIVE', documents: [], category_details: {}, location_ids: [], qr_version: 1 };

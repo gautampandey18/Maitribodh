@@ -4,13 +4,16 @@ const deviceValue = (device) => device?.slice(0, 100) ?? null;
 
 export function createVisitsRepository(pool) {
   return {
-    async checkIn({ personId, checkinGateId, checkinLocationId, accompanyingCount, actorUserId, actorRole, device, ipAddress }) {
+    async checkIn({ personId, checkinGateId, checkinLocationId, accompanyingCount, eventAcknowledged, actorUserId, actorRole, device, ipAddress }) {
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
         const personResult = await client.query(
           `SELECT p.person_id, p.status, p.accompanying_count, p.accompanying,
               p.expires_on < (now() AT TIME ZONE 'Asia/Kolkata')::date AS access_expired,
+                  (c.form_type = 'PARTICIPANT' AND NULLIF(program.extra->>'end_date', '')::date
+                    < (now() AT TIME ZONE 'Asia/Kolkata')::date) AS event_expired,
+                  p.category_details->>'future_checkin_access' = 'YES' AS future_checkin_access,
                   gate.location_id IS NOT NULL AS gate_valid,
                   area.location_id IS NOT NULL AS area_valid,
                   EXISTS (
@@ -29,6 +32,9 @@ export function createVisitsRepository(pool) {
                      WHERE pl.person_id = p.person_id AND pl.location_id = area.location_id
                   )) AS location_warning
              FROM mams.person AS p
+             JOIN mams.category AS c ON c.category_id = p.category_id
+             LEFT JOIN mams.lookup_value AS program ON program.lookup_type = 'PROGRAM_BATCH'
+               AND program.lookup_id::text = p.category_details->>'program_batch_id'
              LEFT JOIN mams.location AS gate
                ON gate.location_id = $2 AND gate.location_type = 'GATE' AND gate.status = 'ACTIVE'
              LEFT JOIN mams.location AS area
@@ -50,8 +56,14 @@ export function createVisitsRepository(pool) {
         if (person.status !== 'ACTIVE' || person.access_expired) {
           throw new ApiError(409, 'NOT_ACTIVE', 'Only active persons can check in');
         }
+        if (person.event_expired && !person.future_checkin_access) {
+          throw new ApiError(409, 'EVENT_ACCESS_EXPIRED', 'Access is not valid for this user. The event has ended.');
+        }
         if (person.already_inside) {
           throw new ApiError(409, 'ALREADY_INSIDE', 'Person already has an open visit');
+        }
+        if (person.event_expired && eventAcknowledged !== true) {
+          throw new ApiError(409, 'EVENT_ACKNOWLEDGEMENT_REQUIRED', 'This event has ended. Acknowledge the completed event before continuing check-in.');
         }
         const count = accompanyingCount !== undefined && accompanyingCount !== null
           ? Number(accompanyingCount)
@@ -90,6 +102,8 @@ export function createVisitsRepository(pool) {
               checkin_gate_id: checkinGateId,
               checkin_location_id: checkinLocationId,
               location_warning: person.location_warning,
+              event_warning: Boolean(person.event_expired && person.future_checkin_access),
+              ...(person.event_expired ? { event_acknowledged: eventAcknowledged === true } : {}),
               status: visit.status,
             }),
             ipAddress ?? null,
@@ -97,7 +111,7 @@ export function createVisitsRepository(pool) {
           ],
         );
         await client.query('COMMIT');
-        return { ...visit, locationWarning: person.location_warning };
+        return { ...visit, locationWarning: person.location_warning, eventWarning: Boolean(person.event_expired && person.future_checkin_access) };
       } catch (error) {
         await client.query('ROLLBACK').catch(() => {});
         if (error.code === '23505') {

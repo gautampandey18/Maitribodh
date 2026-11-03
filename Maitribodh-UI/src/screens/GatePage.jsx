@@ -82,8 +82,10 @@ async function releaseScanner(current) {
 
 const states = {
   ELIGIBLE: { title: 'PROFILE FOUND', message: 'Active profile · No blacklist match', severity: 'success' },
+  EVENT_COMPLETED: { title: 'EVENT COMPLETED - CONFIRM CHECK-IN', message: 'The event this participant registered for has ended. Confirm whether to continue check-in.', severity: 'warning' },
   ALREADY_INSIDE: { title: 'PERSON ALREADY INSIDE', message: 'Check out before another check-in.', severity: 'success' },
   NOT_ACTIVE: { title: 'PENDING APPROVAL', message: 'Only Active profiles with valid access may check in.', severity: 'warning' },
+  EVENT_ACCESS_EXPIRED: { title: 'EVENT COMPLETED - ACCESS NOT VALID', message: 'Access is not valid for this user. The event has ended.', severity: 'error' },
   BLOCKED_BLACKLIST: { title: 'BLACKLISTED - ENTRY NOT ALLOWED', message: 'Blacklist match blocks check-in. Alert recorded.', severity: 'error' },
   LOCATION_WARNING: { title: 'LOCATION ACCESS WARNING', message: 'This person is not assigned to the selected restricted area. Verify access before proceeding.', severity: 'warning' },
   INVALID_QR: { title: 'INVALID QR', message: 'This QR code is no longer valid.', severity: 'error' },
@@ -107,6 +109,7 @@ export default function GatePage() {
   const [photoRevision, setPhotoRevision] = useState(0);
   const [verified, setVerified] = useState(false);
   const [locationAcknowledged, setLocationAcknowledged] = useState(false);
+  const [eventAcknowledged, setEventAcknowledged] = useState(false);
   const [accompanyingCount, setAccompanyingCount] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -130,7 +133,8 @@ export default function GatePage() {
   const areas = options?.locations?.filter((item) => item.location_type === 'AREA') ?? [];
   const selectedGate = gateId || gates[0]?.location_id;
   const selectedArea = areaId || areas[0]?.location_id;
-  const state = states[selected?.outcome];
+  const state = selected?.eventWarning && selected?.outcome === 'ELIGIBLE'
+    ? states.EVENT_COMPLETED : states[selected?.outcome];
   const canRecoverPhoto = ['ELIGIBLE', 'LOCATION_WARNING', 'ALREADY_INSIDE'].includes(selected?.outcome);
   useEffect(() => {
     const update = () => setOnline(navigator.onLine);
@@ -238,6 +242,7 @@ export default function GatePage() {
     setSelected(personForArea(person, locationId));
     setVerified(false);
     setLocationAcknowledged(false);
+    setEventAcknowledged(false);
     setAccompanyingCount(0);
   }
   async function stopCamera() {
@@ -380,6 +385,10 @@ export default function GatePage() {
   }
   async function movement(checkIn) {
     if (!selected || !online) return;
+    if (checkIn && selected.eventWarning && !eventAcknowledged) {
+      setError('Acknowledge that the event has ended before continuing check-in.');
+      return;
+    }
     setBusy(true); setError('');
     try {
       if (checkIn) await api.post('/visits', {
@@ -388,6 +397,7 @@ export default function GatePage() {
         checkinLocationId: Number(selectedArea),
         device: 'Gate Terminal 01',
         accompanyingCount: Number(accompanyingCount || 0),
+        ...(selected.eventWarning ? { eventAcknowledged } : {}),
       });
       else await api.post(`/visits/${selected.openVisitId}/check-outs`, { checkoutGateId: Number(selectedGate), checkoutLocationId: Number(selectedArea), device: 'Gate Terminal 01' });
       setNotice(checkIn ? 'Check-In recorded.' : 'Check-Out recorded.');
@@ -413,11 +423,18 @@ export default function GatePage() {
           fields={[
             ['Gate', gates.find((item) => String(item.location_id) === String(selectedGate))?.name],
             ['Area', areas.find((item) => String(item.location_id) === String(selectedArea))?.name],
-            ['Entry status', selected.outcome?.replaceAll('_', ' ').toLowerCase() ?? 'Ready to verify'],
+            ['Entry status', selected.eventWarning && selected.outcome === 'ELIGIBLE' ? 'Event completed - acknowledgement required' : selected.outcome?.replaceAll('_', ' ').toLowerCase() ?? 'Ready to verify'],
             ['Additional people', selected.openVisitId ? (selected.accompanyingCount ?? 0) : accompanyingCount],
             ...(selected.insideSince ? [['Inside since', new Date(selected.insideSince).toLocaleString()]] : []),
           ]}
         />
+        {selected.eventWarning && <Alert severity="warning" sx={{ my: 1 }}>
+          This event has ended. Future check-in access was granted during registration. Do you want to continue check-in?
+          {['ELIGIBLE', 'LOCATION_WARNING'].includes(selected.outcome) && <FormControlLabel
+            control={<Checkbox checked={eventAcknowledged} onChange={(event) => setEventAcknowledged(event.target.checked)} />}
+            label="I acknowledge that the event has ended and confirm this participant may check in"
+          />}
+        </Alert>}
         {photoLoading && <Typography role="status">Loading profile photo...</Typography>}
         {photoError && <Alert severity="error" sx={{ my: 1 }}>{photoError}{!photoMissing && <Button onClick={() => setPhotoRevision((value) => value + 1)} disabled={!online || photoLoading}>Retry profile photo</Button>}</Alert>}
         {(!selected.photoKey || photoMissing) && <Box sx={{ my: 1 }}>
@@ -772,7 +789,7 @@ export default function GatePage() {
             disabled={busy || !online}
           />
         )}
-        <Box sx={{ display: 'flex', gap: 2 }}><Button variant="contained" startIcon={busy ? <CircularProgress size={18} /> : <LoginOutlinedIcon />} onClick={() => movement(true)} disabled={busy || !online || !['ELIGIBLE', 'LOCATION_WARNING'].includes(selected?.outcome) || !verified || !photoUrl || (selected?.locationWarning && !locationAcknowledged) || !selectedGate}>Check-In</Button><Button variant="outlined" startIcon={<LogoutOutlinedIcon />} onClick={() => movement(false)} disabled={busy || !online || !selected?.openVisitId || !selectedGate}>Check-Out</Button></Box>
+        <Box sx={{ display: 'flex', gap: 2 }}><Button variant="contained" startIcon={busy ? <CircularProgress size={18} /> : <LoginOutlinedIcon />} onClick={() => movement(true)} disabled={busy || !online || !['ELIGIBLE', 'LOCATION_WARNING'].includes(selected?.outcome) || !verified || !photoUrl || (selected?.locationWarning && !locationAcknowledged) || (selected?.eventWarning && !eventAcknowledged) || !selectedGate}>Check-In</Button><Button variant="outlined" startIcon={<LogoutOutlinedIcon />} onClick={() => movement(false)} disabled={busy || !online || !selected?.openVisitId || !selectedGate}>Check-Out</Button></Box>
         {items?.length === 0 && <Button sx={{ mt: 3 }} component={Link} to={`/register?from=gate&gate=${selectedGate}&area=${selectedArea}`} disabled={!online}>Register Visitor</Button>}
       </Box>
     </Box>

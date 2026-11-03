@@ -680,8 +680,19 @@ export default function RegisterPage() {
         {(schema.fields ?? []).map((field) => {
           const onChange = (event) => setValues((previous) => ({ ...previous, categoryDetails: { ...previous.categoryDetails, [field.key]: event.target.value, ...(field.source === 'DEPARTMENT' ? { job_role_id: '' } : {}) } }));
           return field.type === 'select' ? <TextField key={field.key} select label={field.label} required={field.required} value={values.categoryDetails[field.key] ?? ''} onChange={onChange}><MenuItem value="">Select</MenuItem>{field.source ? selectedOptions(field.source).map((option) => <MenuItem key={option.id} value={option.id}>{option.name}</MenuItem>) : (field.options ?? []).map((option) => <MenuItem key={option} value={option}>{option}</MenuItem>)}</TextField>
-            : <TextField key={field.key} label={field.label} type={field.type} required={field.required} value={values.categoryDetails[field.key] ?? ''} onChange={onChange} inputProps={{ maxLength: 500, ...(field.type === 'number' ? { min: 1, step: 1 } : {}) }} InputLabelProps={field.type === 'date' ? { shrink: true } : undefined} />;
+            : <TextField key={field.key} label={field.label} type={field.type} required={field.required} value={values.categoryDetails[field.key] ?? ''} onChange={onChange} inputProps={{ maxLength: 500, ...(field.type === 'number' ? { min: 1, step: 1 } : {}), ...(category?.form_type === 'STAFF' && field.key === 'joining_date' && field.type === 'date' ? { min: new Date().toISOString().slice(0, 10) } : {}) }} InputLabelProps={field.type === 'date' ? { shrink: true } : undefined} />;
         })}
+        {category?.form_type === 'PARTICIPANT' && <FormControlLabel
+          control={<Checkbox
+            checked={values.categoryDetails.future_checkin_access === 'YES'}
+            onChange={(event) => setValues((previous) => ({
+              ...previous,
+              categoryDetails: { ...previous.categoryDetails, future_checkin_access: event.target.checked ? 'YES' : 'NO' },
+            }))}
+          />}
+          label="Allow future check-ins after this event ends (optional)"
+        />}
+        <Box className="form-grid" role="group" aria-label="Emergency contact" sx={{ gridColumn: '1 / -1' }}>
         <TextField
           label="Emergency Contact Name"
           value={values.emergencyName}
@@ -720,6 +731,7 @@ export default function RegisterPage() {
           helperText={fieldErrors.emergencyMobile}
           required={Boolean(schema.emergencyRequired)}
         />
+        </Box>
       </Box>}
       {step === 2 && <Box className="form-grid">
         <TextField label="Assigned Areas" select SelectProps={{ multiple: true }} value={values.locationIds} onChange={(event) => change('locationIds', event.target.value)}>{selectedOptions('AREA').map((item) => <MenuItem key={item.id} value={Number(item.id)}>{item.name}</MenuItem>)}</TextField>
@@ -743,6 +755,10 @@ export default function RegisterPage() {
           {category?.form_type === 'VISITOR' && values.categoryDetails.driver_available && <Box className="registration-review-fact registration-review-driver">
             <Typography variant="caption">Driver</Typography>
             <Typography>{values.categoryDetails.driver_available === 'YES' ? 'Available' : 'Not available'}{values.categoryDetails.driver_available === 'YES' && [values.categoryDetails.driver_name, values.categoryDetails.driver_mobile].filter(Boolean).length > 0 ? ` · ${[values.categoryDetails.driver_name, formatPhoneNumber(toE164Phone(values.categoryDetails.driver_mobile, values.categoryDetails.driver_mobile_country || 'IN')) || values.categoryDetails.driver_mobile].filter(Boolean).join(' · ')}` : ''}</Typography>
+          </Box>}
+          {category?.form_type === 'PARTICIPANT' && <Box className="registration-review-fact">
+            <Typography variant="caption">Check-ins after the event</Typography>
+            <Typography>{values.categoryDetails.future_checkin_access === 'YES' ? 'Allowed with a gate warning' : 'Not allowed'}</Typography>
           </Box>}
         </Box>
         <FormControlLabel className="registration-review-consent" control={<Checkbox checked={values.consent} onChange={(event) => change('consent', event.target.checked)} />} label="I confirm consent to store this profile and photograph for access management." />

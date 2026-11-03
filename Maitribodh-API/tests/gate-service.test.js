@@ -35,6 +35,35 @@ test('gate decisions follow blacklist, status, inside, and location precedence',
   assert.deepEqual(result.items[4].assignedAreaIds, [2]);
 });
 
+test('completed events require explicit future access and preserve gate restrictions', async () => {
+  const base = { status: 'ACTIVE', open_visit_id: null, event_expired: true, future_checkin_access: false };
+  const rows = [
+    base,
+    { ...base, future_checkin_access: true },
+    { ...base, future_checkin_access: true, location_warning: true },
+    { ...base, future_checkin_access: true, is_blacklisted: true },
+    { ...base, future_checkin_access: true, status: 'DEACTIVATED' },
+    { ...base, event_expired: false },
+    { ...base, future_checkin_access: undefined },
+    { ...base, future_checkin_access: true, access_expired: true },
+    { ...base, future_checkin_access: true, open_visit_id: 4 },
+  ].map((row, index) => ({ ...row, person_id: index + 1 }));
+  const service = createGateService({
+    repository: {
+      async isActiveLocation() { return true; },
+      async findCandidates() { return rows; },
+      async recordLookup() {},
+    },
+    qrService: {},
+  });
+  const result = await service.lookup({ mobile: '9876543210', locationId: 2, actor: { userId: 8 } });
+  assert.deepEqual(result.items.map((item) => item.outcome), [
+    'EVENT_ACCESS_EXPIRED', 'ELIGIBLE', 'LOCATION_WARNING', 'BLOCKED_BLACKLIST',
+    'NOT_ACTIVE', 'ELIGIBLE', 'EVENT_ACCESS_EXPIRED', 'NOT_ACTIVE', 'ALREADY_INSIDE',
+  ]);
+  assert.deepEqual(result.items.map((item) => item.eventWarning), [false, true, true, false, false, false, false, false, true]);
+});
+
 test('invalid QR is audited and rejected before person lookup', async () => {
   let candidateQuery = false;
   let audit;
