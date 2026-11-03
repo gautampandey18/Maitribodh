@@ -148,7 +148,7 @@ export function createUsersRouter({ authService, usersService, authenticate }) {
     asyncHandler(async (request, response) => {
       const parsedUserId = userIdSchema.safeParse(request.params.userId);
       if (!parsedUserId.success) throw new ApiError(404, 'USER_NOT_FOUND', 'User not found');
-      if (parsedUserId.data === request.auth.userId) throw new ApiError(400, 'SELF_DELETE_FORBIDDEN', 'You cannot delete your own account');
+      if (parsedUserId.data === Number(request.auth.userId)) throw new ApiError(400, 'SELF_DELETE_FORBIDDEN', 'You cannot delete your own account');
       await usersService.deleteUser({ targetUserId: parsedUserId.data, actor: actorFromRequest(request) });
       response.status(204).send();
     }),

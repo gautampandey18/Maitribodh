@@ -281,7 +281,7 @@ export default function LocationsPage() {
               fullWidth
               inputProps={{ maxLength: 100 }}
             />
-            <TextField name="locationType" label="Location type" value={locationForm.locationType} onChange={updateForm} select fullWidth disabled={Boolean(editing)}>
+            <TextField name="locationType" label="Location type" value={locationForm.locationType} onChange={updateForm} select fullWidth>
               <MenuItem value="GATE">Gate</MenuItem>
               <MenuItem value="AREA">Area</MenuItem>
             </TextField>

@@ -7,6 +7,17 @@ import MasterDataPage from './MasterDataPage.jsx';
 
 afterEach(() => vi.restoreAllMocks());
 
+it.each(['Departments', 'Job Roles', 'Subcategories', 'ID Proof Types', 'Blacklist Reasons', 'Programs & Batches'])(
+  'names the add dialog after the %s tab', async (tab) => {
+    vi.spyOn(api, 'get').mockResolvedValue({ data: { items: [], categories: [], total: 0 } });
+    const user = userEvent.setup();
+    render(<MemoryRouter><MasterDataPage /></MemoryRouter>);
+    await user.click(screen.getByRole('tab', { name: tab }));
+    await user.click(screen.getByRole('button', { name: `Add ${tab}` }));
+    expect(screen.getByRole('dialog', { name: `Add ${tab} Value` })).toBeInTheDocument();
+  },
+);
+
 it('searches master values within the selected lookup type', async () => {
   const get = vi.spyOn(api, 'get').mockImplementation((path) => Promise.resolve({
     data: path.startsWith('/persons/registration/options')

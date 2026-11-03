@@ -110,6 +110,22 @@ it('allows today and future staff joining dates and marks past dates invalid', a
   expect(joiningDate.validity.rangeUnderflow).toBe(true);
 });
 
+it('shows compact country codes while searching full country names', async () => {
+  const user = userEvent.setup();
+  renderPage('ADMIN');
+  await user.click(await screen.findByRole('button', { name: /^Visitor/ }));
+  const country = screen.getByRole('combobox', { name: 'Country code' });
+  expect(country).toHaveValue('IN (+91)');
+  await user.clear(country);
+  await user.type(country, 'United States');
+  await user.click(await screen.findByRole('option', { name: 'United States (+1)' }));
+  expect(country).toHaveValue('US (+1)');
+  await user.clear(country);
+  await user.type(country, '+91');
+  await user.click(await screen.findByRole('option', { name: 'India (+91)' }));
+  expect(country).toHaveValue('IN (+91)');
+});
+
 it('restricts guards to the visitor category', async () => {
   renderPage('SECURITY_GUARD', options, ['/register?from=gate&gate=1&area=2']);
   expect(await screen.findByRole('button', { name: /^Visitor/ })).toBeInTheDocument();

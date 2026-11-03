@@ -15,6 +15,27 @@ import { createPublicQrRouter } from '../src/modules/qr/public-qr.routes.js';
 import { createGateRouter } from '../src/modules/gate/gate.routes.js';
 import { createVisitsRouter } from '../src/modules/visits/visits.routes.js';
 
+test('user deletion returns a friendly self-delete error for numeric and string actor IDs', async () => {
+  for (const userId of [7, '7']) {
+    let deleted = false;
+    const app = createRouteApp('/api/v1/users', createUsersRouter({
+      authService: {},
+      usersService: { async deleteUser() { deleted = true; } },
+      authenticate: (request, _response, next) => {
+        request.auth = { userId, role: 'ADMIN' };
+        next();
+      },
+    }));
+    const response = await request(app).delete('/api/v1/users/7');
+    assert.equal(response.status, 400);
+    assert.equal(response.body.error.code, 'SELF_DELETE_FORBIDDEN');
+    assert.equal(response.body.error.message, 'You cannot delete your own account');
+    assert.equal(deleted, false);
+    await request(app).delete('/api/v1/users/8').expect(204);
+    assert.equal(deleted, true);
+  }
+});
+
 test('user creation route requires an authorized role', async () => {
   let created = false;
   const app = createRouteApp(
