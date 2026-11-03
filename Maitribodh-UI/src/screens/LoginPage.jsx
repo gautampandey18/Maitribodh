@@ -3,7 +3,7 @@ import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useDispatch, useSelector } from 'react-redux';
-import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -16,7 +16,6 @@ import {
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
-import QrCode2OutlinedIcon from '@mui/icons-material/QrCode2Outlined';
 import { api } from '../api.js';
 import { sessionStarted } from '../store.js';
 import { canAccessPath, landingPath } from '../constants/navigation.js';
@@ -65,19 +64,23 @@ export default function LoginPage() {
     <Box className="login-page">
       <Box component="section" className="login-brand-panel">
         <Box className="login-brand-lockup">
-          <Box className="login-brand-dot" />
-          <Typography>MAITRIBODH ASHRAM · AMS</Typography>
+          <Box component="img" className="login-brand-logo" src="/maitriboddlogo.png" alt="Maitribodh logo" />
+          <Box>
+            <Typography className="login-brand-name">Maitribodh</Typography>
+            <Typography className="login-brand-tagline">ASHRAM OPERATIONS</Typography>
+          </Box>
         </Box>
         <Box className="login-brand-copy">
-          <Typography className="eyebrow">ACCESS OPERATIONS</Typography>
-          <Typography component="h1" className="login-brand-heading">One record per person. Every gate, every time.</Typography>
+          <Typography className="login-brand-eyebrow">PURPOSEFUL SERVICE, THOUGHTFULLY MANAGED</Typography>
+          <Typography component="h1" className="login-brand-heading">Welcome to Maitribodh Ashram</Typography>
           <Typography className="login-brand-description">
-            Register once as Staff, Visitor, Vendor, Contractor, Participant, or Parivar Member. Every future visit is just a scan away.
+            A secure and unified platform to manage ashram operations, visitors, and facility access.
           </Typography>
-        </Box>
-        <Box className="login-security">
-          <LockOutlinedIcon fontSize="small" />
-          <Typography>Secured connection · Sessions last up to 2 hours and sign out after 30 minutes of inactivity · Access is logged for compliance.</Typography>
+          <Typography className="login-brand-motto">
+            <span aria-hidden="true">✦</span>
+            Seva through clarity and care
+            <span aria-hidden="true">✦</span>
+          </Typography>
         </Box>
       </Box>
       <Box component="main" className="login-form-wrap">
@@ -128,9 +131,11 @@ export default function LoginPage() {
               {isSubmitting ? 'Signing in' : 'Sign in'}
             </Button>
           </Box>
+          {/* Temporarily hidden; restore when the public ID card flow is ready.
           <Button component={Link} to="/public-qr" variant="text" color="inherit" startIcon={<QrCode2OutlinedIcon />} fullWidth sx={{ mt: 1.5 }}>
             Retrieve your QR code
           </Button>
+          */}
           <Typography className="login-footer">Accounts are provisioned by an administrator.</Typography>
         </Box>
       </Box>

@@ -533,19 +533,21 @@ export default function GatePage() {
             const mobileToLookup = (mobileCountry !== 'IN' && e164) ? e164 : cleaned;
             lookup({ mobile: mobileToLookup });
           }}
+          className="gate-lookup-form"
           sx={{ mt: 3, display: 'flex', gap: 1.5, alignItems: 'flex-start' }}
         >
-          <Box sx={{ display: 'flex', gap: 1, flex: 1, maxWidth: 520 }}>
+          <Box className="gate-lookup-fields" sx={{ display: 'flex', gap: 1, flex: 1, minWidth: 0, maxWidth: 520 }}>
             <TextField
               select
               size="small"
+              className="gate-country-select"
               value={mobileCountry}
               onChange={(event) => {
                 setMobileCountry(event.target.value);
                 setMobileError('');
               }}
               sx={{
-                width: 130,
+                width: 104,
                 flexShrink: 0,
                 bgcolor: '#FFFFFF',
                 borderRadius: '8px',
@@ -564,7 +566,7 @@ export default function GatePage() {
               SelectProps={{
                 renderValue: (selected) => {
                   const item = phoneCountries.find((c) => c.country === selected);
-                  return item ? `${item.country} (${item.callingCode})` : selected;
+                  return item ? <><span className="gate-country-iso">{item.country} </span>{item.callingCode}</> : selected;
                 },
               }}
               inputProps={{ 'aria-label': 'Country code' }}
@@ -648,6 +650,7 @@ export default function GatePage() {
             variant="contained"
             disabled={busy || scanning || !online}
             aria-label="Find Person"
+            className="gate-find-button"
             sx={{
               bgcolor: '#9C4508',
               color: '#FFFFFF',
@@ -656,13 +659,14 @@ export default function GatePage() {
               fontWeight: 600,
               fontSize: '0.9rem',
               height: 40,
+              flexShrink: 0,
               px: 2.75,
               boxShadow: 'none',
               whiteSpace: 'nowrap',
               '&:hover': { bgcolor: '#873C07', boxShadow: 'none' },
             }}
           >
-            Find person
+            <span className="gate-find-label">Find person</span>
           </Button>
         </Box>
 

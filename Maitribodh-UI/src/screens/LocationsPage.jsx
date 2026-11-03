@@ -222,18 +222,18 @@ export default function LocationsPage() {
             <Table size="medium" aria-label="Active locations">
               <TableHead>
                 <TableRow>
-                  <TableCell align="center">Location</TableCell>
-                  <TableCell align="center">Type</TableCell>
-                  <TableCell align="center">Restricted area</TableCell>
+                  <TableCell>Location</TableCell>
+                  <TableCell>Type</TableCell>
+                  <TableCell>Restricted area</TableCell>
                   <TableCell align="right">Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {locations.map((location) => (
                   <TableRow key={location.location_id} hover>
-                    <TableCell align="center"><Typography fontWeight={600}>{location.name}</Typography></TableCell>
-                    <TableCell align="center">{location.location_type}</TableCell>
-                    <TableCell align="center">{location.is_restricted ? 'Yes' : 'No'}</TableCell>
+                    <TableCell><Typography fontWeight={600}>{location.name}</Typography></TableCell>
+                    <TableCell>{location.location_type}</TableCell>
+                    <TableCell>{location.is_restricted ? 'Yes' : 'No'}</TableCell>
                     <TableCell align="right">
                       <Tooltip title={`Edit ${location.name}`}>
                         <span>

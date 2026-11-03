@@ -111,7 +111,7 @@ it('downloads a PNG containing the complete identity card', async () => {
     }
   });
   const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function clickDownload() {
-    expect(this.download).toBe('Maitribodh-ID-Card-MB-000008.png');
+    expect(this.download).toBe('Asha-Patel-MB-000008.png');
   });
 
   await user.click(download);
