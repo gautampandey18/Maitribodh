@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Alert, Box, Button, Checkbox, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, MenuItem, Step, StepLabel, Stepper, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, Checkbox, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Step, StepLabel, Stepper, TextField, Typography } from '@mui/material';
 import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 import ArrowForwardOutlinedIcon from '@mui/icons-material/ArrowForwardOutlined';
 import CameraAltOutlinedIcon from '@mui/icons-material/CameraAltOutlined';
@@ -14,6 +14,7 @@ import SchoolOutlinedIcon from '@mui/icons-material/SchoolOutlined';
 import VolunteerActivismOutlinedIcon from '@mui/icons-material/VolunteerActivismOutlined';
 import { api } from '../api.js';
 import { requestMessage, useResource } from '../utils/resources.js';
+import SearchableSelect from '../components/SearchableSelect.jsx';
 import InternationalPhoneField from '../components/InternationalPhoneField.jsx';
 import { formatPhoneNumber, splitPhoneNumber, toE164Phone } from '../utils/phone.js';
 import { getRoles } from '../constants/roles.js';
@@ -516,37 +517,39 @@ export default function RegisterPage() {
           required={false}
           label="Alternate Mobile"
         />
-        <TextField
-          select
+        <SearchableSelect
           label="Gender"
           value={values.gender}
-          onChange={(event) => {
-            change('gender', event.target.value);
-            if (fieldErrors.gender) validateField('gender', event.target.value);
+          onChange={(value) => {
+            change('gender', value);
+            if (fieldErrors.gender) validateField('gender', value);
           }}
           onBlur={() => validateField('gender', values.gender)}
+          options={[
+            { value: 'MALE', label: 'MALE' },
+            { value: 'FEMALE', label: 'FEMALE' },
+            { value: 'OTHER', label: 'OTHER' },
+          ]}
           error={Boolean(fieldErrors.gender)}
           helperText={fieldErrors.gender}
           required
-        >
-          {['MALE', 'FEMALE', 'OTHER'].map((value) => <MenuItem key={value} value={value}>{value}</MenuItem>)}
-        </TextField>
-        <TextField
-          select
+        />
+        <SearchableSelect
           label="Resident Status"
           value={values.residentStatus}
-          onChange={(event) => {
-            change('residentStatus', event.target.value);
-            if (fieldErrors.residentStatus) validateField('residentStatus', event.target.value);
+          onChange={(value) => {
+            change('residentStatus', value);
+            if (fieldErrors.residentStatus) validateField('residentStatus', value);
           }}
           onBlur={() => validateField('residentStatus', values.residentStatus)}
+          options={[
+            { value: 'RESIDENT', label: 'Resident' },
+            { value: 'NON_RESIDENT', label: 'Non-Resident / International' },
+          ]}
           error={Boolean(fieldErrors.residentStatus)}
           helperText={fieldErrors.residentStatus}
           required
-        >
-          <MenuItem value="RESIDENT">Resident</MenuItem>
-          <MenuItem value="NON_RESIDENT">Non-Resident / International</MenuItem>
-        </TextField>
+        />
         {values.residentStatus === 'NON_RESIDENT' && (
           <TextField
             label="Passport Number"
@@ -588,7 +591,18 @@ export default function RegisterPage() {
           multiline
           inputProps={{ maxLength: 500 }}
         />
-        <TextField select label="ID Proof Type" value={values.idProofTypeId} onChange={(event) => change('idProofTypeId', event.target.value)}><MenuItem value="">None</MenuItem>{selectedOptions('ID_PROOF_TYPE').map((item) => <MenuItem key={item.id} value={item.id}>{item.name}</MenuItem>)}</TextField>
+        <SearchableSelect
+          label="ID Proof Type"
+          value={values.idProofTypeId}
+          onChange={(value) => change('idProofTypeId', value)}
+          options={[
+            { value: '', label: 'None' },
+            ...selectedOptions('ID_PROOF_TYPE').map((item) => ({
+              value: item.id,
+              label: item.name,
+            })),
+          ]}
+        />
         <TextField label="ID Proof Number" value={values.idProofNumber} onChange={(event) => change('idProofNumber', event.target.value)} inputProps={{ maxLength: 50 }} />
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
           <Typography component="label" htmlFor="registration-photo" sx={{ fontWeight: 600 }}>
@@ -637,23 +651,23 @@ export default function RegisterPage() {
           />
         </Box>
         {category?.form_type === 'VISITOR' && <>
-          <TextField
-            select
+          <SearchableSelect
             label="Is a driver available?"
             value={values.categoryDetails.driver_available ?? ''}
-            onChange={(event) => setValues((previous) => ({
+            onChange={(value) => setValues((previous) => ({
               ...previous,
               categoryDetails: {
                 ...previous.categoryDetails,
-                driver_available: event.target.value,
-                ...(event.target.value === 'YES' ? {} : { driver_name: '', driver_mobile: '' }),
+                driver_available: value,
+                ...(value === 'YES' ? {} : { driver_name: '', driver_mobile: '' }),
               },
             }))}
-          >
-            <MenuItem value="">Select (optional)</MenuItem>
-            <MenuItem value="YES">Yes</MenuItem>
-            <MenuItem value="NO">No</MenuItem>
-          </TextField>
+            options={[
+              { value: '', label: 'Select (optional)' },
+              { value: 'YES', label: 'Yes' },
+              { value: 'NO', label: 'No' },
+            ]}
+          />
           {values.categoryDetails.driver_available === 'YES' && <>
             <TextField
               label="Driver Name (optional)"
@@ -678,9 +692,45 @@ export default function RegisterPage() {
           </>}
         </>}
         {(schema.fields ?? []).map((field) => {
-          const onChange = (event) => setValues((previous) => ({ ...previous, categoryDetails: { ...previous.categoryDetails, [field.key]: event.target.value, ...(field.source === 'DEPARTMENT' ? { job_role_id: '' } : {}) } }));
-          return field.type === 'select' ? <TextField key={field.key} select label={field.label} required={field.required} value={values.categoryDetails[field.key] ?? ''} onChange={onChange}><MenuItem value="">Select</MenuItem>{field.source ? selectedOptions(field.source).map((option) => <MenuItem key={option.id} value={option.id}>{option.name}</MenuItem>) : (field.options ?? []).map((option) => <MenuItem key={option} value={option}>{option}</MenuItem>)}</TextField>
-            : <TextField key={field.key} label={field.label} type={field.type} required={field.required} value={values.categoryDetails[field.key] ?? ''} onChange={onChange} inputProps={{ maxLength: 500, ...(field.type === 'number' ? { min: 1, step: 1 } : {}), ...(category?.form_type === 'STAFF' && field.key === 'joining_date' && field.type === 'date' ? { min: new Date().toISOString().slice(0, 10) } : {}) }} InputLabelProps={field.type === 'date' ? { shrink: true } : undefined} />;
+          const onChange = (value) => setValues((previous) => ({ ...previous, categoryDetails: { ...previous.categoryDetails, [field.key]: value, ...(field.source === 'DEPARTMENT' ? { job_role_id: '' } : {}) } }));
+          if (field.type === 'select') {
+            const selectOptions = field.source
+              ? selectedOptions(field.source).map((option) => ({
+                  value: option.id,
+                  label: option.name,
+                }))
+              : (field.options ?? []).map((option) => ({
+                  value: option,
+                  label: option,
+                }));
+            return (
+              <SearchableSelect
+                key={field.key}
+                label={field.label}
+                required={field.required}
+                value={values.categoryDetails[field.key] ?? ''}
+                onChange={onChange}
+                options={[{ value: '', label: 'Select' }, ...selectOptions]}
+              />
+            );
+          }
+          return (
+            <TextField
+              key={field.key}
+              label={field.label}
+              type={field.type}
+              required={field.required}
+              value={values.categoryDetails[field.key] ?? ''}
+              onChange={(event) => onChange(event.target.value)}
+              inputProps={{
+                maxLength: 500,
+                ...(field.type === 'number' ? { min: 1, step: 1 } : {}),
+                ...(category?.form_type === 'STAFF' && field.key === 'joining_date' && field.type === 'date'
+                  ? { min: new Date().toISOString().slice(0, 10) } : {}),
+              }}
+              InputLabelProps={field.type === 'date' ? { shrink: true } : undefined}
+            />
+          );
         })}
         {category?.form_type === 'PARTICIPANT' && <FormControlLabel
           control={<Checkbox
@@ -734,7 +784,17 @@ export default function RegisterPage() {
         </Box>
       </Box>}
       {step === 2 && <Box className="form-grid">
-        <TextField label="Assigned Areas" select SelectProps={{ multiple: true }} value={values.locationIds} onChange={(event) => change('locationIds', event.target.value)}>{selectedOptions('AREA').map((item) => <MenuItem key={item.id} value={Number(item.id)}>{item.name}</MenuItem>)}</TextField>
+        <SearchableSelect
+          label="Assigned Areas"
+          value={values.locationIds}
+          onChange={(value) => change('locationIds', Array.isArray(value) ? value : [value])}
+          options={selectedOptions('AREA').map((item) => ({
+            value: Number(item.id),
+            label: item.name,
+          }))}
+          multiple
+          sx={{ gridColumn: '1 / -1' }}
+        />
         <TextField label="Remarks" multiline value={values.remarks} onChange={(event) => change('remarks', event.target.value)} inputProps={{ maxLength: 500 }} />
       </Box>}
       {step === 3 && <Box><Typography component="label" htmlFor="registration-documents">Documents</Typography><input id="registration-documents" type="file" multiple accept="application/pdf,image/jpeg,image/png" onChange={(event) => pickFiles(event.target.files, false)} />{documents.map((file) => <Typography key={file.name}>{file.name}</Typography>)}</Box>}
