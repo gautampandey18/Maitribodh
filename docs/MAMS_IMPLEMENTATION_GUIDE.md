@@ -32,7 +32,7 @@ The API client in `src/api.js`:
 
 Authentication state is held in Redux and persisted to tab-scoped `sessionStorage` ([store.js](../Maitribodh-UI/src/store.js)). Refresh restores the token, user, forced-password-change flag, original expiry, and last activity timestamp. Tokens are not stored in `localStorage`. Closing the tab ends its saved session.
 
-[SessionManager.jsx](../Maitribodh-UI/src/components/SessionManager.jsx) signs out after 30 minutes without pointer, keyboard, touch, or scrolling activity, or at the two-hour absolute limit, whichever comes first. Background polling does not extend the session. Focus, visibility, and page-resume events check elapsed wall time so suspended tabs cannot resume an expired session. Idle logout immediately clears local credentials and attempts server-side revocation through the existing logout endpoint; a network failure is logged and never prevents local logout. The API independently enforces the JWT expiry; idle timing is client-side. Refresh never extends a deadline.
+[SessionManager.jsx](../Maitribodh-UI/src/components/SessionManager.jsx) signs out after 30 minutes without pointer, keyboard, touch, or scrolling activity. Active sessions do not have an absolute lifetime. Background polling does not extend the session. Focus, visibility, and page-resume events check elapsed wall time so suspended tabs cannot resume an idle session. Idle logout immediately clears local credentials and attempts server-side revocation through the existing logout endpoint; a network failure is logged and never prevents local logout. Idle timing is client-side, and refresh preserves the original inactivity deadline.
 
 ### 2.2 API
 
@@ -346,7 +346,7 @@ The temporary credential can be used for only one successful login. If it has be
 
 - Wrong passwords are counted inside a 15-minute failure window. The fifth failed attempt locks the account for 15 minutes; a successful login clears the count/window/lock.
 - There is also an HTTP login rate limiter. Its time window and request limit are deployment settings (`LOGIN_RATE_LIMIT_WINDOW_MS`, `LOGIN_RATE_LIMIT_MAX`); configure them explicitly for the environment.
-- JWT lifetime is two hours for every role. The client also signs out after 30 minutes of inactivity, preserves deadlines across refresh, and shows the reason on the sign-in page.
+- JWTs have no absolute expiry; token-version revocation remains available through logout, password changes, and account changes. The client signs out after 30 minutes of inactivity, preserves the inactivity deadline across refresh, and shows the reason on the sign-in page.
 - Logout increments the account token version. Authentication resolves the account and checks current status/token version, so deactivated users and revoked tokens are not accepted.
 - Admins can list/search users with pagination and filters for role/status; set or clear the bulk-upload flag; and deactivate an active account. Deactivation and permission changes go through audited repository operations.
 

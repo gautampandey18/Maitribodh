@@ -78,10 +78,10 @@ const authService = createAuthService({
   repository: authRepository,
   comparePassword: bcrypt.compare,
   hashPassword: (password, rounds) => bcrypt.hash(password, rounds),
-  issueToken: (user, expiresIn) => jwt.sign(
+  issueToken: (user) => jwt.sign(
     { role: user.role, tokenVersion: user.token_version },
     authConfig.jwtSecret,
-    { subject: String(user.user_id), expiresIn, algorithm: 'HS256' },
+    { subject: String(user.user_id), algorithm: 'HS256' },
   ),
 });
 const authenticate = createAuthenticate({

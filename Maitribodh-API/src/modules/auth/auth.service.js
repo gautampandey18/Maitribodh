@@ -1,7 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { ApiError } from '../../errors/ApiError.js';
 import { getRoles } from '../../constants/roles.js';
-const SESSION_EXPIRY_SECONDS = 2 * 60 * 60;
 
 export function createAuthService({
   repository,
@@ -39,13 +38,11 @@ export function createAuthService({
         throw invalidCredentials();
       }
 
-      const expiresIn = SESSION_EXPIRY_SECONDS;
-      const accessToken = await issueToken(authenticatedUser, expiresIn);
+      const accessToken = await issueToken(authenticatedUser);
 
       return {
         accessToken,
         tokenType: 'Bearer',
-        expiresIn,
         user: {
           id: authenticatedUser.user_id,
           role: getRoles(authenticatedUser)[0],

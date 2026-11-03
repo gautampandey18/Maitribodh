@@ -3,39 +3,39 @@ import test from 'node:test';
 import { ROLES } from '../src/constants/roles.js';
 import { createAuthService } from '../src/modules/auth/auth.service.js';
 
-test('login issues a Security Guard token with a two-hour expiry', async () => {
+test('login issues a Security Guard token without an absolute expiry', async () => {
   const issued = [];
   const service = createAuthService({
     repository: createRepository({ role: ROLES.SECURITY_GUARD }),
     comparePassword: async () => true,
-    issueToken: async (user, expiresIn) => {
-      issued.push({ user, expiresIn });
+    issueToken: async (user, ...options) => {
+      issued.push({ user, options });
       return 'signed-token';
     },
   });
 
   const result = await service.login({ username: 'guard', password: 'valid-password' });
 
-  assert.equal(issued[0].expiresIn, 7200);
+  assert.deepEqual(issued[0].options, []);
   assert.equal(result.accessToken, 'signed-token');
-  assert.equal(result.expiresIn, 7200);
+  assert.equal(Object.hasOwn(result, 'expiresIn'), false);
 });
 
-test('login issues other roles tokens with a two-hour expiry', async () => {
+test('login issues other roles tokens without an absolute expiry', async () => {
   const issued = [];
   const service = createAuthService({
     repository: createRepository({ role: ROLES.ADMIN }),
     comparePassword: async () => true,
-    issueToken: async (_user, expiresIn) => {
-      issued.push(expiresIn);
+    issueToken: async (_user, ...options) => {
+      issued.push(options);
       return 'signed-token';
     },
   });
 
   const result = await service.login({ username: 'admin', password: 'valid-password' });
 
-  assert.equal(issued[0], 7200);
-  assert.equal(result.expiresIn, 7200);
+  assert.deepEqual(issued[0], []);
+  assert.equal(Object.hasOwn(result, 'expiresIn'), false);
 });
 
 test('login returns every assigned role and a deterministic representative role', async () => {
@@ -50,7 +50,7 @@ test('login returns every assigned role and a deterministic representative role'
   const session = await service.login({ username: 'approver.guard', password: 'valid-password' });
   assert.deepEqual(session.user.roles, [ROLES.APPROVER, ROLES.SECURITY_GUARD]);
   assert.equal(session.user.role, ROLES.APPROVER);
-  assert.equal(session.expiresIn, 7200);
+  assert.equal(Object.hasOwn(session, 'expiresIn'), false);
 });
 
 test('first login consumes a valid temporary password and requires password change', async () => {

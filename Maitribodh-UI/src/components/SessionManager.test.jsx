@@ -3,14 +3,13 @@ import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { api } from '../api.js';
 import {
-  createAppStore, passwordChanged, SESSION_IDLE_MS, SESSION_MAX_AGE_MS,
-  SESSION_STORAGE_KEY, sessionEnded, sessionStarted,
+  createAppStore, passwordChanged, SESSION_IDLE_MS,
+  SESSION_STORAGE_KEY, sessionActivity, sessionEnded, sessionStarted,
 } from '../store.js';
 import SessionManager from './SessionManager.jsx';
 
 const login = {
   accessToken: 'session-token',
-  expiresIn: 7200,
   user: { id: 4, role: 'ADMIN' },
   mustChangePassword: true,
 };
@@ -68,31 +67,29 @@ it('logs out at exactly 30 minutes idle and revokes the captured token', () => {
 });
 
 it.each(['pointerdown', 'pointermove', 'keydown', 'scroll', 'touchstart'])(
-  '%s extends inactivity but not the absolute session deadline',
+  '%s extends the inactivity deadline',
   (event) => {
     const store = startSession();
-    const expiresAt = store.getState().auth.expiresAt;
     act(() => vi.advanceTimersByTime(20 * 60 * 1000));
     fireEvent(window, new Event(event));
     act(() => vi.advanceTimersByTime(20 * 60 * 1000));
     expect(store.getState().auth.accessToken).toBe('session-token');
-    expect(store.getState().auth.expiresAt).toBe(expiresAt);
     act(() => vi.advanceTimersByTime(10 * 60 * 1000));
     expect(store.getState().auth.logoutReason).toBe('inactive');
   },
 );
 
-it('ends an actively used session at exactly two hours', () => {
+it('keeps an active session beyond two hours and ends it after 30 minutes idle', () => {
   const store = startSession();
-  for (let i = 0; i < 5; i += 1) {
+  for (let i = 0; i < 8; i += 1) {
     act(() => vi.advanceTimersByTime(20 * 60 * 1000));
     fireEvent.keyDown(window, { key: 'a' });
   }
-  act(() => vi.advanceTimersByTime(20 * 60 * 1000 - 1));
   expect(store.getState().auth.accessToken).toBe('session-token');
-  act(() => vi.advanceTimersByTime(1));
-  expect(store.getState().auth.logoutReason).toBe('expired');
-  expect(api.post).not.toHaveBeenCalled();
+  expect(Date.now() - store.getState().auth.lastActivityAt).toBe(0);
+  act(() => vi.advanceTimersByTime(SESSION_IDLE_MS));
+  expect(store.getState().auth.logoutReason).toBe('inactive');
+  expect(api.post).toHaveBeenCalledTimes(1);
 });
 
 it('refresh after the idle deadline does not restore an expired session', () => {
@@ -105,11 +102,15 @@ it('refresh after the idle deadline does not restore an expired session', () => 
   expect(sessionStorage.getItem(SESSION_STORAGE_KEY)).toBeNull();
 });
 
-it('refresh after the absolute deadline does not restore an expired session', () => {
+it('refresh after two hours does not end a recently active session', () => {
   const store = createAppStore();
   store.dispatch(sessionStarted(login));
-  vi.setSystemTime(Date.now() + SESSION_MAX_AGE_MS);
-  expect(createAppStore().getState().auth.logoutReason).toBe('expired');
+  for (let i = 0; i < 6; i += 1) {
+    vi.setSystemTime(Date.now() + 20 * 60 * 1000);
+    store.dispatch(sessionActivity(Date.now()));
+  }
+  vi.setSystemTime(Date.now() + SESSION_IDLE_MS - 1);
+  expect(createAppStore().getState().auth.accessToken).toBe('session-token');
 });
 
 it.each(['focus', 'pageshow', 'visibilitychange', 'keydown'])(

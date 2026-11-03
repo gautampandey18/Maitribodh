@@ -10,7 +10,7 @@ afterEach(() => {
 });
 
 it('attaches the persisted session token to requests', async () => {
-  store.dispatch(sessionStarted({ accessToken: 'active-token', user: { id: 1, role: 'ADMIN' }, expiresIn: 7200 }));
+  store.dispatch(sessionStarted({ accessToken: 'active-token', user: { id: 1, role: 'ADMIN' } }));
   const adapter = vi.fn(async (config) => ({ data: {}, status: 200, headers: {}, config }));
   await api.get('/dashboard', { adapter });
   expect(adapter.mock.calls[0][0].headers.Authorization).toBe('Bearer active-token');
@@ -18,7 +18,7 @@ it('attaches the persisted session token to requests', async () => {
 
 it('ends idle sessions before sending another protected request', async () => {
   vi.useFakeTimers();
-  store.dispatch(sessionStarted({ accessToken: 'idle-token', user: { id: 1, role: 'ADMIN' }, expiresIn: 7200 }));
+  store.dispatch(sessionStarted({ accessToken: 'idle-token', user: { id: 1, role: 'ADMIN' } }));
   vi.setSystemTime(Date.now() + SESSION_IDLE_MS);
   const adapter = vi.fn();
   await expect(api.get('/dashboard', { adapter })).rejects.toThrow('Session ended');
