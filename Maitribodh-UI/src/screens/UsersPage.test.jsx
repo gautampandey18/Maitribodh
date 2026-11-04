@@ -74,6 +74,26 @@ it('shows all assigned roles in the user list', async () => {
   render(<Provider store={store}><MemoryRouter><UsersPage /></MemoryRouter></Provider>);
   expect(await screen.findByRole('cell', { name: 'APPROVER, SECURITY GUARD' })).toBeInTheDocument();
 });
+
+it('shows active and inactive users with the person status colors', async () => {
+  vi.spyOn(api, 'get').mockResolvedValue({ data: { items: [
+    {
+      user_id: 25, first_name: 'Asha', last_name: 'Patel', username: 'asha.active',
+      mobile: '9876543210', role: 'APPROVER', status: 'ACTIVE',
+    },
+    {
+      user_id: 26, first_name: 'Ravi', last_name: 'Shah', username: 'ravi.inactive',
+      mobile: '9876543211', role: 'APPROVER', status: 'INACTIVE',
+    },
+  ], total: 2 } });
+  render(<Provider store={store}><MemoryRouter><UsersPage /></MemoryRouter></Provider>);
+
+  const activeChip = (await screen.findByText('ACTIVE')).closest('.MuiChip-root');
+  const inactiveChip = screen.getByText('Inactive').closest('.MuiChip-root');
+  expect(activeChip).toHaveStyle({ backgroundColor: 'rgb(230, 244, 234)', color: 'rgb(46, 125, 50)' });
+  expect(inactiveChip).toHaveStyle({ backgroundColor: 'rgb(253, 236, 234)', color: 'rgb(198, 40, 40)' });
+});
+
 it('creates an account, issues its initial credential, and reveals it once', async () => {
   vi.spyOn(api, 'get').mockResolvedValue({ data: { items: [] } });
   const post = vi.spyOn(api, 'post')

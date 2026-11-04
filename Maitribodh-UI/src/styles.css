@@ -1776,6 +1776,7 @@ body.notifications-panel-open .top-bar .top-toolbar>.MuiIconButton-root {
   font-weight: 700;
   line-height: 1;
   color: var(--th-text);
+  padding: 2px;
   margin: 0 0 7px;
 }
 
@@ -3168,19 +3169,9 @@ body.notifications-panel-open .top-bar .top-toolbar>.MuiIconButton-root {
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  background: #3B3027;
-}
-
-.login-page::before {
-  content: "";
-  position: absolute;
-  inset: -12px;
-  z-index: -1;
-  pointer-events: none;
   background:
     linear-gradient(rgba(20, 15, 10, .28), rgba(20, 15, 10, .28)),
-    url('/image-background.jfif') center / cover no-repeat #3B3027;
-  filter: blur(6px);
+    url('/backgroud-image.jpg') center / cover no-repeat #3B3027;
 }
 
 .login-form-wrap {
@@ -3189,6 +3180,8 @@ body.notifications-panel-open .top-bar .top-toolbar>.MuiIconButton-root {
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+  z-index: 1;
   background: var(--th-canvas);
 }
 
@@ -3226,6 +3219,16 @@ body.notifications-panel-open .top-bar .top-toolbar>.MuiIconButton-root {
   justify-content: space-between;
   padding-left: 18px;
   padding-right: 14px;
+}
+
+.login-form .MuiButton-root.MuiButton-contained {
+  color: #FFFFFF;
+  background-color: var(--th-head-text);
+}
+
+.login-form .MuiButton-root.MuiButton-contained:hover {
+  color: #FFFFFF;
+  background-color: #71340A;
 }
 
 .login-alert {
@@ -5869,7 +5872,6 @@ body.notifications-panel-open .app-navigation-drawer .MuiDrawer-paper::after {
   min-height: 100vh;
   display: grid;
   grid-template-columns: minmax(0, 1.3fr) minmax(380px, 1fr);
-  background: var(--th-surface);
 }
 
 .login-brand-panel {
@@ -5880,6 +5882,7 @@ body.notifications-panel-open .app-navigation-drawer .MuiDrawer-paper::after {
   position: relative;
   isolation: isolate;
   overflow: hidden;
+  z-index: 1;
   color: #FFFFFF;
   background: transparent;
 }
@@ -6049,7 +6052,6 @@ body.notifications-panel-open .app-navigation-drawer .MuiDrawer-paper::after {
     position: relative;
     isolation: isolate;
     overflow: hidden;
-    background: #3B3027;
   }
 
   .login-brand-panel {
@@ -6324,6 +6326,22 @@ body.notifications-panel-open .app-navigation-drawer .MuiDrawer-paper::after {
 .page-container .MuiTableContainer-root {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+}
+
+.report-panel .MuiTableContainer-root {
+  max-width: 100%;
+}
+
+.report-panel .MuiTable-root {
+  width: 100%;
+  min-width: 100%;
+  table-layout: auto;
+}
+
+.report-panel .MuiTableCell-root {
+  white-space: nowrap;
+  word-break: normal;
+  overflow-wrap: normal;
 }
 
 .page-container .MuiTable-root:not(.qr-identity-table) {

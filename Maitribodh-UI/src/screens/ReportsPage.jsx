@@ -570,6 +570,9 @@ function renderCellContent(column, value) {
 
 function formatCell(value) {
   if (value === null || value === undefined || value === '') return '—';
-  if (value instanceof Date) return value.toLocaleString();
-  return String(value);
+  const timestamp = value instanceof Date ? value.toISOString() : String(value);
+  const match = timestamp.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+  if (!match) return timestamp;
+  const [, year, month, day, hour, minute, second] = match;
+  return `${day}-${month}-${year}/${hour}:${minute}:${second}`;
 }

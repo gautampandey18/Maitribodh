@@ -14,6 +14,7 @@ import {
   Box,
   Button,
   Checkbox,
+  Chip,
   CircularProgress,
   Dialog,
   DialogActions,
@@ -463,7 +464,13 @@ export default function UsersPage() {
                       <Typography variant="caption" color="text.secondary">{user.username} · {user.mobile}</Typography>
                     </TableCell>
                     <TableCell>{getRoles(user).map((role) => role.replaceAll('_', ' ')).join(', ')}</TableCell>
-                    <TableCell>{user.status}</TableCell>
+                    <TableCell>
+                      <Chip
+                        size="small"
+                        label={user.status === 'INACTIVE' ? 'Inactive' : user.status}
+                        sx={userStatusColor(user.status)}
+                      />
+                    </TableCell>
                     <TableCell>{user.can_bulk_upload ? 'Enabled' : 'Disabled'}</TableCell>
                     <TableCell align="right" className="user-actions">
                       <Tooltip title="Issue temporary password">
@@ -704,6 +711,12 @@ export default function UsersPage() {
       <Snackbar open={Boolean(notice)} autoHideDuration={3000} onClose={() => setNotice('')} message={notice} />
     </Box>
   );
+}
+
+function userStatusColor(status) {
+  return status === 'ACTIVE'
+    ? { background: '#E6F4EA', color: '#2E7D32', fontWeight: 600 }
+    : { background: '#FDECEA', color: '#C62828', fontWeight: 600 };
 }
 
 function formatDate(value) {

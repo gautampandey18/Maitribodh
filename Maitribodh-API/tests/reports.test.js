@@ -227,7 +227,12 @@ test('report routes load without date filters, validate supplied ranges, and exp
         visitFilters = input;
         return input.pagination
           ? { items: [{ name: 'Asha Patel', mobile: '******3210' }], total: 31, page: input.pagination.page, pageSize: input.pagination.pageSize }
-          : [{ name: '=HYPERLINK("https://example.invalid")', mobile: '******3210' }];
+          : [{
+            checkin_at: new Date('2026-11-04T11:30:00.000Z'),
+            checkout_at: new Date('2026-11-04T12:15:00.000Z'),
+            name: '=HYPERLINK("https://example.invalid")',
+            mobile: '******3210',
+          }];
       },
       async recordVisitHistoryExport(input) { visitFilters.exportAudit = input; },
     },
@@ -294,8 +299,10 @@ test('report routes load without date filters, validate supplied ranges, and exp
   assert.equal(visitFilters.exportAudit.rowCount, 1);
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(response.body);
-  assert.equal(workbook.worksheets[0].getCell('A1').value, 'Name');
-  assert.equal(workbook.worksheets[0].getCell('A2').value, '=HYPERLINK("https://example.invalid")');
+  const worksheet = workbook.worksheets[0];
+  assert.equal(worksheet.getCell('A1').value, 'Check-In At');
+  const nameColumn = worksheet.getRow(1).values.indexOf('Name');
+  assert.equal(worksheet.getRow(2).getCell(nameColumn).value, '=HYPERLINK("https://example.invalid")');
 });
 
 test('every report has an unpaginated Excel export endpoint', async () => {
@@ -309,6 +316,23 @@ test('every report has an unpaginated Excel export endpoint', async () => {
     ['blacklist', 'blacklist'],
   ].map(([method, report]) => [method, async (input) => {
     calls.push({ report, input });
+    if (report === 'visit-history') {
+      return [{
+        report,
+        checkin_at: new Date('2026-11-04T11:30:00.000Z'),
+        checkout_at: new Date('2026-11-04T12:15:00.000Z'),
+      }, {
+        report,
+        checkin_at: new Date('2026-11-04T13:00:00.000Z'),
+        checkout_at: null,
+      }];
+    }
+    if (report === 'registrations') {
+      return [
+        { report, approval_required: true },
+        { report, approval_required: false },
+      ];
+    }
     return [{ report }];
   }]));
   reportsService.recordVisitHistoryExport = async () => {};
@@ -337,7 +361,27 @@ test('every report has an unpaginated Excel export endpoint', async () => {
     assert.match(response.headers['content-disposition'], new RegExp(`${report}\\.xlsx`));
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(response.body);
-    assert.equal(workbook.worksheets[0].getRow(2).getCell(1).value, report);
+    if (report === 'visit-history') {
+      const worksheet = workbook.worksheets[0];
+      assert.deepEqual(worksheet.getRow(1).values.slice(1, 5), [
+        'Check-In At', 'Check-In Time', 'Check-Out At', 'Check-Out Time',
+      ]);
+      assert.deepEqual(worksheet.getRow(2).values.slice(1, 5), [
+        '2026-11-04', '17:00:00', '2026-11-04', '17:45:00',
+      ]);
+      assert.deepEqual(
+        Array.from(worksheet.getRow(3).values.slice(1, 5), (value) => value ?? null),
+        ['2026-11-04', '18:30:00', null, null],
+      );
+    } else {
+      assert.equal(workbook.worksheets[0].getRow(2).getCell(1).value, report);
+    }
+    if (report === 'registrations') {
+      const worksheet = workbook.worksheets[0];
+      assert.equal(worksheet.getRow(1).getCell(2).value, 'Approval Required');
+      assert.equal(worksheet.getRow(2).getCell(2).value, 'Yes');
+      assert.equal(worksheet.getRow(3).getCell(2).value, 'No');
+    }
     assert.deepEqual(calls.at(-1).input, expectedInput);
   }
   assert.deepEqual(calls.map(({ report }) => report), ['visit-history', 'registrations', 'occupancy', 'staff', 'approvals', 'blacklist']);

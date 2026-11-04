@@ -101,12 +101,30 @@ export function createReportsRouter({ reportsService, authenticate }) {
       workbook.created = new Date();
       const worksheet = workbook.addWorksheet(reportKey.slice(0, 31));
       const columns = rows.length ? Object.keys(rows[0]) : [];
+      if (reportKey === 'visit-history' && rows.length) {
+        const remainingColumns = columns.filter((key) => key !== 'checkin_at' && key !== 'checkout_at');
+        columns.splice(0, columns.length, 'checkin_at', 'checkin_time', 'checkout_at', 'checkout_time', ...remainingColumns);
+      }
       worksheet.columns = columns.map((key) => ({
         header: columnLabel(key),
         key,
         width: Math.min(Math.max(columnLabel(key).length + 2, 14), 32),
       }));
-      for (const row of rows) worksheet.addRow(row);
+      for (const row of rows) {
+        const exportRow = { ...row };
+        if (reportKey === 'registrations' && typeof row.approval_required === 'boolean') {
+          exportRow.approval_required = row.approval_required ? 'Yes' : 'No';
+        }
+        if (reportKey === 'visit-history') {
+          const checkin = formatIstDateTime(row.checkin_at);
+          const checkout = formatIstDateTime(row.checkout_at);
+          exportRow.checkin_at = checkin.date;
+          exportRow.checkin_time = checkin.time;
+          exportRow.checkout_at = checkout.date;
+          exportRow.checkout_time = checkout.time;
+        }
+        worksheet.addRow(exportRow);
+      }
       worksheet.getRow(1).font = { bold: true };
       worksheet.views = [{ state: 'frozen', ySplit: 1 }];
       const buffer = await workbook.xlsx.writeBuffer();
@@ -206,7 +224,34 @@ function optionalStatus(value) {
 }
 
 function columnLabel(value) {
+  const labels = {
+    checkin_at: 'Check-In At',
+    checkin_time: 'Check-In Time',
+    checkout_at: 'Check-Out At',
+    checkout_time: 'Check-Out Time',
+  };
+  if (labels[value]) return labels[value];
   return value.replaceAll('_', ' ').replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function formatIstDateTime(value) {
+  if (value === null || value === undefined) return { date: null, time: null };
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return { date: String(value), time: null };
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date).map(({ type, value: part }) => [type, part]));
+  return {
+    date: `${parts.year}-${parts.month}-${parts.day}`,
+    time: `${parts.hour}:${parts.minute}:${parts.second}`,
+  };
 }
 
 function actorFromRequest(request) {

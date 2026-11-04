@@ -89,6 +89,7 @@ it('runs the registration report with the selected status and renders returned r
 
   expect(await screen.findByText('Asha Patel')).toBeInTheDocument();
   expect(screen.getByText('******3210')).toBeInTheDocument();
+  expect(screen.getByText('09-10-2026/08:00:00')).toBeInTheDocument();
   await waitFor(() => expect(get).toHaveBeenCalledWith('/reports/registrations', { params: { status: 'ACTIVE', page: 1, pageSize: 5 } }));
 }, 30_000);
 
@@ -149,7 +150,18 @@ it('uses the selected date range for Visit History and exports Excel', async () 
     if (path === '/reports/analytics') return Promise.resolve({ data: REPORT_TABS_CONFIG.visits });
     return Promise.resolve({
       data: {
-        items: [{ person_code: 'MB-000007', name: 'Asha Patel', mobile: '******3210', category: 'Staff', checkin_location: 'Main Gate', checkin_location_id: 3, checkout_location: 'Main Gate', checkout_location_id: 3 }],
+        items: [{
+          person_code: 'MB-000007',
+          name: 'Asha Patel',
+          mobile: '******3210',
+          category: 'Staff',
+          checkin_at: '2026-11-04T07:15:43.794Z',
+          checkout_at: '2026-11-04T08:20:10.123Z',
+          checkin_location: 'Main Gate',
+          checkin_location_id: 3,
+          checkout_location: 'Main Gate',
+          checkout_location_id: 3,
+        }],
         total: 1,
         page: 1,
         pageSize: 5,
@@ -163,6 +175,8 @@ it('uses the selected date range for Visit History and exports Excel', async () 
 
   render(<MemoryRouter><ReportsPage /></MemoryRouter>);
   expect(await screen.findByText('Asha Patel')).toBeInTheDocument();
+  expect(screen.getByText('04-11-2026/07:15:43')).toBeInTheDocument();
+  expect(screen.getByText('04-11-2026/08:20:10')).toBeInTheDocument();
   expect(screen.queryByLabelText('Location ID')).not.toBeInTheDocument();
   expect(screen.getAllByText('Main Gate')).toHaveLength(2);
   expect(screen.queryByRole('columnheader', { name: 'Checkin Location Id' })).not.toBeInTheDocument();
