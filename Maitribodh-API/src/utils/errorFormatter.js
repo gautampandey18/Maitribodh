@@ -6,7 +6,6 @@ const FIELD_LABELS = {
   email: 'Email address',
   username: 'Username',
   role: 'User role',
-  isSecurityHead: 'Security Head status',
   canBulkUpload: 'Bulk upload permission',
   currentPassword: 'Current password',
   newPassword: 'New password',

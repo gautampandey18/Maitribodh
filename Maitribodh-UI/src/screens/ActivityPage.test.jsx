@@ -55,6 +55,7 @@ it('summarizes audit values without making table rows interactive', async () => 
 
   render(<ActivityPage />);
 
+  expect(screen.getByText('Review system activity, filter audit records, and export them for compliance.')).toBeInTheDocument();
   const summaryText = (expected) => (_, element) => element?.tagName === 'DIV'
     && element.children.length === 1
     && element.firstElementChild.tagName === 'STRONG'

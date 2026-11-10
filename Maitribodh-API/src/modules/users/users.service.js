@@ -40,6 +40,9 @@ export function createUsersService({ repository }) {
     },
 
     async updateUser({ targetUserId, input, actor }) {
+      if (input.deactivate === true && Number(targetUserId) === Number(actor.userId)) {
+        throw new ApiError(400, 'SELF_DEACTIVATE_FORBIDDEN', 'You cannot deactivate your own account');
+      }
       if (hasRole(input, ROLES.SUPER_ADMIN) && !hasRole(actor, ROLES.SUPER_ADMIN)) {
         throw new ApiError(403, 'FORBIDDEN', 'Only a Super Admin can assign the Super Admin role');
       }

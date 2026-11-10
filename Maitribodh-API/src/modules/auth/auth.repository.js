@@ -112,7 +112,7 @@ export function createAuthRepository(pool) {
               must_change_password = false
               OR (temporary_password_expires_at > $2 AND temporary_password_used_at IS NULL)
             )
-        RETURNING user_id, role, roles, token_version, must_change_password`,
+        RETURNING user_id, username, role, roles, token_version, must_change_password`,
         [userId, loggedInAt],
       );
       return result.rows[0] ?? null;

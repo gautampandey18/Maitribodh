@@ -25,7 +25,6 @@ const createUserSchema = z.object({
   username: z.string().trim().min(1).max(50),
   role: z.enum(Object.values(ROLES)).optional(),
   roles: assignedRoles.optional(),
-  isSecurityHead: z.boolean().optional().default(false),
   canBulkUpload: z.boolean().optional().default(false),
 }).refine((input) => Boolean(input.role) !== Boolean(input.roles), 'Supply either role or roles');
 const updateUserSchema = z.object({
@@ -36,7 +35,6 @@ const updateUserSchema = z.object({
   username: z.string().trim().min(1).max(50).optional(),
   role: z.enum(Object.values(ROLES)).optional(),
   roles: assignedRoles.optional(),
-  isSecurityHead: z.boolean().optional(),
   deactivate: z.literal(true).optional(),
   activate: z.literal(true).optional(),
   canBulkUpload: z.boolean().optional(),

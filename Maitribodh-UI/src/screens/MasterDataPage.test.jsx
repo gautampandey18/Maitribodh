@@ -60,6 +60,7 @@ it('opens category management from the Master Data Categories tab', async () => 
   }));
   render(<MemoryRouter><MasterDataPage /></MemoryRouter>);
 
+  expect(screen.getByText('Manage the categories, locations, and reference values used across the system.')).toBeInTheDocument();
   expect(await screen.findByRole('table', { name: 'Registration categories' })).toBeInTheDocument();
   expect(screen.queryByRole('heading', { name: 'Categories', exact: true })).not.toBeInTheDocument();
   expect(await screen.findByText('Visitor')).toBeInTheDocument();
