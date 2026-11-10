@@ -16,7 +16,7 @@ it.each(['Add user', 'Update user'])('keeps both name inputs in one row in the %
   const record = {
     user_id: 25, first_name: 'Asha', last_name: 'Patel', mobile: '9876543210',
     username: 'asha.patel', role: 'APPROVER', status: 'ACTIVE',
-    is_security_head: false, can_bulk_upload: false,
+    can_bulk_upload: false,
   };
   vi.spyOn(api, 'get').mockResolvedValue({ data: { items: [record], total: 1 } });
   const user = userEvent.setup();
@@ -29,6 +29,7 @@ it.each(['Add user', 'Update user'])('keeps both name inputs in one row in the %
     await user.click(screen.getByRole('menuitem', { name: 'Update' }));
   }
   const dialog = within(screen.getByRole('dialog', { name: dialogTitle }));
+  expect(dialog.queryByRole('checkbox', { name: 'Security head' })).not.toBeInTheDocument();
   const firstField = dialog.getByRole('textbox', { name: /First name/ }).closest('.MuiFormControl-root');
   const lastField = dialog.getByRole('textbox', { name: /Last name/ }).closest('.MuiFormControl-root');
   expect(firstField.parentElement).toBe(lastField.parentElement);
@@ -41,7 +42,7 @@ it('adds Security Guard to an existing Approver while retaining both role select
   const record = {
     user_id: 25, first_name: 'Asha', last_name: 'Patel', mobile: '9876543210',
     username: 'asha.patel', role: 'APPROVER', roles: ['APPROVER'],
-    is_security_head: false, can_bulk_upload: false, status: 'ACTIVE',
+    can_bulk_upload: false, status: 'ACTIVE',
   };
   vi.spyOn(api, 'get').mockResolvedValue({ data: { items: [record], total: 1 } });
   const patch = vi.spyOn(api, 'patch').mockResolvedValue({
@@ -120,7 +121,6 @@ it('creates an account, issues its initial credential, and reveals it once', asy
   expect(screen.getByRole('option', { name: 'ADMIN' })).toBeInTheDocument();
   expect(screen.queryByRole('option', { name: 'SUPER ADMIN' })).not.toBeInTheDocument();
   expect(screen.getByRole('option', { name: 'VIEWER' })).toHaveAttribute('aria-selected', 'true');
-  expect(screen.queryByRole('checkbox', { name: 'Security head' })).not.toBeInTheDocument();
   await user.click(screen.getByRole('option', { name: 'VIEWER' }));
   await user.click(screen.getByRole('option', { name: 'ADMIN' }));
   await user.keyboard('{Escape}');
@@ -139,7 +139,6 @@ it('creates an account, issues its initial credential, and reveals it once', asy
     email: '',
     username: 'asha.patel',
     roles: ['ADMIN'],
-    isSecurityHead: false,
     canBulkUpload: false,
   }));
   expect(post).toHaveBeenNthCalledWith(2, '/users/25/password-reset');

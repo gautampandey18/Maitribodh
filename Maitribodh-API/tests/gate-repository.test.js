@@ -76,3 +76,24 @@ test('gate lookup audit stores matched and blocked person ids for report filteri
     blocked_person_ids: [11],
   });
 });
+
+test('blacklist alerts are sent to active Admin and Super Admin users', async () => {
+  const queries = [];
+  const repository = createGateRepository({
+    async query(sql) {
+      queries.push(sql);
+      return { rowCount: 1 };
+    },
+  });
+
+  await repository.recordLookup({
+    actorUserId: 8,
+    actorRole: 'SECURITY_GUARD',
+    resultCount: 1,
+    outcomes: ['BLOCKED_BLACKLIST'],
+  });
+
+  assert.equal(queries.length, 2);
+  assert.match(queries[1], /roles && ARRAY\['ADMIN', 'SUPER_ADMIN'\]::varchar\[\]/);
+  assert.doesNotMatch(queries[1], /is_security_head/);
+});

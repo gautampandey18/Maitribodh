@@ -16,7 +16,8 @@ test('user list and detail projections exclude credential/token fields', async (
 
   assert.equal(queries.length, 2);
   for (const query of queries) {
-    assert.match(query.sql, /is_security_head, can_bulk_upload, status/);
+    assert.match(query.sql, /can_bulk_upload, status/);
+    assert.doesNotMatch(query.sql, /is_security_head/);
     assert.doesNotMatch(query.sql, /password_hash|token_version|failed_login_count/);
   }
   assert.deepEqual(queries[1].values, [15]);
@@ -56,7 +57,6 @@ test('user creation inserts no password and commits together with its audit reco
     email: null,
     username: 'new.user',
     role: 'APPROVER',
-    isSecurityHead: false,
     canBulkUpload: false,
     createdBy: 3,
     actorRole: 'ADMIN',
@@ -67,6 +67,7 @@ test('user creation inserts no password and commits together with its audit reco
   assert.equal(calls[0].sql, 'BEGIN');
   assert.match(calls[1].sql, /pg_advisory_xact_lock/);
   assert.match(calls[2].sql, /INSERT INTO mams\.app_user/);
+  assert.doesNotMatch(calls[2].sql, /is_security_head/);
   assert.doesNotMatch(calls[2].sql, /password_hash/);
   assert.match(calls[3].sql, /INSERT INTO mams\.audit_log/);
   assert.equal(calls[3].values[5].length, 100);
@@ -101,7 +102,6 @@ test('user creation rolls back if audit insertion fails', async () => {
     email: null,
     username: 'new.user',
     role: 'APPROVER',
-    isSecurityHead: false,
     canBulkUpload: false,
     createdBy: 3,
     actorRole: 'ADMIN',
@@ -132,9 +132,10 @@ test('user role updates persist every role, invalidate changed sessions, and aud
   });
   assert.deepEqual(result.roles, roles);
   const update = calls.find(({ sql }) => sql.includes('UPDATE mams.app_user'));
-  assert.deepEqual(update.values[11], roles);
-  assert.match(update.sql, /roles = COALESCE\(\$12::varchar\[\], roles\)/);
-  assert.match(update.sql, /roles IS DISTINCT FROM \$12::varchar\[\]/);
+  assert.deepEqual(update.values[10], roles);
+  assert.match(update.sql, /roles = COALESCE\(\$11::varchar\[\], roles\)/);
+  assert.match(update.sql, /roles IS DISTINCT FROM \$11::varchar\[\]/);
+  assert.doesNotMatch(update.sql, /is_security_head/);
   assert.match(update.sql, /THEN token_version \+ 1/);
   const audit = calls.find(({ sql }) => sql.includes('INSERT INTO mams.audit_log'));
   assert.deepEqual(JSON.parse(audit.values[3]).roles, roles);
@@ -187,7 +188,7 @@ test('deactivation increments token_version and bulk permission is audited in on
 
   assert.equal(calls[0].sql, 'BEGIN');
   assert.match(calls[1].sql, /pg_advisory_xact_lock/);
-  assert.match(calls[2].sql, /token_version = CASE WHEN \$2::boolean OR \$11::boolean OR/);
+  assert.match(calls[2].sql, /token_version = CASE WHEN \$2::boolean OR \$10::boolean OR/);
   assert.match(calls[2].sql, /THEN token_version \+ 1/);
   assert.equal(calls[2].values[1], true);
   assert.equal(calls[2].values[2], false);
@@ -223,9 +224,9 @@ test('activation restores an inactive account and revokes prior sessions transac
 
   assert.equal(user.status, 'ACTIVE');
   assert.equal(calls[2].values[1], false);
-  assert.equal(calls[2].values[10], true);
-  assert.match(calls[2].sql, /status = CASE WHEN \$2::boolean THEN 'INACTIVE' WHEN \$11::boolean THEN 'ACTIVE'/);
-  assert.match(calls[2].sql, /token_version = CASE WHEN \$2::boolean OR \$11::boolean OR/);
+  assert.equal(calls[2].values[9], true);
+  assert.match(calls[2].sql, /status = CASE WHEN \$2::boolean THEN 'INACTIVE' WHEN \$10::boolean THEN 'ACTIVE'/);
+  assert.match(calls[2].sql, /token_version = CASE WHEN \$2::boolean OR \$10::boolean OR/);
   assert.match(calls[2].sql, /THEN token_version \+ 1/);
   assert.match(calls[3].sql, /INSERT INTO mams\.audit_log/);
   assert.equal(JSON.parse(calls[3].values[3]).status, 'ACTIVE');
@@ -237,6 +238,9 @@ test('deleteUser decouples operational records and deletes user without cascadin
   const client = {
     async query(sql, values = []) {
       calls.push({ sql, values });
+      if (sql.includes('SELECT roles FROM mams.app_user')) {
+        return { rows: [{ roles: ['ADMIN'] }] };
+      }
       if (sql.includes('DELETE FROM mams.app_user')) {
         return { rows: [{ user_id: 25, username: 'admin.x' }], rowCount: 1 };
       }
@@ -259,6 +263,7 @@ test('deleteUser decouples operational records and deletes user without cascadin
   assert.deepEqual(deleted, { user_id: 25, username: 'admin.x' });
   assert.equal(calls[0].sql, 'BEGIN');
   assert.match(calls[1].sql, /pg_advisory_xact_lock/);
+  assert.match(calls[2].sql, /SELECT roles FROM mams\.app_user WHERE user_id = \$1 FOR UPDATE/);
   assert.ok(calls.some((c) => c.sql.includes('ALTER TABLE IF EXISTS mams.approval_history ALTER COLUMN acted_by DROP NOT NULL')));
   assert.ok(calls.some((c) => c.sql.includes('ck_person_consent_fields')));
   assert.ok(calls.some((c) => c.sql.includes('DELETE FROM mams.notification WHERE user_id = $1')));
@@ -273,5 +278,59 @@ test('deleteUser decouples operational records and deletes user without cascadin
   assert.ok(calls.some((c) => c.sql.includes('UPDATE mams.app_user SET created_by = NULL WHERE created_by = $1')));
   assert.ok(calls.some((c) => c.sql.includes('DELETE FROM mams.app_user WHERE user_id = $1')));
   assert.ok(calls.some((c) => c.sql.includes('INSERT INTO mams.audit_log')));
+  assert.equal(calls.at(-1).sql, 'COMMIT');
+});
+
+test('Admin cannot delete Admin or Super Admin accounts', async () => {
+  for (const role of ['ADMIN', 'SUPER_ADMIN']) {
+    const calls = [];
+    const client = {
+      async query(sql, values = []) {
+        calls.push({ sql, values });
+        if (sql.includes('SELECT roles FROM mams.app_user')) {
+          return { rows: [{ roles: [role] }] };
+        }
+        return { rows: [] };
+      },
+      release() {},
+    };
+    const repository = createUsersRepository({ async connect() { return client; } });
+
+    await assert.rejects(repository.deleteUser({
+      targetUserId: 25,
+      actorUserId: 7,
+      actorRole: 'ADMIN',
+    }), (error) => error.statusCode === 403 && error.code === 'FORBIDDEN');
+
+    assert.ok(!calls.some(({ sql }) => sql.includes('DELETE FROM mams.app_user')));
+    assert.equal(calls.at(-1).sql, 'ROLLBACK');
+  }
+});
+
+test('Super Admin can delete another Super Admin account', async () => {
+  const calls = [];
+  const client = {
+    async query(sql, values = []) {
+      calls.push({ sql, values });
+      if (sql.includes('SELECT roles FROM mams.app_user')) {
+        return { rows: [{ roles: ['SUPER_ADMIN'] }] };
+      }
+      if (sql.includes('DELETE FROM mams.app_user')) {
+        return { rows: [{ user_id: 25, username: 'other.super' }], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 1 };
+    },
+    release() {},
+  };
+  const repository = createUsersRepository({ async connect() { return client; } });
+
+  const deleted = await repository.deleteUser({
+    targetUserId: 25,
+    actorUserId: 1,
+    actorRole: 'SUPER_ADMIN',
+  });
+
+  assert.deepEqual(deleted, { user_id: 25, username: 'other.super' });
+  assert.ok(calls.some(({ sql }) => sql.includes('DELETE FROM mams.app_user')));
   assert.equal(calls.at(-1).sql, 'COMMIT');
 });

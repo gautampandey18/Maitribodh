@@ -53,7 +53,6 @@ const userSchema = z.object({
   email: z.union([z.string().trim().email('Enter a valid email').max(150), z.literal('')]),
   username: z.string().trim().min(1, 'Enter a username').max(50),
   roles: z.array(z.enum(roles)).min(1, 'Select at least one role'),
-  isSecurityHead: z.boolean(),
   canBulkUpload: z.boolean(),
 });
 
@@ -65,7 +64,6 @@ const emptyUser = {
   email: '',
   username: '',
   roles: ['VIEWER'],
-  isSecurityHead: false,
   canBulkUpload: false,
 };
 
@@ -306,7 +304,6 @@ export default function UsersPage() {
       email: user.email ?? '',
       username: user.username,
       roles: getRoles(user),
-      isSecurityHead: user.is_security_head,
       canBulkUpload: user.can_bulk_upload,
     });
     setFormError('');
@@ -626,7 +623,6 @@ export default function UsersPage() {
                 </MenuItem>
               ))}
             </TextField>
-            {editTarget && <FormControlLabel control={<Checkbox name="isSecurityHead" checked={userForm.isSecurityHead} onChange={updateForm} />} label="Security head" />}
             <FormControlLabel control={<Checkbox name="canBulkUpload" checked={userForm.canBulkUpload} onChange={updateForm} />} label="Can upload bulk registrations" />
           </DialogContent>
           <DialogActions className="dialog-actions">

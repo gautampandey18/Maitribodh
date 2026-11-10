@@ -1,4 +1,5 @@
 import { ApiError } from '../../errors/ApiError.js';
+import { ROLES } from '../../constants/roles.js';
 
 export function createUsersRepository(pool) {
   const adminMembershipLockId = 1296126532;
@@ -7,7 +8,7 @@ export function createUsersRepository(pool) {
     async listUsers({ pageSize, offset, query = '', role, status }) {
       const result = await pool.query(
         `SELECT user_id, first_name, last_name, mobile, email, username, role, roles,
-                is_security_head, can_bulk_upload, status, created_at, updated_at,
+                can_bulk_upload, status, created_at, updated_at,
                 count(*) OVER()::int AS total
            FROM mams.app_user
           WHERE ($1 = '' OR first_name || ' ' || last_name ILIKE '%' || $1 || '%'
@@ -28,7 +29,7 @@ export function createUsersRepository(pool) {
     async getUser(targetUserId) {
       const result = await pool.query(
         `SELECT user_id, first_name, last_name, mobile, email, username, role, roles,
-                is_security_head, can_bulk_upload, status, created_at, updated_at
+                can_bulk_upload, status, created_at, updated_at
            FROM mams.app_user
           WHERE user_id = $1`,
         [targetUserId],
@@ -44,7 +45,6 @@ export function createUsersRepository(pool) {
       username,
       role,
       roles,
-      isSecurityHead,
       canBulkUpload,
       createdBy,
       actorRole,
@@ -58,10 +58,10 @@ export function createUsersRepository(pool) {
         const result = await client.query(
           `INSERT INTO mams.app_user
              (first_name, last_name, mobile, email, username, role,
-              is_security_head, can_bulk_upload, created_by, roles)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::varchar[])
+              can_bulk_upload, created_by, roles)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::varchar[])
            RETURNING user_id, first_name, last_name, mobile, email, username,
-                     role, roles, is_security_head, can_bulk_upload, status, created_at`,
+                     role, roles, can_bulk_upload, status, created_at`,
           [
             firstName,
             lastName,
@@ -69,7 +69,6 @@ export function createUsersRepository(pool) {
             email,
             username,
             role,
-            isSecurityHead,
             canBulkUpload,
             createdBy,
             roles ?? [role],
@@ -102,7 +101,7 @@ export function createUsersRepository(pool) {
       }
     },
 
-    async updateUser({ targetUserId, firstName, lastName, mobile, email, username, role, roles, isSecurityHead, deactivate = false, activate = false, canBulkUpload, actorUserId, actorRole, ipAddress, device }) {
+    async updateUser({ targetUserId, firstName, lastName, mobile, email, username, role, roles, deactivate = false, activate = false, canBulkUpload, actorUserId, actorRole, ipAddress, device }) {
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
@@ -121,18 +120,17 @@ export function createUsersRepository(pool) {
               SET first_name = COALESCE($4, first_name), last_name = COALESCE($5, last_name),
                 mobile = COALESCE($6, mobile), email = COALESCE($7, email),
                 username = COALESCE($8, username), role = COALESCE($9, role),
-                roles = COALESCE($12::varchar[], roles),
-                is_security_head = COALESCE($10::boolean, is_security_head),
-                status = CASE WHEN $2::boolean THEN 'INACTIVE' WHEN $11::boolean THEN 'ACTIVE' ELSE status END,
+                roles = COALESCE($11::varchar[], roles),
+                status = CASE WHEN $2::boolean THEN 'INACTIVE' WHEN $10::boolean THEN 'ACTIVE' ELSE status END,
                 can_bulk_upload = COALESCE($3::boolean, can_bulk_upload),
-                token_version = CASE WHEN $2::boolean OR $11::boolean OR
-                  ($12::varchar[] IS NOT NULL AND roles IS DISTINCT FROM $12::varchar[])
+                token_version = CASE WHEN $2::boolean OR $10::boolean OR
+                  ($11::varchar[] IS NOT NULL AND roles IS DISTINCT FROM $11::varchar[])
                   THEN token_version + 1 ELSE token_version END,
                   updated_at = now()
             WHERE user_id = $1
           RETURNING user_id, first_name, last_name, mobile, email, username,
-                    role, roles, is_security_head, can_bulk_upload, status, updated_at`,
-          [targetUserId, deactivate, canBulkUpload ?? null, firstName ?? null, lastName ?? null, mobile ?? null, email ?? null, username ?? null, role ?? null, isSecurityHead ?? null, activate, roles ?? (role ? [role] : null)],
+                    role, roles, can_bulk_upload, status, updated_at`,
+          [targetUserId, deactivate, canBulkUpload ?? null, firstName ?? null, lastName ?? null, mobile ?? null, email ?? null, username ?? null, role ?? null, activate, roles ?? (role ? [role] : null)],
         );
         const user = result.rows[0];
         if (!user) {
@@ -141,7 +139,7 @@ export function createUsersRepository(pool) {
         }
 
         const changes = {};
-        for (const [key, value] of Object.entries({ firstName, lastName, mobile, email, username, role, roles, isSecurityHead, canBulkUpload })) {
+        for (const [key, value] of Object.entries({ firstName, lastName, mobile, email, username, role, roles, canBulkUpload })) {
           if (value !== undefined) changes[key] = value;
         }
         if (deactivate) changes.status = 'INACTIVE';
@@ -169,6 +167,20 @@ export function createUsersRepository(pool) {
       try {
         await client.query('BEGIN');
         await client.query('SELECT pg_advisory_xact_lock($1)', [adminMembershipLockId]);
+        const target = await client.query(
+          'SELECT roles FROM mams.app_user WHERE user_id = $1 FOR UPDATE',
+          [targetUserId],
+        );
+        if (!target.rows[0]) {
+          await client.query('ROLLBACK');
+          return null;
+        }
+        const targetRoles = target.rows[0].roles ?? [];
+        const hasPrivilegedRole = targetRoles.includes(ROLES.ADMIN)
+          || targetRoles.includes(ROLES.SUPER_ADMIN);
+        if (actorRole !== ROLES.SUPER_ADMIN && hasPrivilegedRole) {
+          throw new ApiError(403, 'FORBIDDEN', 'Only a Super Admin can delete Admin or Super Admin accounts');
+        }
 
         // Relax legacy schema constraints so records decouple cleanly even on unmigrated databases
         await client.query(`

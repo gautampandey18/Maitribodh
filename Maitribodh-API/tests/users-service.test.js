@@ -16,6 +16,22 @@ test('users cannot delete their own account even when ID types differ', async ()
   }
 });
 
+test('users cannot deactivate their own account even when ID types differ', async () => {
+  const service = createUsersService({ repository: {
+    async updateUser() { assert.fail('Self-deactivation must not reach the database'); },
+  } });
+  for (const targetUserId of [7, '7']) {
+    for (const userId of [7, '7']) {
+      await assert.rejects(service.updateUser({
+        targetUserId,
+        input: { deactivate: true },
+        actor: { userId, role: ROLES.ADMIN },
+      }), (error) => error.statusCode === 400 && error.code === 'SELF_DEACTIVATE_FORBIDDEN'
+        && error.message === 'You cannot deactivate your own account');
+    }
+  }
+});
+
 test('deleting another account still forwards the audit actor', async () => {
   let received;
   const service = createUsersService({ repository: {
