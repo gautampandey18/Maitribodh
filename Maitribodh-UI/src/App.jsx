@@ -143,6 +143,7 @@ function AppShell() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const visibleNavigation = NAVIGATION.filter((item) => canAccessPath(auth.user, item.path));
   const userRole = getRoles(auth.user).map((role) => role.replaceAll('_', ' ')).join(', ') || 'Unknown';
+  const username = auth.user?.username || 'your account';
   const icons = { '/dashboard': <DashboardOutlinedIcon />, '/persons': <SearchOutlinedIcon />, '/register': <PeopleAltOutlinedIcon />, '/approvals': <FactCheckOutlinedIcon />, '/qr': <KeyOutlinedIcon />, '/gate': <PlaceOutlinedIcon />, '/blacklist': <GppBadOutlinedIcon />, '/reports': <AssessmentOutlinedIcon />, '/users': <PeopleAltOutlinedIcon />, '/master': <TuneOutlinedIcon />, '/audit': <FactCheckOutlinedIcon /> };
   const navigationWidth = sidebarCollapsed ? collapsedDrawerWidth : drawerWidth;
 
@@ -196,14 +197,14 @@ function AppShell() {
           </Box>
           <Box className="top-actions">
             <NotificationsBell />
-            <Tooltip title={`Signed in as ${userRole}`}>
+            <Tooltip title={`Signed in as ${username}`}>
               <Box className="top-user-role">
                 <Typography variant="caption">SIGNED IN AS</Typography>
                 <Typography className="top-user-role-name">{userRole}</Typography>
               </Box>
             </Tooltip>
-            <Tooltip title={`Signed in as ${userRole}`}>
-              <Avatar aria-label={`Signed in as ${userRole}`} sx={{ width: 30, height: 30, fontSize: 12 }}>{auth.user?.role?.slice(0, 2)}</Avatar>
+            <Tooltip title={`Signed in as ${username}`}>
+              <Avatar aria-label={`Signed in as ${username}`} sx={{ width: 30, height: 30, fontSize: 12 }}>{username.slice(0, 2).toUpperCase()}</Avatar>
             </Tooltip>
             <Tooltip title="Change password">
               <IconButton aria-label="Change password" onClick={() => navigate('/password')}>

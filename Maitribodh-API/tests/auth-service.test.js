@@ -50,6 +50,7 @@ test('login returns every assigned role and a deterministic representative role'
   const session = await service.login({ username: 'approver.guard', password: 'valid-password' });
   assert.deepEqual(session.user.roles, [ROLES.APPROVER, ROLES.SECURITY_GUARD]);
   assert.equal(session.user.role, ROLES.APPROVER);
+  assert.equal(session.user.username, 'test.user');
   assert.equal(Object.hasOwn(session, 'expiresIn'), false);
 });
 
@@ -257,7 +258,8 @@ test('Admin reset stores only a hash and returns a 24-hour temporary password on
   });
 
   assert.equal(hashRounds, 12);
-  assert.match(result.temporaryPassword, /^[a-z]{4}(-[a-z]{4}){3}-\d{4}$/);
+  assert.match(result.temporaryPassword, /^[a-z]{4}-[a-z]{4}-[2-9]{2}$/);
+  assert.equal(result.temporaryPassword.length, 12);
   assert.equal(result.expiresAt.toISOString(), '2026-10-10T12:00:00.000Z');
   assert.equal(resetInput.passwordHash, `bcrypt:${result.temporaryPassword}`);
   assert.equal(resetInput.temporaryPassword, undefined);
@@ -266,6 +268,7 @@ test('Admin reset stores only a hash and returns a 24-hour temporary password on
 function createRepository({ role = ROLES.ADMIN, userOverrides = {}, loginOverrides = {} } = {}) {
   const user = {
     user_id: 12,
+    username: 'test.user',
     role,
     status: 'ACTIVE',
     password_hash: 'stored-hash',
@@ -284,6 +287,7 @@ function createRepository({ role = ROLES.ADMIN, userOverrides = {}, loginOverrid
     async completeLogin() {
       return {
         user_id: user.user_id,
+        username: user.username,
         role: user.role,
         token_version: user.token_version,
         must_change_password: user.must_change_password,

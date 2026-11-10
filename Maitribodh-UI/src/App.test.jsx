@@ -24,12 +24,14 @@ afterEach(() => {
 it('shows and opens both Approval Center and Security Gate for a multi-role account', async () => {
   store.dispatch(sessionStarted({
     accessToken: 'multi-role-token',
-    user: { id: 7, role: 'APPROVER', roles: ['APPROVER', 'SECURITY_GUARD'] },
+    user: { id: 7, username: 'approval.guard', role: 'APPROVER', roles: ['APPROVER', 'SECURITY_GUARD'] },
   }));
   const user = userEvent.setup();
   render(<Provider store={store}><MemoryRouter initialEntries={['/approvals']}><App /></MemoryRouter></Provider>);
 
   expect(await screen.findByRole('heading', { name: 'Approval workspace' })).toBeInTheDocument();
+  await user.hover(screen.getAllByLabelText('Signed in as approval.guard')[1]);
+  expect(await screen.findByRole('tooltip')).toHaveTextContent('Signed in as approval.guard');
   expect(screen.getByRole('link', { name: 'Approval Center' })).toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Security Gate' })).toBeInTheDocument();
   expect(screen.queryByRole('link', { name: 'User Management' })).not.toBeInTheDocument();

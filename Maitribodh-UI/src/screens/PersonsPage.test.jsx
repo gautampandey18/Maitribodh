@@ -55,6 +55,7 @@ it('loads all registrations, filters by category, and requests the next page', a
     </Provider>,
   );
 
+  expect(screen.getByText('Find registrations, review their status, and manage person profiles.')).toBeInTheDocument();
   expect(await screen.findByText('Initial Active')).toBeInTheDocument();
   expect(screen.getByText('+91 98765 43210')).toBeInTheDocument();
   expect(screen.getByText('Initial Inactive')).toBeInTheDocument();

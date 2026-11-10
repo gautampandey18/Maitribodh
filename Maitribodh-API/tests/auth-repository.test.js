@@ -2,6 +2,21 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createAuthRepository } from '../src/modules/auth/auth.repository.js';
 
+test('completed login returns the username for the profile tooltip', async () => {
+  let statement;
+  const repository = createAuthRepository({
+    async query(sql) {
+      statement = sql;
+      return { rows: [{ user_id: 12, username: 'approval.guard' }] };
+    },
+  });
+
+  const user = await repository.completeLogin(12, new Date('2026-11-10T12:00:00Z'));
+
+  assert.equal(user.username, 'approval.guard');
+  assert.match(statement, /RETURNING user_id, username, role/);
+});
+
 test('temporary password reset truncates audit device metadata to the database limit', async () => {
   let auditValues;
   const client = {

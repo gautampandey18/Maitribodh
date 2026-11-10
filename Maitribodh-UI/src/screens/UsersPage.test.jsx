@@ -22,6 +22,7 @@ it.each(['Add user', 'Update user'])('keeps both name inputs in one row in the %
   const user = userEvent.setup();
   render(<Provider store={store}><MemoryRouter><UsersPage /></MemoryRouter></Provider>);
 
+  expect(screen.getByText('Manage application accounts, roles, and access.')).toBeInTheDocument();
   if (dialogTitle === 'Add user') {
     await user.click(await screen.findByRole('button', { name: 'Add Application User' }));
   } else {

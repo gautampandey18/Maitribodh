@@ -63,7 +63,12 @@ export default function MasterDataPage() {
   return (
     <Box className="master-data-page">
       <Box className="page-heading">
-        <Typography component="h1" variant="h1">Master Data</Typography>
+        <Box>
+          <Typography component="h1" variant="h1">Master Data</Typography>
+          <Typography variant="body2" color="text.secondary">
+            Manage the categories, locations, and reference values used across the system.
+          </Typography>
+        </Box>
       </Box>
       <Tabs
         className="section-nav-tabs"

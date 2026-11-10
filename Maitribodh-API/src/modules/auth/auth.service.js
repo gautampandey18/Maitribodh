@@ -45,6 +45,7 @@ export function createAuthService({
         tokenType: 'Bearer',
         user: {
           id: authenticatedUser.user_id,
+          username: authenticatedUser.username ?? user.username ?? username,
           role: getRoles(authenticatedUser)[0],
           roles: getRoles(authenticatedUser),
         },
@@ -110,8 +111,8 @@ function generateTemporaryPassword() {
   const word = () => Array.from({ length: 2 }, () => (
     consonants[randomInt(consonants.length)] + vowels[randomInt(vowels.length)]
   )).join('');
-  const words = Array.from({ length: 4 }, word);
-  const digits = String(randomInt(10_000)).padStart(4, '0');
+  const words = Array.from({ length: 2 }, word);
+  const digits = Array.from({ length: 2 }, () => '23456789'[randomInt(8)]).join('');
   return `${words.join('-')}-${digits}`;
 }
 

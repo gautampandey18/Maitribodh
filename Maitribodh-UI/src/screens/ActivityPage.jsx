@@ -203,7 +203,12 @@ export default function ActivityPage() {
 
   return <Box className="audit-page">
     <Box className="page-heading">
-      <Typography variant="h1" component="h1">Audit &amp; Compliance</Typography>
+      <Box>
+        <Typography variant="h1" component="h1">Audit &amp; Compliance</Typography>
+        <Typography variant="body2" color="text.secondary">
+          Review system activity, filter audit records, and export them for compliance.
+        </Typography>
+      </Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
         {selectedAuditIds.length > 0 && (
           <Button

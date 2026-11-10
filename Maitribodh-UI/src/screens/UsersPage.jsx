@@ -416,6 +416,9 @@ export default function UsersPage() {
       <Box className="page-heading">
         <Box>
           <Typography component="h1" variant="h1">Users</Typography>
+          <Typography variant="body2" color="text.secondary">
+            Manage application accounts, roles, and access.
+          </Typography>
         </Box>
         <Button variant="contained" color="secondary" startIcon={<AddIcon />} onClick={() => { setFormError(''); setFieldErrors({}); setEditTarget(null); setUserForm(emptyUser); setCreateOpen(true); }}>
           Add Application User
