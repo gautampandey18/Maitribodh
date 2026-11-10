@@ -40,7 +40,7 @@ import {
 import { z } from 'zod';
 import { api } from '../api.js';
 import InternationalPhoneField from '../components/InternationalPhoneField.jsx';
-import { splitPhoneNumber, toE164Phone } from '../utils/phone.js';
+import { formatPhoneNumber, splitPhoneNumber, toE164Phone } from '../utils/phone.js';
 import { requestMessage } from '../utils/resources.js';
 import { getRoles, hasRole, USER_ROLES } from '../constants/roles.js';
 
@@ -64,7 +64,7 @@ const emptyUser = {
   mobileCountry: 'IN',
   email: '',
   username: '',
-  roles: ['REG_OFFICER'],
+  roles: ['VIEWER'],
   isSecurityHead: false,
   canBulkUpload: false,
 };
@@ -421,7 +421,7 @@ export default function UsersPage() {
           <Typography component="h1" variant="h1">Users</Typography>
         </Box>
         <Button variant="contained" color="secondary" startIcon={<AddIcon />} onClick={() => { setFormError(''); setFieldErrors({}); setEditTarget(null); setUserForm(emptyUser); setCreateOpen(true); }}>
-          Add user
+          Add Application User
         </Button>
       </Box>
 
@@ -461,7 +461,7 @@ export default function UsersPage() {
                   <TableRow key={user.user_id} hover>
                     <TableCell>
                       <Typography fontWeight={600}>{user.first_name} {user.last_name}</Typography>
-                      <Typography variant="caption" color="text.secondary">{user.username} · {user.mobile}</Typography>
+                      <Typography variant="caption" color="text.secondary">{user.username} · {formatPhoneNumber(user.mobile)}</Typography>
                     </TableCell>
                     <TableCell>{getRoles(user).map((role) => role.replaceAll('_', ' ')).join(', ')}</TableCell>
                     <TableCell>
@@ -626,7 +626,7 @@ export default function UsersPage() {
                 </MenuItem>
               ))}
             </TextField>
-            <FormControlLabel control={<Checkbox name="isSecurityHead" checked={userForm.isSecurityHead} onChange={updateForm} />} label="Security head" />
+            {editTarget && <FormControlLabel control={<Checkbox name="isSecurityHead" checked={userForm.isSecurityHead} onChange={updateForm} />} label="Security head" />}
             <FormControlLabel control={<Checkbox name="canBulkUpload" checked={userForm.canBulkUpload} onChange={updateForm} />} label="Can upload bulk registrations" />
           </DialogContent>
           <DialogActions className="dialog-actions">

@@ -9,7 +9,7 @@ import { createRegistrationRouter } from '../src/modules/persons/registration.ro
 import { createPersonsRouter } from '../src/modules/persons/persons.routes.js';
 import { createAuthenticate } from '../src/middleware/authenticate.js';
 
-const input = { categoryId: 1, firstName: 'Asha', lastName: 'Patel', mobile: '9820000000', gender: 'OTHER', consent: true, categoryDetails: { purpose: 'Meeting', visit_date: '2026-10-09' } };
+const input = { categoryId: 1, firstName: 'Asha', lastName: 'Patel', mobile: '9820000000', email: 'asha@example.com', gender: 'OTHER', consent: true, categoryDetails: { purpose: 'Meeting', visit_date: '2026-10-09' } };
 function appFor(role, repository) {
   const authenticate = (req, _res, next) => { req.auth = { role, userId: 9 }; next(); };
   return createApp({ personsRouter: createRegistrationRouter({ repository, authenticate, encryptionSecret: 'test-secret-not-for-production' }) });

@@ -8,7 +8,7 @@ test('public lookup serializes by IP, returns active matches, and audits only ma
     async query(sql, values = []) {
       calls.push({ sql, values });
       if (sql.includes('minute_count')) return { rows: [{ minute_count: 0, day_count: 0 }] };
-      if (sql.includes('SELECT p.person_code')) {
+      if (sql.includes('SELECT identity.qr_code')) {
         return { rows: [{ person_code: 'MB-000001', first_name: 'Maitri', last_name: 'One', category: 'Visitor', qr_version: 1 }], rowCount: 1 };
       }
       return { rows: [], rowCount: 1 };
@@ -51,7 +51,7 @@ test('public lookup records and rejects requests above the minute limit', async 
 
   assert.deepEqual(result, { limited: true, window: 'MINUTE', retryAfterSeconds: 60 });
   assert.match(calls[3].sql, /PUBLIC_QR_RATE_LIMITED/);
-  assert.equal(calls.some(({ sql }) => sql.includes('SELECT p.person_code')), false);
+  assert.equal(calls.some(({ sql }) => sql.includes('SELECT identity.qr_code')), false);
   assert.equal(calls.at(-1).sql, 'COMMIT');
 });
 

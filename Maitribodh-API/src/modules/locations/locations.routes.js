@@ -12,6 +12,7 @@ const locationSchema = z.object({
   locationType: z.enum(['GATE', 'AREA']),
   isRestricted: z.boolean().optional().default(false),
   departmentId: z.number().int().positive().nullable().optional().default(null),
+  maxOccupancy: z.number().int().positive().nullable().optional().default(null),
 });
 const locationIdSchema = z.coerce.number().int().positive();
 const locationPatchSchema = z.object({
@@ -19,6 +20,7 @@ const locationPatchSchema = z.object({
   locationType: z.enum(['GATE', 'AREA']).optional(),
   isRestricted: z.boolean().optional(),
   departmentId: z.number().int().positive().nullable().optional(),
+  maxOccupancy: z.number().int().positive().nullable().optional(),
   status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
 }).refine((changes) => Object.keys(changes).length > 0);
 

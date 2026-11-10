@@ -101,6 +101,7 @@ export default function GatePage() {
   const [mobileCountry, setMobileCountry] = useState('IN');
   const [mobileError, setMobileError] = useState('');
   const [items, setItems] = useState(null);
+  const [areaOccupancy, setAreaOccupancy] = useState(null);
   const [selected, setSelected] = useState(null);
   const [photoUrl, setPhotoUrl] = useState('');
   const [photoError, setPhotoError] = useState('');
@@ -136,6 +137,14 @@ export default function GatePage() {
   const state = selected?.eventWarning && selected?.outcome === 'ELIGIBLE'
     ? states.EVENT_COMPLETED : states[selected?.outcome];
   const canRecoverPhoto = ['ELIGIBLE', 'LOCATION_WARNING', 'ALREADY_INSIDE'].includes(selected?.outcome);
+  const selectedAreaDetails = areas.find((item) => String(item.location_id) === String(selectedArea));
+  const maxOccupancy = areaOccupancy?.maxOccupancy ?? areaOccupancy?.max_occupancy ?? selectedAreaDetails?.max_occupancy;
+  const currentOccupancy = Number(areaOccupancy?.currentOccupancy
+    ?? areaOccupancy?.current_occupancy
+    ?? selectedAreaDetails?.current_occupancy
+    ?? 0);
+  const wouldExceedCapacity = maxOccupancy != null
+    && currentOccupancy + 1 + Number(accompanyingCount) > Number(maxOccupancy);
   useEffect(() => {
     const update = () => setOnline(navigator.onLine);
     window.addEventListener('online', update); window.addEventListener('offline', update);
@@ -216,6 +225,7 @@ export default function GatePage() {
     try {
       const { data } = await api.post('/gate/lookups', { ...payload, locationId: Number(selectedArea) });
       setItems(data.items);
+      setAreaOccupancy(data.areaOccupancy);
       if (data.items.length === 1) selectPerson(data.items[0]);
     } catch (failure) { setError(requestMessage(failure)); } finally { setBusy(false); }
   }
@@ -402,7 +412,13 @@ export default function GatePage() {
       else await api.post(`/visits/${selected.openVisitId}/check-outs`, { checkoutGateId: Number(selectedGate), checkoutLocationId: Number(selectedArea), device: 'Gate Terminal 01' });
       setNotice(checkIn ? 'Check-In recorded.' : 'Check-Out recorded.');
       await lookup({ query: selected.personCode });
-    } catch (failure) { setError(requestMessage(failure)); } finally { setBusy(false); }
+    } catch (failure) {
+      const message = requestMessage(failure);
+      if (failure.response?.data?.error?.code === 'AREA_CAPACITY_REACHED') {
+        await lookup({ query: selected.personCode });
+      }
+      setError(message);
+    } finally { setBusy(false); }
   }
   return <Box>
     <Box className="page-heading"><Typography component="h1" variant="h1">Security Gate</Typography></Box>
@@ -773,7 +789,11 @@ export default function GatePage() {
         )}
       </Box>
       <Box className="gate-result-panel">
-        <Box className="form-grid"><Autocomplete options={gates} value={gates.find((item) => String(item.location_id) === String(selectedGate)) ?? null} getOptionLabel={(item) => item.name} isOptionEqualToValue={(item, value) => item.location_id === value.location_id} onChange={(_event, item) => { setGateId(item?.location_id ?? ''); }} renderInput={(inputParams) => <TextField {...inputParams} label="Gate" required />} /><Autocomplete options={areas} value={areas.find((item) => String(item.location_id) === String(selectedArea)) ?? null} getOptionLabel={(item) => item.name} isOptionEqualToValue={(item, value) => item.location_id === value.location_id} onChange={(_event, item) => { if (!item) return; const nextArea = Number(item.location_id); setAreaId(nextArea); setVerified(false); setLocationAcknowledged(false); if (selected) setSelected(personForArea(selected, nextArea)); else setItems(null); }} renderInput={(inputParams) => <TextField {...inputParams} label="Area" required />} /></Box>
+        <Box className="form-grid"><Autocomplete options={gates} value={gates.find((item) => String(item.location_id) === String(selectedGate)) ?? null} getOptionLabel={(item) => item.name} isOptionEqualToValue={(item, value) => item.location_id === value.location_id} onChange={(_event, item) => { setGateId(item?.location_id ?? ''); }} renderInput={(inputParams) => <TextField {...inputParams} label="Gate" required />} /><Autocomplete options={areas} value={areas.find((item) => String(item.location_id) === String(selectedArea)) ?? null} getOptionLabel={(item) => item.name} isOptionEqualToValue={(item, value) => item.location_id === value.location_id} onChange={(_event, item) => { if (!item) return; const nextArea = Number(item.location_id); setAreaId(nextArea); setAreaOccupancy({ currentOccupancy: item.current_occupancy, maxOccupancy: item.max_occupancy }); setVerified(false); setLocationAcknowledged(false); if (selected) setSelected(personForArea(selected, nextArea)); else setItems(null); }} renderInput={(inputParams) => <TextField {...inputParams} label="Area" required />} /></Box>
+        {maxOccupancy != null && <Alert severity={wouldExceedCapacity ? 'warning' : 'info'} sx={{ mt: 2 }}>
+          Area occupancy: {currentOccupancy} / {maxOccupancy}
+          {wouldExceedCapacity ? ' Maximum occupancy would be exceeded by this entry.' : ''}
+        </Alert>}
         {busy && <Box role="status" sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 2 }}><CircularProgress size={20} /><Typography>Loading person information...</Typography></Box>}
         <Alert severity={state?.severity ?? 'info'} sx={{ my: 3 }}><Typography variant="h3">{state?.title ?? (items?.length === 0 ? 'PERSON NOT FOUND' : 'READY TO VERIFY')}</Typography>{state?.message ?? (items?.length === 0 ? 'A valid person record is required before entry.' : 'Scan a QR code to automatically display the person, or search by registered mobile number.')}</Alert>
         {selected && !selected.openVisitId && (
@@ -789,7 +809,7 @@ export default function GatePage() {
             disabled={busy || !online}
           />
         )}
-        <Box sx={{ display: 'flex', gap: 2 }}><Button variant="contained" startIcon={busy ? <CircularProgress size={18} /> : <LoginOutlinedIcon />} onClick={() => movement(true)} disabled={busy || !online || !['ELIGIBLE', 'LOCATION_WARNING'].includes(selected?.outcome) || !verified || !photoUrl || (selected?.locationWarning && !locationAcknowledged) || (selected?.eventWarning && !eventAcknowledged) || !selectedGate}>Check-In</Button><Button variant="outlined" startIcon={<LogoutOutlinedIcon />} onClick={() => movement(false)} disabled={busy || !online || !selected?.openVisitId || !selectedGate}>Check-Out</Button></Box>
+        <Box sx={{ display: 'flex', gap: 2 }}><Button variant="contained" startIcon={busy ? <CircularProgress size={18} /> : <LoginOutlinedIcon />} onClick={() => movement(true)} disabled={busy || !online || wouldExceedCapacity || !['ELIGIBLE', 'LOCATION_WARNING'].includes(selected?.outcome) || !verified || !photoUrl || (selected?.locationWarning && !locationAcknowledged) || (selected?.eventWarning && !eventAcknowledged) || !selectedGate}>Check-In</Button><Button variant="outlined" startIcon={<LogoutOutlinedIcon />} onClick={() => movement(false)} disabled={busy || !online || !selected?.openVisitId || !selectedGate}>Check-Out</Button></Box>
         {items?.length === 0 && <Button sx={{ mt: 3 }} component={Link} to={`/register?from=gate&gate=${selectedGate}&area=${selectedArea}`} disabled={!online}>Register Visitor</Button>}
       </Box>
     </Box>

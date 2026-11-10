@@ -19,6 +19,9 @@ export function createLocationsService({ repository }) {
       if (input.locationType === 'GATE' && input.isRestricted) {
         throw new ApiError(400, 'INVALID_LOCATION', 'A gate cannot be restricted');
       }
+      if (input.locationType === 'GATE' && input.maxOccupancy != null) {
+        throw new ApiError(400, 'INVALID_LOCATION', 'Maximum occupancy can only be set for an area');
+      }
 
       try {
         return await repository.createLocation({
@@ -43,10 +46,13 @@ export function createLocationsService({ repository }) {
     },
 
     async updateLocation({ locationId, changes, actor }) {
+      if (changes.locationType === 'GATE' && changes.maxOccupancy != null) {
+        throw new ApiError(400, 'INVALID_LOCATION', 'Maximum occupancy can only be set for an area');
+      }
       try {
         const location = await repository.updateLocation({
           locationId,
-          changes,
+          changes: changes.locationType === 'GATE' ? { ...changes, maxOccupancy: null } : changes,
           actorUserId: actor.userId,
           actorRole: actor.role,
           ipAddress: actor.ipAddress,

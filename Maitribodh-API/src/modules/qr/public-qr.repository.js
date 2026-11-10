@@ -35,13 +35,18 @@ export function createPublicQrRepository(pool) {
         }
 
         const matches = await client.query(
-          `SELECT p.person_code, p.first_name, p.last_name, p.qr_version, c.name AS category
+          `SELECT identity.qr_code AS person_code,
+                  (array_agg(p.first_name ORDER BY p.created_at))[1] AS first_name,
+                  (array_agg(p.last_name ORDER BY p.created_at))[1] AS last_name,
+                  identity.qr_version,
+                  string_agg(DISTINCT c.name, ', ' ORDER BY c.name) AS category
              FROM mams.person AS p
+             JOIN mams.person_identity AS identity USING (identity_id)
              JOIN mams.category AS c ON c.category_id = p.category_id
             WHERE (p.mobile = $1
                OR ($1 ~ '^[0-9]{10}$' AND p.mobile = '+91' || $1))
               AND p.status = 'ACTIVE'
-              AND p.qr_version > 0
+              AND identity.qr_code IS NOT NULL
               AND NOT EXISTS (
                 SELECT 1
                   FROM mams.blacklist AS b
@@ -50,7 +55,8 @@ export function createPublicQrRepository(pool) {
                    AND b.start_date <= (now() AT TIME ZONE 'Asia/Kolkata')::date
                    AND (b.end_date IS NULL OR b.end_date >= (now() AT TIME ZONE 'Asia/Kolkata')::date)
               )
-            ORDER BY p.created_at`,
+            GROUP BY identity.identity_id, identity.qr_code, identity.qr_version
+            ORDER BY min(p.created_at)`,
           [mobile],
         );
 

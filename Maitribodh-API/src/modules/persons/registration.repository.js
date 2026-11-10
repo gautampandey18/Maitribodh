@@ -12,7 +12,10 @@ export function createRegistrationRepository(pool) {
       return result;
     } catch (error) {
       await client.query('ROLLBACK').catch(() => {});
-      if (error.code === '23505' && (error.constraint === 'ux_person_mobile_category' || String(error.detail).includes('mobile'))) {
+      if (error.code === '23505' && (
+        ['ux_person_mobile_category', 'ux_person_identity_category', 'person_identity_mobile_key'].includes(error.constraint)
+        || String(error.detail).includes('mobile')
+      )) {
         throw new ApiError(409, 'DUPLICATE_REGISTRATION', 'This mobile number is already registered under this category.');
       }
       throw error;
@@ -29,7 +32,16 @@ export function createRegistrationRepository(pool) {
     async options() {
       const categories = await pool.query("SELECT * FROM mams.category WHERE status = 'ACTIVE' ORDER BY category_id");
       const lookups = await pool.query("SELECT * FROM mams.lookup_value WHERE status = 'ACTIVE' ORDER BY name");
-      const locations = await pool.query("SELECT * FROM mams.location WHERE status = 'ACTIVE' ORDER BY name");
+      const locations = await pool.query(
+        `SELECT location.*,
+                COALESCE((SELECT sum(1 + visit.accompanying_count)::int
+                            FROM mams.visit AS visit
+                           WHERE visit.checkin_location_id = location.location_id
+                             AND visit.status = 'OPEN'), 0) AS current_occupancy
+           FROM mams.location AS location
+          WHERE location.status = 'ACTIVE'
+          ORDER BY location.name`,
+      );
       return {
         categories: categories.rows.map((category) => ({
           ...Object.fromEntries(Object.entries(category).filter(([key]) => !['is_broad', 'broad_category_id'].includes(key))),
@@ -70,8 +82,12 @@ export function createRegistrationRepository(pool) {
     },
     async get(personId) {
       const person = (await pool.query(`SELECT p.*, c.name AS category, c.form_type,
+        identity.qr_code AS identity_qr_code,
         ARRAY(SELECT location_id FROM mams.person_location WHERE person_id = p.person_id) AS location_ids
-        FROM mams.person p JOIN mams.category c USING (category_id) WHERE p.person_id = $1`, [personId])).rows[0];
+        FROM mams.person p
+        JOIN mams.category c USING (category_id)
+        LEFT JOIN mams.person_identity AS identity USING (identity_id)
+        WHERE p.person_id = $1`, [personId])).rows[0];
       if (!person) throw new ApiError(404, 'PERSON_NOT_FOUND', 'Person not found');
       delete person.passport_number_enc;
       delete person.id_proof_number_enc;
@@ -96,6 +112,7 @@ export function createRegistrationRepository(pool) {
         const currentCategory = (await client.query('SELECT * FROM mams.category WHERE category_id = $1 FOR SHARE', [input.categoryId])).rows[0];
         if (!currentCategory || currentCategory.status !== 'ACTIVE' || currentCategory.approval_required === null || currentCategory.approval_required !== category.approval_required) throw new ApiError(409, 'CATEGORY_CHANGED', 'Category configuration changed. Reload and review this registration.');
         validateCategoryDetails(input, currentCategory, actor.role);
+        await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`person-mobile:${input.mobile}`]);
         const existingPerson = (await client.query(
           `SELECT person_id FROM mams.person
            WHERE category_id = $1
@@ -106,6 +123,18 @@ export function createRegistrationRepository(pool) {
         )).rows[0];
         if (existingPerson) {
           throw new ApiError(409, 'DUPLICATE_REGISTRATION', 'This mobile number is already registered under this category.');
+        }
+        let identity = (await client.query(
+          'SELECT identity_id, qr_code, qr_version FROM mams.person_identity WHERE mobile = $1 FOR UPDATE',
+          [input.mobile],
+        )).rows[0];
+        if (!identity) {
+          identity = (await client.query(
+            `INSERT INTO mams.person_identity (mobile)
+             VALUES ($1)
+             RETURNING identity_id, qr_code, qr_version`,
+            [input.mobile],
+          )).rows[0];
         }
         if (input.idProofTypeId) {
           const proof = (await client.query("SELECT name FROM mams.lookup_value WHERE lookup_id = $1 AND lookup_type = 'ID_PROOF_TYPE' AND status = 'ACTIVE'", [input.idProofTypeId])).rows[0];
@@ -128,19 +157,22 @@ export function createRegistrationRepository(pool) {
           || ['visitor', 'vendor', 'contractor', 'participant'].includes(category.name?.toLowerCase()?.trim());
         const status = !isNonApproval && category.approval_required ? 'PENDING' : 'ACTIVE';
         const result = await client.query(`INSERT INTO mams.person
-          (category_id, first_name, last_name, mobile, alternate_mobile, gender, resident_status, passport_number_enc, passport_last4, date_of_birth,
+          (category_id, identity_id, first_name, last_name, mobile, alternate_mobile, gender, resident_status, passport_number_enc, passport_last4, date_of_birth,
            address, email, photo_key, emergency_contact_name, emergency_contact_mobile, category_details, accompanying_count,
            documents, remarks, status, source, qr_version, registered_by, consent_at, consent_notice_version, consent_captured_by, expires_on,
            id_proof_type_id, id_proof_number_enc, id_proof_last4)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb,$17,$18::jsonb,$19,$20,$21,$22,$23,now(),$24,$23,$25,$26,$27,$28)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::jsonb,$18,$19::jsonb,$20,$21,$22,$23,$24,now(),$25,$24,$26,$27,$28,$29)
           RETURNING person_id, person_code, status, qr_version`,
-        [input.categoryId, input.firstName, input.lastName, input.mobile, input.alternateMobile || null, input.gender, input.residentStatus,
+        [input.categoryId, identity.identity_id, input.firstName, input.lastName, input.mobile, input.alternateMobile || null, input.gender, input.residentStatus,
           passportEncrypted, input.residentStatus === 'NON_RESIDENT' ? input.passportNumber.slice(-4) : null, input.dateOfBirth || null,
           input.address || null, input.email || null, photoKey, input.emergencyName || null, input.emergencyMobile || null,
           JSON.stringify(input.categoryDetails), input.accompanyingCount, JSON.stringify(documents), input.remarks || null, status, input.source,
-          status === 'ACTIVE' ? 1 : 0, actor.userId, CONSENT_NOTICE_VERSION, input.categoryDetails.end_date || null,
+          identity.qr_version, actor.userId, CONSENT_NOTICE_VERSION, input.categoryDetails.end_date || null,
           input.idProofTypeId ?? null, idProofEncrypted ?? null, input.idProofNumber ? input.idProofNumber.slice(-4) : null]);
         const person = result.rows[0];
+        if (!identity.qr_code) {
+          await client.query('UPDATE mams.person_identity SET qr_code = $2 WHERE identity_id = $1', [identity.identity_id, person.person_code]);
+        }
         for (const locationId of new Set(input.locationIds)) {
           const assigned = await client.query(`INSERT INTO mams.person_location (person_id, location_id, assigned_by)
             SELECT $1, location_id, $3 FROM mams.location WHERE location_id = $2 AND location_type = 'AREA' AND status = 'ACTIVE' RETURNING location_id`, [person.person_id, locationId, actor.userId]);
@@ -177,6 +209,29 @@ export function createRegistrationRepository(pool) {
           if (duplicate) {
             throw new ApiError(409, 'DUPLICATE_REGISTRATION', 'This mobile number is already registered under this category.');
           }
+          const currentIdentity = (await client.query(
+            'SELECT identity_id FROM mams.person_identity WHERE identity_id = $1 FOR UPDATE',
+            [current.identity_id],
+          )).rows[0];
+          const conflictingIdentity = (await client.query(
+            'SELECT identity_id FROM mams.person_identity WHERE mobile = $1 AND identity_id <> $2',
+            [changes.mobile, currentIdentity.identity_id],
+          )).rows[0];
+          if (conflictingIdentity) {
+            throw new ApiError(409, 'DUPLICATE_REGISTRATION', 'This mobile number is already linked to another person.');
+          }
+          await client.query(
+            `UPDATE mams.person_identity
+                SET mobile = $2, qr_version = qr_version + 1
+              WHERE identity_id = $1`,
+            [currentIdentity.identity_id, changes.mobile],
+          );
+          await client.query(
+            `UPDATE mams.person
+                SET mobile = $2, qr_version = qr_version + 1, updated_at = now()
+              WHERE identity_id = $1 AND person_id <> $3`,
+            [currentIdentity.identity_id, changes.mobile, personId],
+          );
         }
         const updated = (await client.query(`UPDATE mams.person SET first_name = $2, last_name = $3, mobile = $4::varchar(16), alternate_mobile = $5,
           email = $6, address = $7, emergency_contact_name = $8, emergency_contact_mobile = $9,
@@ -185,7 +240,8 @@ export function createRegistrationRepository(pool) {
             ELSE jsonb_set(COALESCE(category_details, '{}'::jsonb), '{future_checkin_access}',
               to_jsonb(CASE WHEN $12::boolean THEN 'YES'::text ELSE 'NO'::text END)) END,
           updated_by = $10, updated_at = now() WHERE person_id = $1 RETURNING person_id, person_code, first_name, last_name, mobile, status, qr_version`,
-        [personId, changes.firstName, changes.lastName, changes.mobile, changes.alternateMobile || null, changes.email || null, changes.address || null,
+        [personId, changes.firstName, changes.lastName, changes.mobile, changes.alternateMobile || null,
+          changes.email === undefined ? current.email : changes.email || null, changes.address || null,
           changes.emergencyName || null, changes.emergencyMobile || null, actor.userId, changes.mobile, changes.futureCheckinAccess ?? null])).rows[0];
         const before = { first_name: current.first_name, last_name: current.last_name, mobile: current.mobile, status: current.status, qr_version: current.qr_version };
         const after = { ...updated };

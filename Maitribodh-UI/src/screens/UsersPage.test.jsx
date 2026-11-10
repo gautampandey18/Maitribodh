@@ -23,7 +23,7 @@ it.each(['Add user', 'Update user'])('keeps both name inputs in one row in the %
   render(<Provider store={store}><MemoryRouter><UsersPage /></MemoryRouter></Provider>);
 
   if (dialogTitle === 'Add user') {
-    await user.click(await screen.findByRole('button', { name: 'Add user' }));
+    await user.click(await screen.findByRole('button', { name: 'Add Application User' }));
   } else {
     await user.click(await screen.findByRole('button', { name: 'Actions for asha.patel' }));
     await user.click(screen.getByRole('menuitem', { name: 'Update' }));
@@ -115,12 +115,14 @@ it('creates an account, issues its initial credential, and reveals it once', asy
     </Provider>,
   );
 
-  await user.click(await screen.findByRole('button', { name: 'Add user' }));
+  await user.click(await screen.findByRole('button', { name: 'Add Application User' }));
   await user.click(screen.getByRole('combobox', { name: 'Roles' }));
   expect(screen.getByRole('option', { name: 'ADMIN' })).toBeInTheDocument();
   expect(screen.queryByRole('option', { name: 'SUPER ADMIN' })).not.toBeInTheDocument();
+  expect(screen.getByRole('option', { name: 'VIEWER' })).toHaveAttribute('aria-selected', 'true');
+  expect(screen.queryByRole('checkbox', { name: 'Security head' })).not.toBeInTheDocument();
+  await user.click(screen.getByRole('option', { name: 'VIEWER' }));
   await user.click(screen.getByRole('option', { name: 'ADMIN' }));
-  await user.click(screen.getByRole('option', { name: 'REG OFFICER' }));
   await user.keyboard('{Escape}');
   await user.type(screen.getByRole('textbox', { name: /First name/ }), 'Asha');
   await user.type(screen.getByRole('textbox', { name: /Last name/ }), 'Patel');
@@ -161,7 +163,7 @@ it('keeps the account and explains how to retry when credential issuance fails',
     </Provider>,
   );
 
-  await user.click(await screen.findByRole('button', { name: 'Add user' }));
+  await user.click(await screen.findByRole('button', { name: 'Add Application User' }));
   await user.type(screen.getByRole('textbox', { name: /First name/ }), 'Ravi');
   await user.type(screen.getByRole('textbox', { name: /Last name/ }), 'Shah');
   await user.type(screen.getByRole('textbox', { name: /Mobile/ }), '9876543211');
@@ -212,7 +214,7 @@ it('keeps password and bulk-upload actions as row icons and user management acti
 
   render(<Provider store={store}><MemoryRouter><UsersPage /></MemoryRouter></Provider>);
 
-  await screen.findByText('asha.patel · 9876543210');
+  await screen.findByText('asha.patel · +91 98765 43210');
   await user.click(screen.getByRole('button', { name: 'Issue temporary password for asha.patel' }));
   expect(screen.getByText(/Issue a new temporary password for asha\.patel/)).toBeInTheDocument();
   expect(post).not.toHaveBeenCalled();
@@ -254,7 +256,7 @@ it('offers activation for inactive users and updates the row after confirmation'
 
   render(<Provider store={store}><MemoryRouter><UsersPage /></MemoryRouter></Provider>);
 
-  await screen.findByText('ravi.shah · 9876543211');
+  await screen.findByText('ravi.shah · +91 98765 43211');
   await user.click(screen.getByRole('button', { name: 'Actions for ravi.shah' }));
   await user.click(screen.getByRole('menuitem', { name: 'Activate' }));
   expect(screen.getByRole('dialog', { name: 'Activate user' })).toHaveTextContent('They will be able to log in again.');
@@ -290,7 +292,7 @@ it('validates fields at runtime on blur and enter, and displays formatted debug 
     </Provider>,
   );
 
-  await user.click(await screen.findByRole('button', { name: 'Add user' }));
+  await user.click(await screen.findByRole('button', { name: 'Add Application User' }));
   const firstNameInput = screen.getByRole('textbox', { name: /First name/ });
   const mobileInput = screen.getByRole('textbox', { name: /Mobile/ });
 

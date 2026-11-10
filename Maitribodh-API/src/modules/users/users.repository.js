@@ -12,7 +12,10 @@ export function createUsersRepository(pool) {
            FROM mams.app_user
           WHERE ($1 = '' OR first_name || ' ' || last_name ILIKE '%' || $1 || '%'
             OR username ILIKE '%' || $1 || '%' OR email ILIKE '%' || $1 || '%'
-            OR mobile ILIKE '%' || $1 || '%')
+            OR mobile ILIKE '%' || $1 || '%'
+            OR (regexp_replace($1, '[^0-9]', '', 'g') <> ''
+              AND regexp_replace(mobile, '[^0-9]', '', 'g')
+                LIKE '%' || regexp_replace($1, '[^0-9]', '', 'g') || '%'))
             AND ($2::varchar IS NULL OR $2 = ANY(roles))
             AND ($3::varchar IS NULL OR status = $3)
           ORDER BY last_name, first_name, user_id

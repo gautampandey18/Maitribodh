@@ -6,6 +6,7 @@ import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import { api } from '../api.js';
 import { csvBlob, downloadBlob, requestMessage, useResource } from '../utils/resources.js';
+import { formatPhoneNumber } from '../utils/phone.js';
 
 function formatAuditKey(key) {
   return key
@@ -285,7 +286,7 @@ export default function ActivityPage() {
                   <TableCell><Box component="span" className="audit-action-badge">{item.activity}</Box></TableCell>
                   <TableCell><Box component="span" className="audit-module-badge">{item.module}</Box></TableCell>
                   <TableCell>{item.entity}</TableCell>
-                  <TableCell className="audit-mobile">{item.person_mobile ?? '—'}</TableCell>
+                  <TableCell className="audit-mobile">{formatPhoneNumber(item.person_mobile) || '—'}</TableCell>
                   <TableCell className="audit-before"><AuditValueSummary value={item.old_value} /></TableCell>
                   <TableCell className="audit-after"><AuditValueSummary value={item.new_value} /></TableCell>
                 </TableRow>

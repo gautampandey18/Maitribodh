@@ -30,6 +30,7 @@ import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import MoreVertOutlinedIcon from '@mui/icons-material/MoreVertOutlined';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
+import { formatPhoneNumber } from '../utils/phone.js';
 
 const statuses = ['PENDING', 'ACTIVE', 'REJECTED', 'DEACTIVATED'];
 
@@ -236,7 +237,7 @@ export default function PersonsPage() {
                       <Button component={Link} to={`/persons/${item.person_id}`} color="primary" variant="text" sx={{ p: 0, justifyContent: 'flex-start', fontWeight: 600 }}>{item.name}</Button>
                     </TableCell>
                     <TableCell>{item.category}</TableCell>
-                    <TableCell>{item.mobile ?? '—'}</TableCell>
+                    <TableCell>{formatPhoneNumber(item.mobile) || '—'}</TableCell>
                     <TableCell><Chip size="small" label={statusLabel(item.status)} sx={statusColor(item.status)} /></TableCell>
                     <TableCell>{formatDate(item.created_at)}</TableCell>
                     <TableCell align="right">

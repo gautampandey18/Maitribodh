@@ -27,6 +27,7 @@ import AddIcon from '@mui/icons-material/Add';
 import PersonSearchOutlinedIcon from '@mui/icons-material/PersonSearchOutlined';
 import { api } from '../api.js';
 import { requestMessage } from '../utils/resources.js';
+import { formatPhoneNumber } from '../utils/phone.js';
 
 export default function BlacklistPage() {
   const [entries, setEntries] = useState([]);
@@ -294,7 +295,7 @@ export default function BlacklistPage() {
               <Box className="selected-blacklist-person">
                 <Box>
                   <Typography fontWeight={700}>{selectedPerson.name}</Typography>
-                  <Typography variant="body2" color="text.secondary">{selectedPerson.person_code} · {selectedPerson.category} · {selectedPerson.mobile}</Typography>
+                  <Typography variant="body2" color="text.secondary">{selectedPerson.person_code} · {selectedPerson.category} · {formatPhoneNumber(selectedPerson.mobile)}</Typography>
                 </Box>
                 <Button onClick={() => setSelectedPerson(null)}>Change</Button>
               </Box>

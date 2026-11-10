@@ -4,6 +4,7 @@ import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined';
 import { api } from '../api.js';
 import PersonIdentityCard from '../components/PersonIdentityCard.jsx';
+import { formatPhoneNumber } from '../utils/phone.js';
 import { downloadBlob, requestMessage } from '../utils/resources.js';
 
 function formatDate(value) {
@@ -82,10 +83,10 @@ export default function QrPage() {
     try {
       const { data } = await api.get('/persons', { params: { q: normalizedQuery, status: 'ACTIVE', page: 1, pageSize: 50 } });
       if (currentRequestId !== requestId.current) return;
-      const matchCount = data.total ?? data.items?.length ?? 0;
-      if (matchCount > 0 && data.items?.length) {
-        setItems(data.items);
-        selectPerson(data.items[0]);
+      const uniqueItems = [...new Map((data.items ?? []).map((item) => [item.identity_id ?? item.person_id, item])).values()];
+      if (uniqueItems.length) {
+        setItems(uniqueItems);
+        selectPerson(uniqueItems[0]);
       } else {
         setEmptyMessage('No user found.');
       }
@@ -164,7 +165,7 @@ export default function QrPage() {
                         </Button>
                       </TableCell>
                       <TableCell>{item.category}</TableCell>
-                      <TableCell>{item.mobile}</TableCell>
+                      <TableCell>{formatPhoneNumber(item.mobile)}</TableCell>
                       <TableCell>{item.status === 'ACTIVE' && (item.qr_version ?? 0) > 0 ? 'Current' : item.status}</TableCell>
                     </TableRow>
                   );
@@ -175,12 +176,12 @@ export default function QrPage() {
           <Box key={selected.person_id} component="section" className="qr-identity-card-section" aria-label="QR preview">
             <PersonIdentityCard
               personId={selected.person_id}
-              personCode={selected.person_code}
+              personCode={selected.identity_qr_code || selected.person_code}
               name={selected.name}
               category={selected.category}
               status={selected.status}
               photoSrc={photoSrc}
-              mobile={selected.mobile}
+              mobile={formatPhoneNumber(selected.mobile)}
               qrVersion={selected.qr_version}
               onQrBlob={setQrBlob}
               fields={[

@@ -4,13 +4,14 @@ export function createLocationsRepository(pool) {
     locationType: 'location_type',
     isRestricted: 'is_restricted',
     departmentId: 'department_id',
+    maxOccupancy: 'max_occupancy',
     status: 'status',
   };
 
   return {
     async listActiveLocations({ pageSize, offset, query = '', locationType }) {
       const result = await pool.query(
-        `SELECT location_id, name, location_type, is_restricted,
+        `SELECT location_id, name, location_type, is_restricted, max_occupancy,
                 count(*) OVER()::int AS total
            FROM mams.location
           WHERE status = 'ACTIVE'
@@ -25,7 +26,7 @@ export function createLocationsRepository(pool) {
 
     async getLocation(locationId) {
       const result = await pool.query(
-        `SELECT location_id, name, location_type, is_restricted,
+        `SELECT location_id, name, location_type, is_restricted, max_occupancy,
                 department_id, status, created_at, updated_at
            FROM mams.location
           WHERE location_id = $1`,
@@ -39,6 +40,7 @@ export function createLocationsRepository(pool) {
       locationType,
       isRestricted,
       departmentId,
+      maxOccupancy,
       actorUserId,
       actorRole,
       ipAddress,
@@ -48,10 +50,10 @@ export function createLocationsRepository(pool) {
       try {
         await client.query('BEGIN');
         const result = await client.query(
-          `INSERT INTO mams.location (name, location_type, is_restricted, department_id)
-           VALUES ($1, $2, $3, $4)
-           RETURNING location_id, name, location_type, is_restricted, department_id, status, created_at`,
-          [name, locationType, isRestricted, departmentId],
+          `INSERT INTO mams.location (name, location_type, is_restricted, department_id, max_occupancy)
+           VALUES ($1, $2, $3, $4, $5)
+           RETURNING location_id, name, location_type, is_restricted, department_id, max_occupancy, status, created_at`,
+          [name, locationType, isRestricted, departmentId, locationType === 'AREA' ? maxOccupancy : null],
         );
         const location = result.rows[0];
         await client.query(
@@ -67,6 +69,7 @@ export function createLocationsRepository(pool) {
               name: location.name,
               location_type: location.location_type,
               is_restricted: location.is_restricted,
+              max_occupancy: location.max_occupancy,
               department_id: location.department_id,
             }),
             ipAddress ?? null,
@@ -107,18 +110,18 @@ export function createLocationsRepository(pool) {
         for (const [key, value] of entries) {
           const column = writableColumns[key];
           oldValue[column] = current[column];
-          newValue[column] = value;
+          newValue[column] = key === 'maxOccupancy' && current.location_type === 'GATE' ? null : value;
         }
 
         const assignments = entries.map(([key], index) => `${writableColumns[key]} = $${index + 1}`);
-        const values = entries.map(([, value]) => value);
+        const values = entries.map(([key, value]) => key === 'maxOccupancy' && current.location_type === 'GATE' ? null : value);
         values.push(locationId);
         const updatedResult = await client.query(
           `UPDATE mams.location
               SET ${assignments.join(', ')}, updated_at = now()
             WHERE location_id = $${values.length}
           RETURNING location_id, name, location_type, is_restricted,
-                    department_id, status, created_at, updated_at`,
+                    department_id, max_occupancy, status, created_at, updated_at`,
           values,
         );
         const location = updatedResult.rows[0];

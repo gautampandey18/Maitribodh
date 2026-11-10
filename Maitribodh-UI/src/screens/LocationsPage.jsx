@@ -31,7 +31,7 @@ import {
 import { api } from '../api.js';
 import { requestMessage } from '../utils/resources.js';
 
-const emptyLocation = { name: '', locationType: 'GATE', isRestricted: false, departmentId: '' };
+const emptyLocation = { name: '', locationType: 'GATE', isRestricted: false, departmentId: '', maxOccupancy: '' };
 const locationTypes = ['GATE', 'AREA'];
 
 export default function LocationsPage() {
@@ -132,6 +132,7 @@ export default function LocationsPage() {
         locationType: response.data.location_type,
         isRestricted: response.data.is_restricted,
         departmentId: response.data.department_id?.toString() ?? '',
+        maxOccupancy: response.data.max_occupancy?.toString() ?? '',
       });
       setFormError('');
       setDialogOpen(true);
@@ -169,6 +170,9 @@ export default function LocationsPage() {
       locationType: locationForm.locationType,
       isRestricted: locationForm.locationType === 'AREA' && locationForm.isRestricted,
       departmentId: locationForm.departmentId ? Number(locationForm.departmentId) : null,
+      maxOccupancy: locationForm.locationType === 'AREA' && locationForm.maxOccupancy
+        ? Number(locationForm.maxOccupancy)
+        : null,
     };
     try {
       if (editing) {
@@ -225,6 +229,7 @@ export default function LocationsPage() {
                   <TableCell>Location</TableCell>
                   <TableCell>Type</TableCell>
                   <TableCell>Restricted area</TableCell>
+                  <TableCell>Maximum occupancy</TableCell>
                   <TableCell align="right">Actions</TableCell>
                 </TableRow>
               </TableHead>
@@ -234,6 +239,7 @@ export default function LocationsPage() {
                     <TableCell><Typography fontWeight={600}>{location.name}</Typography></TableCell>
                     <TableCell>{location.location_type}</TableCell>
                     <TableCell>{location.is_restricted ? 'Yes' : 'No'}</TableCell>
+                    <TableCell>{location.location_type === 'AREA' ? location.max_occupancy ?? 'Unlimited' : '—'}</TableCell>
                     <TableCell align="right">
                       <Tooltip title={`Edit ${location.name}`}>
                         <span>
@@ -246,7 +252,7 @@ export default function LocationsPage() {
                   </TableRow>
                 ))}
                 {!locations.length && (
-                  <TableRow><TableCell colSpan={4} className="empty-table">No active locations configured.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={5} className="empty-table">No active locations configured.</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
@@ -285,6 +291,16 @@ export default function LocationsPage() {
               <MenuItem value="GATE">Gate</MenuItem>
               <MenuItem value="AREA">Area</MenuItem>
             </TextField>
+            {locationForm.locationType === 'AREA' && <TextField
+              name="maxOccupancy"
+              label="Maximum occupancy"
+              type="number"
+              value={locationForm.maxOccupancy}
+              onChange={updateForm}
+              inputProps={{ min: 1, step: 1 }}
+              helperText="Leave blank for no occupancy limit."
+              fullWidth
+            />}
             <TextField name="departmentId" label="Department" value={locationForm.departmentId} onChange={updateForm} select fullWidth>
               <MenuItem value="">None</MenuItem>
               {departments.map((department) => (

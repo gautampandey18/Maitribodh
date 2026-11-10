@@ -62,7 +62,7 @@ it('summarizes audit values without making table rows interactive', async () => 
   expect(await screen.findByText(summaryText('Status: PENDING'))).toBeInTheDocument();
   expect(screen.getByText(summaryText('Status: ACTIVE'))).toBeInTheDocument();
   expect(screen.getByText(summaryText('Reason: —'))).toBeInTheDocument();
-  expect(screen.getByText('9876543210')).toBeInTheDocument();
+  expect(screen.getByText('+91 98765 43210')).toBeInTheDocument();
   expect(screen.getByText('+1 more fields')).toBeInTheDocument();
   expect(screen.queryByText('{"status":"PENDING"}')).not.toBeInTheDocument();
   const panel = screen.getByRole('region', { name: 'Audit records' });
@@ -103,7 +103,7 @@ it('sends free-text search changes to the audit API', async () => {
   await user.type(screen.getByRole('textbox', { name: 'Search entry or mobile number' }), '9876543210');
 
   expect(await screen.findByText('CHECK_IN')).toBeInTheDocument();
-  expect(screen.getByText('9876543210')).toBeInTheDocument();
+  expect(screen.getByText('+91 98765 43210')).toBeInTheDocument();
   await waitFor(() => expect(get).toHaveBeenLastCalledWith('/audit?page=1&pageSize=5&query=9876543210', expect.objectContaining({ signal: expect.any(AbortSignal) })));
   await user.click(screen.getByRole('button', { name: 'Clear filters' }));
   expect(screen.getByRole('textbox', { name: 'Search entry or mobile number' })).toHaveValue('');
