@@ -4,7 +4,7 @@ export function createGateRepository(pool) {
       const result = await pool.query(
         `SELECT location_id
            FROM mams.location
-          WHERE location_id = $1 AND status = 'ACTIVE'`,
+        WHERE location_id = $1 AND location_type = 'AREA' AND status = 'ACTIVE'`,
         [locationId],
       );
       return result.rowCount > 0;
@@ -13,7 +13,7 @@ export function createGateRepository(pool) {
     async findCandidates({ personCode, mobile, query, locationId }) {
       const result = await pool.query(
         `SELECT p.person_id, p.person_code, p.first_name, p.last_name,
-                c.name AS category, p.status, p.qr_version, p.photo_key, p.mobile,
+                c.name AS category, p.status, identity.qr_version, p.photo_key, p.mobile,
                 p.expires_on < (now() AT TIME ZONE 'Asia/Kolkata')::date AS access_expired,
                 (c.form_type = 'PARTICIPANT' AND NULLIF(program.extra->>'end_date', '')::date
                   < (now() AT TIME ZONE 'Asia/Kolkata')::date) AS event_expired,
@@ -35,19 +35,36 @@ export function createGateRepository(pool) {
                    WHERE pl.person_id = p.person_id AND pl.location_id = l.location_id
                 )) AS location_warning
            FROM mams.person AS p
+           JOIN mams.person_identity AS identity USING (identity_id)
            JOIN mams.category AS c ON c.category_id = p.category_id
            LEFT JOIN mams.lookup_value AS program ON program.lookup_type = 'PROGRAM_BATCH'
              AND program.lookup_id::text = p.category_details->>'program_batch_id'
            LEFT JOIN mams.visit AS v ON v.person_id = p.person_id AND v.status = 'OPEN'
            JOIN mams.location AS l ON l.location_id = $3 AND l.status = 'ACTIVE'
           WHERE p.status <> 'DRAFT'
-            AND (($1::varchar IS NOT NULL AND p.person_code = upper($1))
+            AND (($1::varchar IS NOT NULL AND (identity.qr_code = upper($1) OR p.person_code = upper($1)))
                 OR ($2::varchar IS NOT NULL AND (p.mobile = $2 OR ($2 ~ '^[0-9]{10}$' AND p.mobile = '+91' || $2)))
                 OR ($4::varchar IS NOT NULL AND (lower(p.person_code) = lower($4) OR p.mobile = $4 OR ($4 ~ '^[0-9]{10}$' AND p.mobile = '+91' || $4))))
           ORDER BY p.created_at DESC`,
         [personCode ?? null, mobile ?? null, locationId, query ?? null],
       );
       return result.rows;
+    },
+
+    async getAreaOccupancy(locationId) {
+      const result = await pool.query(
+        `SELECT location.max_occupancy,
+                COALESCE((SELECT sum(1 + visit.accompanying_count)::int
+                            FROM mams.visit AS visit
+                           WHERE visit.checkin_location_id = location.location_id
+                             AND visit.status = 'OPEN'), 0) AS current_occupancy
+           FROM mams.location AS location
+          WHERE location.location_id = $1
+            AND location.location_type = 'AREA'
+            AND location.status = 'ACTIVE'`,
+        [locationId],
+      );
+      return result.rows[0] ?? null;
     },
 
     async recordLookup({

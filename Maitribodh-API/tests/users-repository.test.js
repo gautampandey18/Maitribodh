@@ -22,6 +22,7 @@ test('user list and detail projections exclude credential/token fields', async (
   assert.deepEqual(queries[1].values, [15]);
   assert.match(queries[0].sql, /count\(\*\) OVER\(\)::int AS total/);
   assert.match(queries[0].sql, /username ILIKE/);
+  assert.match(queries[0].sql, /regexp_replace\(mobile, '\[\^0-9\]'/);
   assert.match(queries[0].sql, /AND \(\$2::varchar IS NULL OR \$2 = ANY\(roles\)\)/);
   assert.match(queries[0].sql, /LIMIT \$4 OFFSET \$5/);
   assert.deepEqual(queries[0].values, ['', null, null, 25, 0]);

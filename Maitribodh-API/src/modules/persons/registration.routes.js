@@ -186,7 +186,10 @@ export function createRegistrationRouter({ repository, authenticate, encryptionS
   }));
   router.patch('/:personId', authorize(...managementRoles), asyncHandler(async (request, response) => {
     const schema = registrationInputSchema.pick({ firstName: true, lastName: true, mobile: true, alternateMobile: true, email: true, address: true, emergencyName: true, emergencyMobile: true })
-      .extend({ futureCheckinAccess: z.boolean().optional() });
+      .extend({
+        email: registrationInputSchema.shape.email.optional(),
+        futureCheckinAccess: z.boolean().optional(),
+      });
     response.json(await repository.update({ personId: idFrom(request.params.personId), changes: parseInput(schema, request.body), actor: actorFrom(request) }));
   }));
   router.delete('/:personId', authorize(...managementRoles), asyncHandler(async (request, response) => {

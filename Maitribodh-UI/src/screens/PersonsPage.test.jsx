@@ -18,7 +18,7 @@ it('loads all registrations, filters by category, and requests the next page', a
     .mockResolvedValueOnce({
       data: {
         items: [
-          { person_id: 9, person_code: 'MB-000009', name: 'Initial Active', category: 'Visitor', mobile: '******1111', status: 'ACTIVE', created_at: '2026-10-10T09:30:00Z' },
+          { person_id: 9, person_code: 'MB-000009', name: 'Initial Active', category: 'Visitor', mobile: '9876543210', status: 'ACTIVE', created_at: '2026-10-10T09:30:00Z' },
           { person_id: 10, person_code: 'MB-000010', name: 'Initial Inactive', category: 'Staff', mobile: '******2222', status: 'DEACTIVATED', created_at: '2026-10-09T09:30:00Z' },
         ],
         total: 26,
@@ -56,6 +56,7 @@ it('loads all registrations, filters by category, and requests the next page', a
   );
 
   expect(await screen.findByText('Initial Active')).toBeInTheDocument();
+  expect(screen.getByText('+91 98765 43210')).toBeInTheDocument();
   expect(screen.getByText('Initial Inactive')).toBeInTheDocument();
   expect(screen.getByText('Inactive')).toBeInTheDocument();
   expect(screen.getByRole('columnheader', { name: 'Actions' })).toBeInTheDocument();

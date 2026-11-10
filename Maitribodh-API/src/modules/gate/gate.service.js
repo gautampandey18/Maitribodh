@@ -28,6 +28,7 @@ export function createGateService({ repository, qrService }) {
       }
 
       const candidates = await repository.findCandidates({ personCode, mobile, locationId, ...(query ? { query } : {}) });
+      const areaOccupancy = await repository.getAreaOccupancy(locationId);
       const items = candidates.map((candidate) => {
         let outcome;
         if (qrVersion !== undefined && candidate.qr_version !== qrVersion) {
@@ -80,7 +81,7 @@ export function createGateService({ repository, qrService }) {
         device: actor.device,
       });
 
-      return { items, outcome: items.length ? undefined : 'NOT_FOUND' };
+      return { items, outcome: items.length ? undefined : 'NOT_FOUND', areaOccupancy };
     },
   };
 }

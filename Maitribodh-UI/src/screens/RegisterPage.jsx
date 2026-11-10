@@ -66,7 +66,7 @@ const commonFields = [
   { key: 'firstName', label: 'First Name', required: true, maxLength: 100, pattern: '[\\p{L}\\p{M} \\x2d]+' },
   { key: 'lastName', label: 'Last Name', required: true, maxLength: 100, pattern: '[\\p{L}\\p{M} \\x2d]+' },
   { key: 'dateOfBirth', label: 'Date of Birth', type: 'date' },
-  { key: 'email', label: 'Email', type: 'email' },
+  { key: 'email', label: 'Email', type: 'email', required: true },
 ];
 
 export default function RegisterPage() {
@@ -106,7 +106,8 @@ export default function RegisterPage() {
         else if (trimmed.length > 100) fieldError = 'Last name cannot exceed 100 characters.';
         break;
       case 'email':
-        if (trimmed && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) fieldError = 'Enter a valid email address.';
+        if (!trimmed) fieldError = 'Email is required.';
+        else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) fieldError = 'Enter a valid email address.';
         break;
       case 'gender':
         if (!trimmed) fieldError = 'Gender is required.';
@@ -160,6 +161,8 @@ export default function RegisterPage() {
     }
     if (!values.firstName?.trim()) errors.firstName = 'First name is required.';
     if (!values.lastName?.trim()) errors.lastName = 'Last name is required.';
+    if (!values.email?.trim()) errors.email = 'Email is required.';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email.trim())) errors.email = 'Enter a valid email address.';
     if (!values.gender) errors.gender = 'Gender is required.';
     if (!values.residentStatus) errors.residentStatus = 'Resident status is required.';
     if (values.residentStatus === 'NON_RESIDENT') {

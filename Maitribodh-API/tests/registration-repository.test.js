@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createRegistrationRepository } from '../src/modules/persons/registration.repository.js';
 import { registrationInputSchema } from '../src/modules/persons/registration.validation.js';
 
-const input = registrationInputSchema.parse({ categoryId: 1, firstName: 'Asha', lastName: 'Patel', mobile: '9820000000', gender: 'OTHER', consent: true, categoryDetails: { purpose: 'Meeting', visit_date: '2026-10-09' } });
+const input = registrationInputSchema.parse({ categoryId: 1, firstName: 'Asha', lastName: 'Patel', mobile: '9820000000', email: 'asha@example.com', gender: 'OTHER', consent: true, categoryDetails: { purpose: 'Meeting', visit_date: '2026-10-09' } });
 const category = { category_id: 1, form_type: 'VISITOR', status: 'ACTIVE', approval_required: false, name: 'Visitor' };
 test('registration creates a versioned active profile, audit and notifications in one transaction', async () => {
   const calls = [];
@@ -11,6 +11,7 @@ test('registration creates a versioned active profile, audit and notifications i
     async query(sql, values) {
       calls.push({ sql, values });
       if (sql.includes('FOR SHARE')) return { rows: [category] };
+      if (sql.includes('FROM mams.person_identity')) return { rows: [{ identity_id: 14, qr_code: 'MB-000008', qr_version: 1 }] };
       if (sql.includes('INSERT INTO mams.person')) return { rows: [{ person_id: 8, person_code: 'MB-000008', status: 'ACTIVE', qr_version: 1 }] };
       return { rows: [], rowCount: 1 };
     }, release() {},
@@ -21,11 +22,45 @@ test('registration creates a versioned active profile, audit and notifications i
   assert.equal(calls[0].sql, 'BEGIN');
   const insertCall = calls.find((call) => call.sql.includes('INSERT INTO mams.person'));
   assert.doesNotMatch(insertCall.sql, /permission_level_id/);
-  assert.deepEqual(JSON.parse(insertCall.values[15]), input.categoryDetails);
+  assert.equal(insertCall.values[1], 14);
+  assert.deepEqual(JSON.parse(insertCall.values[16]), input.categoryDetails);
   const auditCall = calls.find((call) => call.sql.includes('INSERT INTO mams.audit_log'));
   assert.ok(auditCall);
   assert.equal(auditCall.values[7].length, 100);
   assert.ok(calls.some((call) => call.sql.includes('INSERT INTO mams.notification')));
+  assert.equal(calls.at(-1).sql, 'COMMIT');
+});
+test('a different category reuses the existing mobile identity and QR code', async () => {
+  const calls = [];
+  const client = {
+    async query(sql, values) {
+      calls.push({ sql, values });
+      if (sql.includes('FOR SHARE')) return { rows: [{ ...category, category_id: 2, name: 'Another Visitor' }] };
+      if (sql.includes('FROM mams.person_identity')) {
+        return { rows: [{ identity_id: 14, qr_code: 'MB-000008', qr_version: 3 }] };
+      }
+      if (sql.includes('INSERT INTO mams.person')) {
+        return { rows: [{ person_id: 9, person_code: 'MB-000009', status: 'ACTIVE', qr_version: 3 }] };
+      }
+      return { rows: [], rowCount: 1 };
+    },
+    release() {},
+  };
+  const repository = createRegistrationRepository({ async connect() { return client; } });
+
+  const person = await repository.create({
+    input: { ...input, categoryId: 2 },
+    category: { ...category, category_id: 2, name: 'Another Visitor' },
+    photoKey: 'participant.jpg',
+    documents: [],
+    passportEncrypted: null,
+    actor: { userId: 9, role: 'ADMIN' },
+  });
+
+  const insertCall = calls.find((call) => call.sql.includes('INSERT INTO mams.person'));
+  assert.equal(insertCall.values[1], 14);
+  assert.equal(person.person_code, 'MB-000009');
+  assert.equal(calls.some((call) => call.sql.includes('INSERT INTO mams.person_identity')), false);
   assert.equal(calls.at(-1).sql, 'COMMIT');
 });
 test('participant registration persists future access without changing its active QR', async () => {
@@ -35,9 +70,10 @@ test('participant registration persists future access without changing its activ
     const client = {
       async query(sql, values) {
         if (sql.includes('FOR SHARE')) return { rows: [participant] };
+        if (sql.includes('FROM mams.person_identity')) return { rows: [{ identity_id: 14, qr_code: 'MB-000008', qr_version: 1 }] };
         if (sql.includes('FROM mams.lookup_value')) return { rows: [{ lookup_id: 1 }], rowCount: 1 };
         if (sql.includes('INSERT INTO mams.person')) {
-          insertedDetails = JSON.parse(values[15]);
+          insertedDetails = JSON.parse(values[16]);
           return { rows: [{ person_id: 8, person_code: 'MB-000008', status: 'ACTIVE', qr_version: 1 }] };
         }
         return { rows: [], rowCount: 1 };
@@ -80,6 +116,7 @@ test('text category fields are not treated as integer master-data references', a
     async query(sql, values) {
       calls.push({ sql, values });
       if (sql.includes('FOR SHARE')) return { rows: [categoryWithTextField] };
+      if (sql.includes('FROM mams.person_identity')) return { rows: [{ identity_id: 14, qr_code: 'MB-000008', qr_version: 1 }] };
       if (sql.includes('INSERT INTO mams.person')) return { rows: [{ person_id: 8, person_code: 'MB-000008', status: 'ACTIVE', qr_version: 1 }] };
       return { rows: [], rowCount: 1 };
     }, release() {},
@@ -101,7 +138,7 @@ test('text category fields are not treated as integer master-data references', a
 
   assert.equal(calls.some(({ sql }) => sql.includes('FROM mams.lookup_value WHERE lookup_id')), false);
   const insertCall = calls.find(({ sql }) => sql.includes('INSERT INTO mams.person'));
-  assert.deepEqual(JSON.parse(insertCall.values[15]), { approval_note: 'approved' });
+  assert.deepEqual(JSON.parse(insertCall.values[16]), { approval_note: 'approved' });
 });
 test('draft list excludes drafts whose categories are inactive or deleted', async () => {
   let call;

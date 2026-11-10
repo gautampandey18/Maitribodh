@@ -7,6 +7,8 @@ test('check-in permits assigned location access and audits it atomically', async
   const client = {
     async query(sql, values = []) {
       calls.push({ sql, values });
+      if (sql.includes('SELECT location_id, max_occupancy')) return { rows: [{ location_id: 3, max_occupancy: null }] };
+      if (sql.includes('SELECT COALESCE(sum(1 + accompanying_count)')) return { rows: [{ current_occupancy: 0 }] };
       if (sql.includes('FROM mams.person AS p')) {
         return {
           rows: [{
@@ -53,12 +55,13 @@ test('check-in permits assigned location access and audits it atomically', async
   assert.equal(visit.locationWarning, false);
   assert.equal(visit.location_override, false);
   assert.equal(calls[0].sql, 'BEGIN');
-  assert.match(calls[1].sql, /FOR UPDATE OF p/);
-  assert.match(calls[2].sql, /location_override\)\s+VALUES .*\$8/s);
-  assert.equal(calls[2].values[7], false);
-  assert.match(calls[3].sql, /INSERT INTO mams.audit_log/);
-  assert.match(calls[3].values[3], /"location_warning":false/);
-  assert.equal(calls[4].sql, 'COMMIT');
+  assert.match(calls[1].sql, /FOR UPDATE/);
+  assert.match(calls[2].sql, /FOR UPDATE OF p/);
+  assert.match(calls[4].sql, /location_override\)\s+VALUES .*\$8/s);
+  assert.equal(calls[4].values[7], false);
+  assert.match(calls[5].sql, /INSERT INTO mams.audit_log/);
+  assert.match(calls[5].values[3], /"location_warning":false/);
+  assert.equal(calls[6].sql, 'COMMIT');
 });
 
 test('check-in rejects blacklisted people without inserting a visit', async () => {
@@ -66,6 +69,8 @@ test('check-in rejects blacklisted people without inserting a visit', async () =
   const client = {
     async query(sql) {
       calls.push(sql);
+      if (sql.includes('SELECT location_id, max_occupancy')) return { rows: [{ location_id: 3, max_occupancy: null }] };
+      if (sql.includes('SELECT COALESCE(sum(1 + accompanying_count)')) return { rows: [{ current_occupancy: 0 }] };
       if (sql.includes('FROM mams.person AS p')) {
         return {
           rows: [{
@@ -105,6 +110,8 @@ test('completed events are enforced during check-in and permitted future entries
     const client = {
       async query(sql, values = []) {
         calls.push({ sql, values });
+        if (sql.includes('SELECT location_id, max_occupancy')) return { rows: [{ location_id: 3, max_occupancy: null }] };
+        if (sql.includes('SELECT COALESCE(sum(1 + accompanying_count)')) return { rows: [{ current_occupancy: 0 }] };
         if (sql.includes('FROM mams.person AS p')) return { rows: [{
           status: 'ACTIVE', gate_valid: true, area_valid: true,
           event_expired: true, future_checkin_access: futureAccess,
@@ -176,6 +183,8 @@ test('check-in records a location override for an unassigned restricted area', a
   const client = {
     async query(sql, values = []) {
       calls.push({ sql, values });
+      if (sql.includes('SELECT location_id, max_occupancy')) return { rows: [{ location_id: 3, max_occupancy: null }] };
+      if (sql.includes('SELECT COALESCE(sum(1 + accompanying_count)')) return { rows: [{ current_occupancy: 0 }] };
       if (sql.includes('FROM mams.person AS p')) {
         return { rows: [{ person_id: 8, status: 'ACTIVE', gate_valid: true, area_valid: true, location_warning: true, is_blacklisted: false, already_inside: false }] };
       }
@@ -199,6 +208,8 @@ test('check-in still blocks expired access without a visit', async () => {
     const client = {
       async query(sql) {
         calls.push(sql);
+        if (sql.includes('SELECT location_id, max_occupancy')) return { rows: [{ location_id: 3, max_occupancy: null }] };
+        if (sql.includes('SELECT COALESCE(sum(1 + accompanying_count)')) return { rows: [{ current_occupancy: 0 }] };
         return sql.includes('FROM mams.person AS p') ? { rows: [{ status: 'ACTIVE', gate_valid: true, area_valid: true, ...flags }] } : { rows: [] };
       },
       release() {},
@@ -208,6 +219,36 @@ test('check-in still blocks expired access without a visit', async () => {
     assert.equal(calls.some((sql) => sql.includes('INSERT INTO mams.visit')), false);
     assert.equal(calls.at(-1), 'ROLLBACK');
   }
+});
+
+test('check-in blocks entry when the person and accompanying guests exceed area capacity', async () => {
+  const calls = [];
+  const client = {
+    async query(sql) {
+      calls.push(sql);
+      if (sql.includes('SELECT location_id, max_occupancy')) return { rows: [{ location_id: 3, max_occupancy: 4 }] };
+      if (sql.includes('FROM mams.person AS p')) return { rows: [{
+        status: 'ACTIVE', accompanying_count: 2, gate_valid: true, area_valid: true,
+        is_blacklisted: false, already_inside: false, location_warning: false,
+      }] };
+      if (sql.includes('SELECT COALESCE(sum(1 + accompanying_count)')) return { rows: [{ current_occupancy: 2 }] };
+      return { rows: [], rowCount: 1 };
+    },
+    release() {},
+  };
+  const repository = createVisitsRepository({ async connect() { return client; } });
+
+  await assert.rejects(
+    repository.checkIn({
+      personId: 8,
+      checkinGateId: 2,
+      checkinLocationId: 3,
+      accompanyingCount: 2,
+    }),
+    (error) => error.statusCode === 409 && error.code === 'AREA_CAPACITY_REACHED',
+  );
+  assert.equal(calls.some((sql) => sql.includes('INSERT INTO mams.visit')), false);
+  assert.equal(calls.at(-1), 'ROLLBACK');
 });
 
 test('admin reconciliation closes one open visit and records the required audit note atomically', async () => {

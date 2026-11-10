@@ -257,7 +257,7 @@ test('Admin reset stores only a hash and returns a 24-hour temporary password on
   });
 
   assert.equal(hashRounds, 12);
-  assert.equal(result.temporaryPassword.length, 32);
+  assert.match(result.temporaryPassword, /^[a-z]{4}(-[a-z]{4}){3}-\d{4}$/);
   assert.equal(result.expiresAt.toISOString(), '2026-10-10T12:00:00.000Z');
   assert.equal(resetInput.passwordHash, `bcrypt:${result.temporaryPassword}`);
   assert.equal(resetInput.temporaryPassword, undefined);

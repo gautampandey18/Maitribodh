@@ -8,6 +8,17 @@ export function createVisitsRepository(pool) {
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
+        const areaResult = await client.query(
+          `SELECT location_id, max_occupancy
+             FROM mams.location
+            WHERE location_id = $1 AND location_type = 'AREA' AND status = 'ACTIVE'
+            FOR UPDATE`,
+          [checkinLocationId],
+        );
+        const area = areaResult.rows[0];
+        if (!area) {
+          throw new ApiError(400, 'INVALID_LOCATION', 'Select an active gate and area');
+        }
         const personResult = await client.query(
           `SELECT p.person_id, p.status, p.accompanying_count, p.accompanying,
               p.expires_on < (now() AT TIME ZONE 'Asia/Kolkata')::date AS access_expired,
@@ -68,6 +79,17 @@ export function createVisitsRepository(pool) {
         const count = accompanyingCount !== undefined && accompanyingCount !== null
           ? Number(accompanyingCount)
           : (person.accompanying_count ?? 0);
+        const occupancyResult = await client.query(
+          `SELECT COALESCE(sum(1 + accompanying_count), 0)::int AS current_occupancy
+             FROM mams.visit
+            WHERE checkin_location_id = $1 AND status = 'OPEN'`,
+          [checkinLocationId],
+        );
+        const currentOccupancy = occupancyResult.rows[0].current_occupancy;
+        if (area.max_occupancy !== null
+          && currentOccupancy + 1 + count > area.max_occupancy) {
+          throw new ApiError(409, 'AREA_CAPACITY_REACHED', 'This area has reached its maximum occupancy');
+        }
         const insertedResult = await client.query(
           `INSERT INTO mams.visit
              (person_id, checkin_gate_id, checkin_location_id, checkin_by,
@@ -88,6 +110,7 @@ export function createVisitsRepository(pool) {
           ],
         );
         const visit = insertedResult.rows[0];
+        const nextOccupancy = currentOccupancy + 1 + count;
         await client.query(
           `INSERT INTO mams.audit_log
              (user_id, user_role, module, activity, entity_type, entity_id,
@@ -111,7 +134,12 @@ export function createVisitsRepository(pool) {
           ],
         );
         await client.query('COMMIT');
-        return { ...visit, locationWarning: person.location_warning, eventWarning: Boolean(person.event_expired && person.future_checkin_access) };
+        return {
+          ...visit,
+          locationWarning: person.location_warning,
+          eventWarning: Boolean(person.event_expired && person.future_checkin_access),
+          areaOccupancy: { currentOccupancy: nextOccupancy, maxOccupancy: area.max_occupancy },
+        };
       } catch (error) {
         await client.query('ROLLBACK').catch(() => {});
         if (error.code === '23505') {

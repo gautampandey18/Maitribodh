@@ -17,7 +17,8 @@ test('person search uses the documented filters, preserves duplicates, and accep
   assert.match(queryInput.sql, /LIMIT \$5 OFFSET \$4/);
   assert.match(queryInput.sql, /\$1 = '' OR p\.person_code/);
   assert.match(queryInput.sql, /p\.mobile = \$1/);
-  assert.match(queryInput.sql, /p\.expires_on, p\.qr_version/);
+  assert.match(queryInput.sql, /identity\.qr_code AS identity_qr_code, identity\.qr_version/);
+  assert.match(queryInput.sql, /regexp_replace\(p\.mobile/);
   assert.doesNotMatch(queryInput.sql, /DISTINCT/);
   assert.doesNotMatch(queryInput.sql, /photo_key/);
   assert.deepEqual(queryInput.values, ['MB-000001', 4, 'ACTIVE', 25, 50]);

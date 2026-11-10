@@ -25,6 +25,7 @@ export function splitPhoneNumber(value) {
 
 export function formatPhoneNumber(value) {
   if (typeof value !== 'string' || !value.trim()) return value ?? '';
-  const parsed = parsePhoneNumberFromString(value);
+  const normalized = /^\d{10}$/.test(value) ? `+91${value}` : value;
+  const parsed = parsePhoneNumberFromString(normalized);
   return parsed?.isValid() ? parsed.formatInternational() : value;
 }

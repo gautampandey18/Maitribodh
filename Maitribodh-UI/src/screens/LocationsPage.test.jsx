@@ -41,6 +41,7 @@ it('creates a restricted area with a department and prevents restricting gates',
   const restricted = screen.getByRole('checkbox', { name: 'Restricted area' });
   expect(restricted).toBeEnabled();
   await user.type(screen.getByRole('textbox', { name: 'Location name' }), 'Workshop');
+  await user.type(screen.getByRole('spinbutton', { name: 'Maximum occupancy' }), '50');
   await user.click(restricted);
   await user.click(screen.getByRole('combobox', { name: 'Department' }));
   await user.click(screen.getByRole('option', { name: 'Facilities' }));
@@ -51,6 +52,7 @@ it('creates a restricted area with a department and prevents restricting gates',
     locationType: 'AREA',
     isRestricted: true,
     departmentId: 12,
+    maxOccupancy: 50,
   }));
 }, 30_000);
 
@@ -76,7 +78,7 @@ it.each([
   }
   await user.click(screen.getByRole('button', { name: 'Save changes' }));
   await waitFor(() => expect(patch).toHaveBeenCalledWith('/locations/4', {
-    name: 'Workshop', locationType: nextType, isRestricted: false, departmentId: null,
+    name: 'Workshop', locationType: nextType, isRestricted: false, departmentId: null, maxOccupancy: null,
   }));
 }, 30_000);
 

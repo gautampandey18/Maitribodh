@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { registrationInputSchema, validateCategoryDetails } from '../src/modules/persons/registration.validation.js';
 import { categoryFieldSchema, categoryFormSchema } from '../src/constants/category-schema.js';
 
-const rawInput = { categoryId: 1, firstName: 'Asha', lastName: 'Patel', mobile: '9820000000', gender: 'OTHER', consent: true, categoryDetails: { purpose: 'Meeting', visit_date: '2026-10-09' } };
+const rawInput = { categoryId: 1, firstName: 'Asha', lastName: 'Patel', mobile: '9820000000', email: 'asha@example.com', gender: 'OTHER', consent: true, categoryDetails: { purpose: 'Meeting', visit_date: '2026-10-09' } };
 const input = registrationInputSchema.parse(rawInput);
 const category = { form_type: 'VISITOR', status: 'ACTIVE', approval_required: false };
 test('registration validates names, consent and mobile', () => {
@@ -12,6 +12,7 @@ test('registration validates names, consent and mobile', () => {
   assert.equal(input.mobile, '+919820000000');
   assert.equal(registrationInputSchema.safeParse({ ...input, mobile: '+123' }).success, false);
   for (const change of [{ mobile: '123' }, { firstName: 'Asha1' }, { consent: false }, { dateOfBirth: 'invalid' }]) assert.equal(registrationInputSchema.safeParse({ ...rawInput, ...change }).success, false);
+  assert.equal(registrationInputSchema.safeParse({ ...rawInput, email: '' }).success, false);
 });
 test('required dynamic fields and unconfirmed approval block registration', () => {
   assert.throws(() => validateCategoryDetails({ ...input, categoryDetails: {} }, category, 'ADMIN'), /Purpose of Visit is required/);

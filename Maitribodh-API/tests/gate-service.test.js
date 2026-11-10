@@ -15,6 +15,7 @@ test('gate decisions follow blacklist, status, inside, and location precedence',
     repository: {
       async isActiveLocation() { return true; },
       async findCandidates() { return rows; },
+      async getAreaOccupancy() { return { current_occupancy: 4, max_occupancy: 20 }; },
       async recordLookup(input) { audit = input; },
     },
     qrService: { verifyQrPayload() { return null; } },
@@ -52,6 +53,7 @@ test('completed events require explicit future access and preserve gate restrict
     repository: {
       async isActiveLocation() { return true; },
       async findCandidates() { return rows; },
+      async getAreaOccupancy() { return null; },
       async recordLookup() {},
     },
     qrService: {},
@@ -71,6 +73,7 @@ test('invalid QR is audited and rejected before person lookup', async () => {
     repository: {
       async isActiveLocation() { return true; },
       async findCandidates() { candidateQuery = true; return []; },
+      async getAreaOccupancy() { return null; },
       async recordLookup(input) { audit = input; },
     },
     qrService: { verifyQrPayload() { return null; } },
@@ -94,6 +97,7 @@ test('mobile lookup returns a uniform not-found outcome and audits masked input'
     repository: {
       async isActiveLocation() { return true; },
       async findCandidates() { return []; },
+      async getAreaOccupancy() { return null; },
       async recordLookup(input) { audit = input; },
     },
     qrService: {},
@@ -105,6 +109,6 @@ test('mobile lookup returns a uniform not-found outcome and audits masked input'
     actor: { userId: 8, role: 'SECURITY_GUARD' },
   });
 
-  assert.deepEqual(result, { items: [], outcome: 'NOT_FOUND' });
+  assert.deepEqual(result, { items: [], outcome: 'NOT_FOUND', areaOccupancy: null });
   assert.equal(audit.mobileMasked, '******3210');
 });

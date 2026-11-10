@@ -55,6 +55,19 @@ it('searches configured gates and areas from their selectors', async () => {
   expect(await screen.findByRole('option', { name: 'Workshop Area' })).toBeInTheDocument();
 }, 30_000);
 
+it('displays the current and maximum occupancy for the selected area', async () => {
+  vi.spyOn(api, 'get').mockResolvedValue({
+    data: {
+      ...options,
+      locations: options.locations.map((location) => location.location_type === 'AREA'
+        ? { ...location, current_occupancy: 12, max_occupancy: 30 }
+        : location),
+    },
+  });
+  render(<MemoryRouter><GatePage /></MemoryRouter>);
+  expect(await screen.findByText('Area occupancy: 12 / 30')).toBeInTheDocument();
+});
+
 it('requires lookup and photo confirmation before check-in', async () => {
   vi.spyOn(api, 'get').mockResolvedValue({ data: options });
   const post = vi.spyOn(api, 'post').mockResolvedValue({ data: { items: [{ personId: 8, personCode: 'MB-000008', name: 'Asha Patel', category: 'Visitor', outcome: 'ELIGIBLE', status: 'ACTIVE', openVisitId: null }] } });
@@ -619,5 +632,4 @@ it('only allows mobile numbers in the input box and validates before search', as
   const selectedDetails = screen.getByRole('region', { name: 'Selected person details' });
   expect(selectedDetails).toHaveTextContent('Multi One');
 }, 30_000);
-
 

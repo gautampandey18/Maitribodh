@@ -25,7 +25,7 @@ export const registrationInputSchema = z.object({
   idProofTypeId: z.coerce.number().int().positive().nullable().optional().default(null),
   idProofNumber: optionalText(50),
   dateOfBirth: z.union([z.iso.date(), z.literal('')]).optional().default(''),
-  address: optionalText(500), email: z.union([z.email().max(150), z.literal('')]).optional().default(''),
+  address: optionalText(500), email: z.string().trim().min(1, 'Email is required').email().max(150),
   emergencyName: optionalText(100), emergencyMobile: optionalPhone.optional().default(''),
   locationIds: z.array(z.coerce.number().int().positive()).max(100).default([]),
   accompanyingCount: z.coerce.number().int().min(0).max(32767).default(0),

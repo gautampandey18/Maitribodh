@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { randomInt } from 'node:crypto';
 import { ApiError } from '../../errors/ApiError.js';
 import { getRoles } from '../../constants/roles.js';
 
@@ -82,7 +82,7 @@ export function createAuthService({
     },
 
     async issueTemporaryPassword({ targetUserId, adminUserId, adminRole, ipAddress, device }) {
-      const temporaryPassword = randomBytes(24).toString('base64url');
+      const temporaryPassword = generateTemporaryPassword();
       const expiresAt = new Date(clock().getTime() + 24 * 60 * 60 * 1000);
       const passwordHash = await hashPassword(temporaryPassword, 12);
       const reset = await repository.setTemporaryPassword({
@@ -102,6 +102,17 @@ export function createAuthService({
       return { temporaryPassword, expiresAt };
     },
   };
+}
+
+function generateTemporaryPassword() {
+  const consonants = 'bcdfghjkmnpqrstvwz';
+  const vowels = 'aeou';
+  const word = () => Array.from({ length: 2 }, () => (
+    consonants[randomInt(consonants.length)] + vowels[randomInt(vowels.length)]
+  )).join('');
+  const words = Array.from({ length: 4 }, word);
+  const digits = String(randomInt(10_000)).padStart(4, '0');
+  return `${words.join('-')}-${digits}`;
 }
 
 function isLocked(lockedUntil, now) {

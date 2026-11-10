@@ -156,6 +156,7 @@ it('requires and submits a photograph with a valid registration', async () => {
   expect(screen.getByText('Category: Visitor')).toBeInTheDocument();
   await user.type(screen.getByRole('textbox', { name: 'First Name' }), 'Asha');
   await user.type(screen.getByRole('textbox', { name: 'Last Name' }), 'Patel');
+  await user.type(screen.getByRole('textbox', { name: 'Email' }), 'asha@example.com');
   await user.click(screen.getByRole('combobox', { name: 'Country code' }));
   await user.click(screen.getByRole('option', { name: /United States \(\+1\)/ }));
   await user.type(screen.getByRole('textbox', { name: 'Mobile Number' }), '4155552671');
