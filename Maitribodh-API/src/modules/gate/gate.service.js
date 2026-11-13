@@ -29,7 +29,7 @@ export function createGateService({ repository, qrService }) {
 
       const candidates = await repository.findCandidates({ personCode, mobile, locationId, ...(query ? { query } : {}) });
       const areaOccupancy = await repository.getAreaOccupancy(locationId);
-      const items = candidates.map((candidate) => {
+      const mappedCandidates = candidates.map((candidate) => {
         let outcome;
         if (qrVersion !== undefined && candidate.qr_version !== qrVersion) {
           outcome = 'INVALID_QR';
@@ -49,6 +49,8 @@ export function createGateService({ repository, qrService }) {
 
         return {
           personId: candidate.person_id,
+          userId: candidate.user_id ?? candidate.identity_id,
+          identityId: candidate.identity_id,
           personCode: candidate.person_code,
           name: `${candidate.first_name} ${candidate.last_name}`.trim(),
           category: candidate.category,
@@ -67,6 +69,15 @@ export function createGateService({ repository, qrService }) {
           outcome,
         };
       });
+      const people = new Map();
+      for (const item of mappedCandidates) {
+        const key = item.identityId ?? `person:${item.personId}`;
+        const current = people.get(key);
+        if (!current || candidatePriority(item.outcome) < candidatePriority(current.outcome)) {
+          people.set(key, item);
+        }
+      }
+      const items = [...people.values()];
       const outcomes = items.length ? items.map((item) => item.outcome) : ['NOT_FOUND'];
 
       await repository.recordLookup({
@@ -84,6 +95,18 @@ export function createGateService({ repository, qrService }) {
       return { items, outcome: items.length ? undefined : 'NOT_FOUND', areaOccupancy };
     },
   };
+}
+
+function candidatePriority(outcome) {
+  return ({
+    BLOCKED_BLACKLIST: 0,
+    ALREADY_INSIDE: 1,
+    ELIGIBLE: 2,
+    LOCATION_WARNING: 3,
+    EVENT_ACCESS_EXPIRED: 4,
+    NOT_ACTIVE: 5,
+    INVALID_QR: 6,
+  })[outcome] ?? 7;
 }
 
 function maskMobile(mobile) {

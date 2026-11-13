@@ -3,7 +3,9 @@ export function createDashboardRepository(pool) {
     async summary() {
       const result = await pool.query(
         `SELECT
-           (SELECT count(*)::int FROM mams.person WHERE status = 'ACTIVE') AS active_persons,
+           (SELECT count(DISTINCT COALESCE(identity_id, -person_id))::int
+              FROM mams.person
+             WHERE status = 'ACTIVE') AS active_persons,
            (SELECT count(*)::int FROM mams.person
              WHERE status <> 'DRAFT'
                AND (created_at AT TIME ZONE 'Asia/Kolkata')::date = (now() AT TIME ZONE 'Asia/Kolkata')::date
@@ -16,7 +18,9 @@ export function createDashboardRepository(pool) {
                AND (checkout_at AT TIME ZONE 'Asia/Kolkata')::date = (now() AT TIME ZONE 'Asia/Kolkata')::date
            ) AS checkouts_today,
            (SELECT count(*)::int FROM mams.person AS p JOIN mams.category AS c ON c.category_id = p.category_id WHERE p.status = 'PENDING' AND c.approval_required = true) AS pending_approvals,
-           (SELECT count(*)::int FROM mams.person WHERE status IN ('ACTIVE', 'PENDING')) AS total_users,
+           (SELECT count(DISTINCT COALESCE(identity_id, -person_id))::int
+              FROM mams.person
+             WHERE status IN ('ACTIVE', 'PENDING')) AS total_users,
            (SELECT count(*)::int FROM mams.audit_log
              WHERE module = 'GATE' AND activity = 'GATE_BLOCKED_BLACKLIST'
                AND (occurred_at AT TIME ZONE 'Asia/Kolkata')::date = (now() AT TIME ZONE 'Asia/Kolkata')::date
@@ -59,7 +63,7 @@ export function createDashboardRepository(pool) {
       const [result, count] = await Promise.all([
         pool.query(
         `SELECT a.occurred_at, coalesce(u.username, 'system') AS actor,
-                nullif(trim(concat_ws(' ', p.first_name, p.last_name)), '') AS person_name,
+                nullif(trim(concat_ws(' ', identity.first_name, identity.last_name)), '') AS person_name,
                 c.name AS category, l.name AS location, a.module, a.activity
            FROM mams.audit_log AS a
            LEFT JOIN mams.app_user AS u ON u.user_id = a.user_id
@@ -67,6 +71,7 @@ export function createDashboardRepository(pool) {
            LEFT JOIN mams.person AS p ON p.person_id = CASE
              WHEN a.entity_type = 'PERSON' THEN a.entity_id
              WHEN a.entity_type = 'VISIT' THEN v.person_id END
+           LEFT JOIN mams.person_identity AS identity USING (identity_id)
            LEFT JOIN mams.category AS c ON c.category_id = p.category_id
            LEFT JOIN mams.location AS l ON l.location_id = CASE
              WHEN a.activity = 'CHECK_OUT' THEN v.checkout_location_id
@@ -94,15 +99,17 @@ export function createDashboardRepository(pool) {
     async inside({ pageSize, offset }) {
       const [result, count, byLocation, byCategory] = await Promise.all([
         pool.query(
-        `SELECT v.visit_id, p.person_id, p.person_code,
-                p.first_name || ' ' || p.last_name AS name,
-                p.mobile, p.photo_key IS NOT NULL AS has_photo,
+        `SELECT v.visit_id, p.person_id, identity.identity_id AS user_id,
+                identity.qr_code AS person_code,
+                identity.first_name || ' ' || identity.last_name AS name,
+                identity.mobile, identity.photo_key IS NOT NULL AS has_photo,
                 c.name AS category, gi.name AS gate, li.name AS location,
                 v.checkin_at, v.accompanying_count, v.accompanying_names,
                 coalesce(u.first_name || ' ' || u.last_name, 'Staff') AS checked_in_by,
                 v.checkin_device
            FROM mams.visit AS v
            JOIN mams.person AS p ON p.person_id = v.person_id
+           JOIN mams.person_identity AS identity USING (identity_id)
            JOIN mams.category AS c ON c.category_id = p.category_id
            JOIN mams.location AS gi ON gi.location_id = v.checkin_gate_id
            JOIN mams.location AS li ON li.location_id = v.checkin_location_id

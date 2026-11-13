@@ -55,7 +55,7 @@ it('loads all registrations, filters by category, and requests the next page', a
     </Provider>,
   );
 
-  expect(screen.getByText('Find registrations, review their status, and manage person profiles.')).toBeInTheDocument();
+  expect(screen.getByText('Find people and manage their category registrations.')).toBeInTheDocument();
   expect(await screen.findByText('Initial Active')).toBeInTheDocument();
   expect(screen.getByText('+91 98765 43210')).toBeInTheDocument();
   expect(screen.getByText('Initial Inactive')).toBeInTheDocument();
@@ -103,15 +103,48 @@ it('deletes a person from the Actions column after confirmation', async () => {
   expect(screen.getByRole('menuitem', { name: 'Update' })).toBeInTheDocument();
   expect(screen.getAllByRole('menuitem')).toHaveLength(2);
   await user.click(screen.getByRole('menuitem', { name: 'Delete' }));
-  expect(screen.getByRole('dialog')).toHaveTextContent('permanently removes the person');
+  expect(screen.getByRole('dialog')).toHaveTextContent('selected category registration');
   expect(screen.getByRole('dialog')).toHaveTextContent('visit, blacklist, and approval history');
-  expect(screen.getByRole('dialog')).toHaveTextContent('Their category will not be deleted');
+  expect(screen.getByRole('dialog')).toHaveTextContent('Other category registrations and the shared person identity will remain');
   await user.click(screen.getByRole('button', { name: 'Delete', exact: true }));
 
   expect(remove).toHaveBeenCalledWith('/persons/12');
   expect(await screen.findByText('Mina Shah deleted')).toBeInTheDocument();
   expect(screen.getByText('No registrations found.')).toBeInTheDocument();
 }, 30_000);
+
+it('shows many person categories in an expandable comma-separated list', async () => {
+  vi.spyOn(api, 'get')
+    .mockResolvedValueOnce({ data: { categories: [] } })
+    .mockResolvedValueOnce({
+      data: {
+        items: [{
+          person_id: 22,
+          name: 'Asha Patel',
+          categories: ['Visitor', 'Vendor', 'Contractor', 'Devotee'],
+          category: 'Contractor, Devotee, Vendor, Visitor',
+          mobile: '******3210',
+          status: 'ACTIVE',
+          created_at: '2026-10-10T09:30:00Z',
+        }],
+        total: 1,
+        page: 1,
+        pageSize: 5,
+      },
+    });
+
+  render(
+    <Provider store={store}>
+      <MemoryRouter>
+        <PersonsPage />
+      </MemoryRouter>
+    </Provider>,
+  );
+
+  expect(await screen.findByText('Visitor, Vendor +2 more')).toBeInTheDocument();
+  await userEvent.setup().click(screen.getByRole('button', { name: 'View all categories for Asha Patel' }));
+  expect(screen.getByText('Visitor, Vendor, Contractor, Devotee')).toBeInTheDocument();
+});
 
 it('keeps the selected status and applies it only after Search is clicked', async () => {
   const get = vi.spyOn(api, 'get')

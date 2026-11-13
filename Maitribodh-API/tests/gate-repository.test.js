@@ -14,8 +14,10 @@ test('gate candidate query uses active location and checks blacklist, open visit
   await repository.findCandidates({ personCode: null, mobile: '9876543210', locationId: 3 });
 
   assert.match(queryInput.sql, /l\.status = 'ACTIVE'/);
+  assert.match(queryInput.sql, /identity\.qr_code AS person_code/);
+  assert.match(queryInput.sql, /AS active_categories/);
   assert.match(queryInput.sql, /b\.lifted_at IS NULL/);
-  assert.match(queryInput.sql, /v\.status = 'OPEN'/);
+  assert.match(queryInput.sql, /visit\.status = 'OPEN'/);
   assert.match(queryInput.sql, /mams\.person_location/);
   assert.match(queryInput.sql, /AS assigned_area_ids/);
   assert.match(queryInput.sql, /c\.form_type = 'PARTICIPANT'/);
@@ -23,7 +25,7 @@ test('gate candidate query uses active location and checks blacklist, open visit
   assert.match(queryInput.sql, /AS event_expired/);
   assert.match(queryInput.sql, /future_checkin_access' = 'YES'/);
   assert.match(queryInput.sql, /program\.lookup_id::text = p\.category_details->>'program_batch_id'/);
-  assert.match(queryInput.sql, /p\.mobile = \$2/);
+  assert.match(queryInput.sql, /identity\.mobile = \$2/);
     assert.deepEqual(queryInput.values, [null, '9876543210', 3, null]);
 });
 

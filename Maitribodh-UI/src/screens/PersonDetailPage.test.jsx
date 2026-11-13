@@ -144,6 +144,7 @@ it('edits profile inline and renders access details as readable fields', async (
   render(<Provider store={store}><MemoryRouter initialEntries={['/persons/8']}><Routes><Route path="/persons/:personId" element={<PersonDetailPage />} /></Routes></MemoryRouter></Provider>);
 
   expect(await screen.findByRole('heading', { name: 'Person details' })).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Add categories' })).toHaveAttribute('href', '/persons/8/categories');
   await screen.findByRole('button', { name: 'Download ID card' });
   expect(screen.getByLabelText('ID card download')).toContainElement(screen.getByRole('button', { name: 'Download ID card' }));
   expect(screen.getByLabelText('ID card download')).toContainElement(screen.getByRole('button', { name: 'Deactivate' }));

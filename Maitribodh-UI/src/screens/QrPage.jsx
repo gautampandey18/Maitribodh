@@ -164,7 +164,7 @@ export default function QrPage() {
                           {item.name}
                         </Button>
                       </TableCell>
-                      <TableCell>{item.category}</TableCell>
+                      <TableCell>{Object.hasOwn(item, 'active_category') ? item.active_category : item.category}</TableCell>
                       <TableCell>{formatPhoneNumber(item.mobile)}</TableCell>
                       <TableCell>{item.status === 'ACTIVE' && (item.qr_version ?? 0) > 0 ? 'Current' : item.status}</TableCell>
                     </TableRow>
@@ -178,7 +178,7 @@ export default function QrPage() {
               personId={selected.person_id}
               personCode={selected.identity_qr_code || selected.person_code}
               name={selected.name}
-              category={selected.category}
+              category={Object.hasOwn(selected, 'active_category') ? selected.active_category : selected.category}
               status={selected.status}
               photoSrc={photoSrc}
               mobile={formatPhoneNumber(selected.mobile)}

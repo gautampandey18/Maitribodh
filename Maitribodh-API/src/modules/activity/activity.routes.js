@@ -23,17 +23,18 @@ export function createActivityRouter({ pool, authenticate }) {
     if (!parsed.success) throw new ApiError(400, 'VALIDATION_ERROR', 'Invalid audit filters');
     const { query, userId, action, personId } = parsed.data;
     const pagination = parsePagination(request.query);
-    const result = await pool.query(`SELECT a.*, u.username AS actor, p.mobile AS person_mobile,
-      COALESCE(p.first_name || ' ' || p.last_name, a.entity_type || ' ' || a.entity_id::text, a.module) AS entity,
+    const result = await pool.query(`SELECT a.*, u.username AS actor, profile.mobile AS person_mobile,
+      COALESCE(profile.first_name || ' ' || profile.last_name, a.entity_type || ' ' || a.entity_id::text, a.module) AS entity,
       count(*) OVER()::int AS total FROM mams.audit_log a LEFT JOIN mams.app_user u USING(user_id)
       LEFT JOIN mams.person p ON a.entity_type = 'PERSON' AND p.person_id = a.entity_id
+      LEFT JOIN mams.person_identity AS profile ON profile.identity_id = p.identity_id
       WHERE ($1 = '' OR a.module ILIKE '%' || $1 || '%'
         OR a.activity ILIKE '%' || $1 || '%'
         OR a.entity_type ILIKE '%' || $1 || '%'
         OR a.entity_id::text ILIKE '%' || $1 || '%'
         OR u.username ILIKE '%' || $1 || '%'
-        OR p.mobile ILIKE '%' || $1 || '%'
-        OR p.first_name || ' ' || p.last_name ILIKE '%' || $1 || '%')
+        OR profile.mobile ILIKE '%' || $1 || '%'
+        OR profile.first_name || ' ' || profile.last_name ILIKE '%' || $1 || '%')
         AND ($2::bigint IS NULL OR a.user_id = $2) AND ($3::varchar IS NULL OR a.activity = $3)
         AND ($4::bigint IS NULL OR (a.entity_type = 'PERSON' AND a.entity_id = $4))
       ORDER BY a.occurred_at DESC, a.audit_id DESC LIMIT $5 OFFSET $6`, [query, userId ?? null, action ?? null, personId ?? null, pagination.pageSize, pagination.offset]);
@@ -62,13 +63,14 @@ export function createActivityRouter({ pool, authenticate }) {
           SELECT a.audit_id FROM mams.audit_log a
           LEFT JOIN mams.app_user u USING(user_id)
           LEFT JOIN mams.person p ON a.entity_type = 'PERSON' AND p.person_id = a.entity_id
+          LEFT JOIN mams.person_identity AS profile ON profile.identity_id = p.identity_id
           WHERE ($1 = '' OR a.module ILIKE '%' || $1 || '%'
             OR a.activity ILIKE '%' || $1 || '%'
             OR a.entity_type ILIKE '%' || $1 || '%'
             OR a.entity_id::text ILIKE '%' || $1 || '%'
             OR u.username ILIKE '%' || $1 || '%'
-            OR p.mobile ILIKE '%' || $1 || '%'
-            OR p.first_name || ' ' || p.last_name ILIKE '%' || $1 || '%')
+            OR profile.mobile ILIKE '%' || $1 || '%'
+            OR profile.first_name || ' ' || profile.last_name ILIKE '%' || $1 || '%')
             AND ($2::bigint IS NULL OR a.user_id = $2)
             AND ($3::varchar IS NULL OR a.activity = $3)
             AND ($4::bigint IS NULL OR (a.entity_type = 'PERSON' AND a.entity_id = $4))

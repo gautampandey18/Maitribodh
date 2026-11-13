@@ -12,19 +12,27 @@ export function createGateRepository(pool) {
 
     async findCandidates({ personCode, mobile, query, locationId }) {
       const result = await pool.query(
-        `SELECT p.person_id, p.person_code, p.first_name, p.last_name,
-                c.name AS category, p.status, identity.qr_version, p.photo_key, p.mobile,
+        `SELECT p.person_id, p.identity_id, identity.identity_id AS user_id,
+                identity.qr_code AS person_code, identity.first_name, identity.last_name,
+                COALESCE(active_categories.category, '') AS category,
+                CASE WHEN c.approval_required = false AND p.status = 'PENDING' THEN 'ACTIVE' ELSE p.status END AS status,
+                identity.qr_version, identity.photo_key, identity.mobile,
                 p.expires_on < (now() AT TIME ZONE 'Asia/Kolkata')::date AS access_expired,
                 (c.form_type = 'PARTICIPANT' AND NULLIF(program.extra->>'end_date', '')::date
                   < (now() AT TIME ZONE 'Asia/Kolkata')::date) AS event_expired,
                 p.category_details->>'future_checkin_access' = 'YES' AS future_checkin_access,
-                p.photo_key IS NOT NULL AS has_photo,
+                identity.photo_key IS NOT NULL AS has_photo,
                 COALESCE(v.accompanying_count, p.accompanying_count) AS accompanying_count, p.accompanying,
                 ARRAY(SELECT pl.location_id FROM mams.person_location AS pl
                     WHERE pl.person_id = p.person_id ORDER BY pl.location_id) AS assigned_area_ids,
                 EXISTS (
                   SELECT 1 FROM mams.blacklist AS b
-                   WHERE b.person_id = p.person_id
+                   WHERE b.person_id IN (
+                     SELECT membership.person_id
+                       FROM mams.person AS membership
+                      WHERE (p.identity_id IS NOT NULL AND membership.identity_id = p.identity_id)
+                         OR (p.identity_id IS NULL AND membership.person_id = p.person_id)
+                   )
                      AND b.lifted_at IS NULL
                      AND b.start_date <= (now() AT TIME ZONE 'Asia/Kolkata')::date
                      AND (b.end_date IS NULL OR b.end_date >= (now() AT TIME ZONE 'Asia/Kolkata')::date)
@@ -37,14 +45,31 @@ export function createGateRepository(pool) {
            FROM mams.person AS p
            JOIN mams.person_identity AS identity USING (identity_id)
            JOIN mams.category AS c ON c.category_id = p.category_id
+           LEFT JOIN LATERAL (
+             SELECT string_agg(DISTINCT active_category.name, ', ' ORDER BY active_category.name) AS category
+               FROM mams.person AS membership
+               JOIN mams.category AS active_category ON active_category.category_id = membership.category_id
+              WHERE (membership.status = 'ACTIVE'
+                  OR (membership.status = 'PENDING' AND active_category.approval_required = false))
+                AND membership.identity_id = p.identity_id
+           ) AS active_categories ON true
            LEFT JOIN mams.lookup_value AS program ON program.lookup_type = 'PROGRAM_BATCH'
              AND program.lookup_id::text = p.category_details->>'program_batch_id'
-           LEFT JOIN mams.visit AS v ON v.person_id = p.person_id AND v.status = 'OPEN'
+           LEFT JOIN LATERAL (
+             SELECT visit.visit_id, visit.checkin_at, visit.accompanying_count
+               FROM mams.visit AS visit
+               JOIN mams.person AS membership ON membership.person_id = visit.person_id
+              WHERE visit.status = 'OPEN'
+                AND ((p.identity_id IS NOT NULL AND membership.identity_id = p.identity_id)
+                  OR (p.identity_id IS NULL AND membership.person_id = p.person_id))
+              ORDER BY visit.checkin_at DESC
+              LIMIT 1
+           ) AS v ON true
            JOIN mams.location AS l ON l.location_id = $3 AND l.status = 'ACTIVE'
           WHERE p.status <> 'DRAFT'
-            AND (($1::varchar IS NOT NULL AND (identity.qr_code = upper($1) OR p.person_code = upper($1)))
-                OR ($2::varchar IS NOT NULL AND (p.mobile = $2 OR ($2 ~ '^[0-9]{10}$' AND p.mobile = '+91' || $2)))
-                OR ($4::varchar IS NOT NULL AND (lower(p.person_code) = lower($4) OR p.mobile = $4 OR ($4 ~ '^[0-9]{10}$' AND p.mobile = '+91' || $4))))
+            AND (($1::varchar IS NOT NULL AND identity.qr_code = upper($1))
+                OR ($2::varchar IS NOT NULL AND (identity.mobile = $2 OR ($2 ~ '^[0-9]{10}$' AND identity.mobile = '+91' || $2)))
+                OR ($4::varchar IS NOT NULL AND (lower(identity.qr_code) = lower($4) OR identity.mobile = $4 OR ($4 ~ '^[0-9]{10}$' AND identity.mobile = '+91' || $4))))
           ORDER BY p.created_at DESC`,
         [personCode ?? null, mobile ?? null, locationId, query ?? null],
       );

@@ -221,10 +221,11 @@ export function createVisitsRepository(pool) {
         await client.query('BEGIN');
         const current = (await client.query(
           `SELECT v.visit_id, v.person_id, v.checkin_gate_id, v.checkin_location_id,
-                  v.checkin_at, p.first_name || ' ' || p.last_name AS name,
+                  v.checkin_at, identity.first_name || ' ' || identity.last_name AS name,
                   l.name AS location
              FROM mams.visit AS v
              JOIN mams.person AS p ON p.person_id = v.person_id
+             JOIN mams.person_identity AS identity USING (identity_id)
              JOIN mams.location AS l ON l.location_id = v.checkin_location_id
             WHERE v.visit_id = $1 AND v.status = 'OPEN'
             FOR UPDATE OF v`,

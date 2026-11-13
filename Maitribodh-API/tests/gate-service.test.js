@@ -112,3 +112,26 @@ test('mobile lookup returns a uniform not-found outcome and audits masked input'
   assert.deepEqual(result, { items: [], outcome: 'NOT_FOUND', areaOccupancy: null });
   assert.equal(audit.mobileMasked, '******3210');
 });
+
+test('gate lookup shows one candidate per identity and prefers the usable category registration', async () => {
+  const rows = [
+    { person_id: 15, identity_id: 8, person_code: 'MB-000008', first_name: 'Asha', last_name: 'Patel', category: 'Visitor, Vendor', status: 'PENDING', is_blacklisted: false, access_expired: false, open_visit_id: null, location_warning: false },
+    { person_id: 12, identity_id: 8, person_code: 'MB-000008', first_name: 'Asha', last_name: 'Patel', category: 'Visitor, Vendor', status: 'ACTIVE', is_blacklisted: false, access_expired: false, open_visit_id: null, location_warning: false },
+  ];
+  const service = createGateService({
+    repository: {
+      async isActiveLocation() { return true; },
+      async findCandidates() { return rows; },
+      async getAreaOccupancy() { return null; },
+      async recordLookup() {},
+    },
+    qrService: {},
+  });
+
+  const result = await service.lookup({ mobile: '9876543210', locationId: 2, actor: { userId: 8 } });
+
+  assert.equal(result.items.length, 1);
+  assert.equal(result.items[0].personId, 12);
+  assert.equal(result.items[0].category, 'Visitor, Vendor');
+  assert.equal(result.items[0].outcome, 'ELIGIBLE');
+});

@@ -21,10 +21,15 @@ function istDate(column) {
  */
 function personSearchSql(alias, param) {
   return `(${param} = ''
-              OR ${alias}.person_code = upper(${param})
-              OR ${alias}.mobile = ${param}
-              OR (${param} ~ '^[0-9]{10}$' AND ${alias}.mobile = '+91' || ${param})
-              OR lower(${alias}.first_name || ' ' || ${alias}.last_name) LIKE '%' || lower(${param}) || '%')`;
+              OR EXISTS (
+                SELECT 1
+                  FROM mams.person_identity AS profile
+                 WHERE profile.identity_id = ${alias}.identity_id
+                   AND (profile.qr_code = upper(${param})
+                     OR profile.mobile = ${param}
+                     OR (${param} ~ '^[0-9]{10}$' AND profile.mobile = '+91' || ${param})
+                     OR lower(profile.first_name || ' ' || profile.last_name) LIKE '%' || lower(${param}) || '%')
+              ))`;
 }
 
 function registrationStatusSql(param) {
@@ -64,11 +69,12 @@ function staffScopeCte(first) {
   return `staff AS (
              SELECT p.person_id, p.status, p.created_at
                FROM mams.person AS p
+               JOIN mams.person_identity AS identity USING (identity_id)
                JOIN mams.category AS c ON c.category_id = p.category_id AND c.form_type = 'STAFF'
                LEFT JOIN mams.lookup_value AS j ON j.lookup_id = (p.category_details ->> 'job_role_id')::int
               WHERE p.status <> 'DRAFT'
                 AND ${personSearchSql('p', search)}
-                AND (${name} = '' OR p.first_name || ' ' || p.last_name ILIKE '%' || ${name} || '%')
+                AND (${name} = '' OR identity.first_name || ' ' || identity.last_name ILIKE '%' || ${name} || '%')
                 AND (${jobRole} = '' OR j.name ILIKE '%' || ${jobRole} || '%')
            ),
            staff_visit AS (
@@ -82,9 +88,10 @@ function blacklistScopeCte(first) {
   return `scoped_person AS (
              SELECT p.person_id
                FROM mams.person AS p
+               JOIN mams.person_identity AS identity USING (identity_id)
                JOIN mams.category AS c ON c.category_id = p.category_id
               WHERE ${personSearchSql('p', search)}
-                AND (${name} = '' OR p.first_name || ' ' || p.last_name ILIKE '%' || ${name} || '%')
+                AND (${name} = '' OR identity.first_name || ' ' || identity.last_name ILIKE '%' || ${name} || '%')
                 AND (${category} = '' OR c.name ILIKE '%' || ${category} || '%')
            ),
            scoped AS (
@@ -466,13 +473,14 @@ export function createReportsRepository(pool) {
   return {
     async visitHistory({ fromDate, toDate, categoryId, locationId, search = '', pagination }) {
       const result = await pool.query(
-        `SELECT v.checkin_at, v.checkout_at, p.person_code,
-                p.first_name || ' ' || p.last_name AS name, p.mobile,
+        `SELECT v.checkin_at, v.checkout_at, identity.qr_code AS person_code,
+                identity.first_name || ' ' || identity.last_name AS name, identity.mobile,
                 c.name AS category, gi.name AS checkin_gate, li.name AS checkin_location,
                 go.name AS checkout_gate, lo.name AS checkout_location,
                 v.status, v.accompanying_count${totalSql(pagination)}
            FROM mams.visit AS v
            JOIN mams.person AS p ON p.person_id = v.person_id
+           JOIN mams.person_identity AS identity USING (identity_id)
            JOIN mams.category AS c ON c.category_id = p.category_id
            LEFT JOIN mams.location AS gi ON gi.location_id = v.checkin_gate_id
            LEFT JOIN mams.location AS li ON li.location_id = v.checkin_location_id
@@ -491,11 +499,13 @@ export function createReportsRepository(pool) {
 
     async registrations({ fromDate, toDate, categoryId, status, search = '', pagination }) {
       const result = await pool.query(
-        `SELECT p.person_code, p.first_name || ' ' || p.last_name AS name,
-                c.name AS category, c.approval_required, p.mobile,
+        `SELECT identity.qr_code AS person_code,
+                identity.first_name || ' ' || identity.last_name AS name,
+                c.name AS category, c.approval_required, identity.mobile,
                 CASE WHEN c.approval_required = false AND p.status = 'PENDING' THEN 'ACTIVE' ELSE p.status END AS status,
                 p.created_at${totalSql(pagination)}
            FROM mams.person AS p
+           JOIN mams.person_identity AS identity USING (identity_id)
            JOIN mams.category AS c ON c.category_id = p.category_id
           WHERE ${registrationScopeSql(1)}
             AND ($4::date IS NULL OR (p.created_at AT TIME ZONE 'Asia/Kolkata')::date >= $4::date)
@@ -527,10 +537,11 @@ export function createReportsRepository(pool) {
 
     async staff({ name = '', jobRole = '', search = '', pagination } = {}) {
       const result = await pool.query(
-        `SELECT p.person_code, p.first_name || ' ' || p.last_name AS name,
+        `SELECT identity.qr_code AS person_code, identity.first_name || ' ' || identity.last_name AS name,
                 d.name AS department, j.name AS job_role,
                 p.category_details ->> 'joining_date' AS joining_date, p.status${totalSql(pagination)}
            FROM mams.person AS p
+           JOIN mams.person_identity AS identity USING (identity_id)
            JOIN mams.category AS c
              ON c.category_id = p.category_id AND c.form_type = 'STAFF'
            LEFT JOIN mams.lookup_value AS d
@@ -538,7 +549,7 @@ export function createReportsRepository(pool) {
            LEFT JOIN mams.lookup_value AS j
              ON j.lookup_id = (p.category_details ->> 'job_role_id')::int
           WHERE p.status <> 'DRAFT'
-            AND ($1 = '' OR p.first_name || ' ' || p.last_name ILIKE '%' || $1 || '%')
+            AND ($1 = '' OR identity.first_name || ' ' || identity.last_name ILIKE '%' || $1 || '%')
             AND ($2 = '' OR j.name ILIKE '%' || $2 || '%')
             AND ${personSearchSql('p', '$3')}
           ORDER BY p.created_at DESC, p.person_id${paginationSql(pagination, 4)}`,
@@ -549,10 +560,11 @@ export function createReportsRepository(pool) {
 
     async approvals({ fromDate, toDate, user = '', search = '', pagination }) {
       const result = await pool.query(
-        `SELECT p.person_code, p.first_name || ' ' || p.last_name AS name,
+        `SELECT identity.qr_code AS person_code, identity.first_name || ' ' || identity.last_name AS name,
                 h.action, h.reason, coalesce(u.username, 'Former Approver') AS by_user, h.acted_at${totalSql(pagination)}
            FROM mams.approval_history AS h
            JOIN mams.person AS p ON p.person_id = h.person_id
+           JOIN mams.person_identity AS identity USING (identity_id)
            LEFT JOIN mams.app_user AS u ON u.user_id = h.acted_by
           WHERE ($1::date IS NULL OR (h.acted_at AT TIME ZONE 'Asia/Kolkata')::date >= $1::date)
             AND ($2::date IS NULL OR (h.acted_at AT TIME ZONE 'Asia/Kolkata')::date <= $2::date)
@@ -566,7 +578,7 @@ export function createReportsRepository(pool) {
 
     async blacklist({ name = '', category = '', search = '', pagination } = {}) {
       const result = await pool.query(
-        `SELECT p.person_code, p.first_name || ' ' || p.last_name AS name,
+        `SELECT identity.qr_code AS person_code, identity.first_name || ' ' || identity.last_name AS name,
                 c.name AS category, r.name AS reason, b.remarks, b.start_date, b.end_date,
                 CASE
                   WHEN b.lifted_at IS NOT NULL THEN 'LIFTED'
@@ -575,9 +587,10 @@ export function createReportsRepository(pool) {
                 END AS state${totalSql(pagination)}
            FROM mams.blacklist AS b
            JOIN mams.person AS p ON p.person_id = b.person_id
+           JOIN mams.person_identity AS identity USING (identity_id)
            JOIN mams.category AS c ON c.category_id = p.category_id
            JOIN mams.lookup_value AS r ON r.lookup_id = b.reason_id
-          WHERE ($1 = '' OR p.first_name || ' ' || p.last_name ILIKE '%' || $1 || '%')
+          WHERE ($1 = '' OR identity.first_name || ' ' || identity.last_name ILIKE '%' || $1 || '%')
             AND ($2 = '' OR c.name ILIKE '%' || $2 || '%')
             AND ${personSearchSql('p', '$3')}
           ORDER BY b.added_at DESC, b.blacklist_id${paginationSql(pagination, 4)}`,

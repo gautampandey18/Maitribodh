@@ -126,6 +126,36 @@ test('registration options expose active categories, schemas and master data', a
   const response = await request(appFor('REG_OFFICER', repository)).get('/api/v1/persons/registration/options').expect(200);
   assert.deepEqual(response.body, expected);
 });
+test('only admins can add categories and all selected registrations are submitted together', async () => {
+  const saved = [];
+  const repository = {
+    async categoryAssignments(personId) {
+      return { person_id: personId, categories: [] };
+    },
+    async addCategories(value) {
+      saved.push(value);
+      return { items: [{ person_id: 11 }, { person_id: 12 }], identity_qr_code: 'MB-000008' };
+    },
+  };
+  await request(appFor('REG_OFFICER', repository))
+    .get('/api/v1/persons/8/category-assignments')
+    .expect(403);
+  const app = appFor('ADMIN', repository);
+  const profile = await request(app).get('/api/v1/persons/8/category-assignments').expect(200);
+  assert.equal(profile.body.person_id, 8);
+  await request(app).post('/api/v1/persons/8/category-assignments')
+    .send({ registrations: [{ categoryId: 1, categoryDetails: {}, consent: false }] })
+    .expect(400);
+  const response = await request(app).post('/api/v1/persons/8/category-assignments')
+    .send({ registrations: [
+      { categoryId: 1, categoryDetails: { purpose: 'Visit' }, consent: true },
+      { categoryId: 2, categoryDetails: { details: 'Vendor work' }, consent: true },
+    ] })
+    .expect(201);
+  assert.equal(response.body.items.length, 2);
+  assert.equal(saved[0].personId, 8);
+  assert.deepEqual(saved[0].registrations.map((item) => item.categoryId), [1, 2]);
+});
 test('person access updates forward validated assignments and expiry', async () => {
   let saved;
   const repository = { async updateAccess(value) { saved = value; return { location_ids: [4], expires_on: '2026-12-31' }; } };

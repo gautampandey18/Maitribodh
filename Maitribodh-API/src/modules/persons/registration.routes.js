@@ -110,6 +110,26 @@ export function createRegistrationRouter({ repository, authenticate, encryptionS
       throw error;
     }
   }));
+  router.get('/:personId/category-assignments', authorize('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (request, response) => {
+    response.json(await repository.categoryAssignments(idFrom(request.params.personId)));
+  }));
+  router.post('/:personId/category-assignments', authorize('ADMIN', 'SUPER_ADMIN'), asyncHandler(async (request, response) => {
+    const schema = z.object({
+      registrations: z.array(z.object({
+        categoryId: z.coerce.number().int().positive(),
+        categoryDetails: z.record(z.string(), z.union([z.string().max(500), z.number()])).default({}),
+        locationIds: z.array(z.coerce.number().int().positive()).max(100).default([]),
+        accompanyingCount: z.coerce.number().int().min(0).max(32767).default(0),
+        consent: z.literal(true),
+      })).min(1).max(50),
+    });
+    const input = parseInput(schema, request.body);
+    response.status(201).json(await repository.addCategories({
+      personId: idFrom(request.params.personId),
+      registrations: input.registrations,
+      actor: actorFrom(request),
+    }));
+  }));
   router.get('/:personId', authorize(...managementRoles), asyncHandler(async (request, response) => response.json(await repository.get(idFrom(request.params.personId)))));
   router.get('/:personId/activity', authorize(...managementRoles), asyncHandler(async (request, response) => response.json({ items: await repository.activity(idFrom(request.params.personId)) })));
   router.post('/:personId/photo', authorize(...registrationRoles), (request, response, next) => profilePhotoUpload(request, response, (error) => next(error ? new ApiError(400, 'UPLOAD_ERROR', 'The photo must be a JPG or PNG image no larger than 2 MB.') : undefined)), asyncHandler(async (request, response) => {

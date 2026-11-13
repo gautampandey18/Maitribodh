@@ -17,10 +17,10 @@ test('pending queue sorts by submission and returns no object storage key', asyn
   assert.equal(rows[0].has_photo, true);
   assert.match(sql, /WHERE p\.status = 'PENDING'/);
   assert.match(sql, /c\.approval_required = true/);
-  assert.match(sql, /concat_ws\(' ', p\.first_name, p\.last_name\) ILIKE '%' \|\| \$1 \|\| '%'/);
+  assert.match(sql, /concat_ws\(' ', identity\.first_name, identity\.last_name\) ILIKE '%' \|\| \$1 \|\| '%'/);
   assert.match(sql, /c\.name ILIKE '%' \|\| \$2 \|\| '%'/);
   assert.match(sql, /ORDER BY h\.acted_at/);
-  assert.match(sql, /p\.photo_key IS NOT NULL AS has_photo/);
+  assert.match(sql, /identity\.photo_key IS NOT NULL AS has_photo/);
   assert.doesNotMatch(sql, /SELECT[^;]*p\.photo_key,/s);
   assert.match(sql, /LIMIT \$3 OFFSET \$4/);
 });
@@ -41,7 +41,7 @@ test('status queue lists paginated registrations for the requested state', async
   assert.equal(rows[0].status, 'ACTIVE');
   assert.match(sql, /WHERE p\.status = \$1/);
   assert.match(sql, /c\.approval_required = true/);
-  assert.match(sql, /concat_ws\(' ', p\.first_name, p\.last_name\) ILIKE '%' \|\| \$2 \|\| '%'/);
+  assert.match(sql, /concat_ws\(' ', identity\.first_name, identity\.last_name\) ILIKE '%' \|\| \$2 \|\| '%'/);
   assert.match(sql, /c\.name ILIKE '%' \|\| \$3 \|\| '%'/);
   assert.match(sql, /LEFT JOIN LATERAL/);
   assert.deepEqual(params, ['ACTIVE', 'Asha', 'Staff', 10, 20]);
@@ -231,13 +231,13 @@ test('non-submitter Registration Officer cannot resubmit another user record', a
   );
 });
 
-test('approved registration can be rejected and its QR version is invalidated', async () => {
+test('rejecting one category preserves the shared identity QR version', async () => {
   const calls = [];
   const client = {
     async query(sql, values = []) {
       calls.push({ sql, values });
       if (sql === 'BEGIN' || sql === 'ROLLBACK') return { rows: [] };
-      if (sql.includes('FROM mams.person')) return { rows: [{ person_id: 10, status: 'ACTIVE', registered_by: 4 }] };
+      if (sql.includes('FROM mams.person')) return { rows: [{ person_id: 10, identity_id: 8, person_code: 'MB-000008', qr_version: 1, status: 'ACTIVE', registered_by: 4 }] };
       if (sql.includes('FROM mams.approval_history')) return { rows: [] };
       if (sql.includes('UPDATE mams.person')) return { rows: [{ person_id: 10, status: 'REJECTED' }] };
       return { rows: [], rowCount: 1 };
@@ -255,7 +255,9 @@ test('approved registration can be rejected and its QR version is invalidated', 
   });
 
   assert.equal(result.status, 'REJECTED');
-  assert.match(calls[3].sql, /qr_version = CASE WHEN status = 'ACTIVE' THEN qr_version \+ 1/);
+  assert.equal(result.person_code, 'MB-000008');
+  assert.equal(result.qr_version, 1);
+  assert.doesNotMatch(calls[3].sql, /qr_version/);
   assert.match(calls[3].sql, /approved_by = NULL, approved_at = NULL/);
   assert.equal(calls[3].values[2], 'ACTIVE');
   assert.deepEqual(JSON.parse(calls[6].values[4]), { status: 'ACTIVE' });

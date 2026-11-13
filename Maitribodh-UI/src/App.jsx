@@ -48,6 +48,7 @@ import GatePage from './screens/GatePage.jsx';
 import QrPage from './screens/QrPage.jsx';
 import MasterDataPage from './screens/MasterDataPage.jsx';
 import PersonDetailPage from './screens/PersonDetailPage.jsx';
+import AssignCategoriesPage from './screens/AssignCategoriesPage.jsx';
 import ActivityPage, { NotificationsBell } from './screens/ActivityPage.jsx';
 import { NAVIGATION, canAccessPath, landingPath } from './constants/navigation.js';
 import { getRoles, hasRole } from './constants/roles.js';
@@ -72,6 +73,7 @@ export default function App() {
           <Route path="/users" element={<AdminOnly><UsersPage /></AdminOnly>} />
           <Route path="/approvals" element={<ApprovalAccess><ApprovalsPage /></ApprovalAccess>} />
           <Route path="/persons" element={<RegistrationAccess><PersonsPage /></RegistrationAccess>} />
+          <Route path="/persons/:personId/categories" element={<AdminOnly><AssignCategoriesPage /></AdminOnly>} />
           <Route path="/persons/:personId" element={<RegistrationAccess><PersonDetailPage /></RegistrationAccess>} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/gate" element={<GatePage />} />
