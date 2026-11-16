@@ -90,10 +90,26 @@ export const REPORT_TABS_CONFIG = {
     tableTitle: 'Staff',
     tableCounter: '0 records',
     kpis: [
-      { label: 'Active staff', value: '0', delta: '0 registered this period' },
-      { label: 'Present today', value: '0', delta: '0% attendance' },
-      { label: 'Avg. hours on site', value: '0 h', delta: '0 completed visits' },
-      { label: 'Missed checkouts', value: '0', delta: 'All checked out' },
+      {
+        label: 'Active staff',
+        value: '0',
+        lines: [{ label: 'Active staff', value: '0' }, { label: 'New Staff Registered', value: '0' }],
+      },
+      {
+        label: 'Present today',
+        value: '0',
+        lines: [{ label: 'Present today', value: '0' }, { label: 'Attendance', value: '0%' }],
+      },
+      {
+        label: 'Avg. hours on site',
+        value: '0 h',
+        lines: [{ label: 'Avg. hours on site', value: '0 h' }, { label: 'Completed visits', value: '0' }],
+      },
+      {
+        label: 'Missed checkouts',
+        value: '0',
+        lines: [{ label: 'Missed checkouts (over 12 h)', value: '0' }, { label: 'Checked out today', value: '0' }],
+      },
     ],
     chartLeft: {
       type: 'stacked-bar',
@@ -116,10 +132,19 @@ export const REPORT_TABS_CONFIG = {
     tableTitle: 'Approval activity',
     tableCounter: '0 records',
     kpis: [
-      { label: 'Approval requests', value: '0', delta: '0% vs previous period', isTotal: true },
-      { label: 'Approved', value: '0', delta: 'No decisions yet' },
-      { label: 'Pending', value: '0', delta: 'None waiting' },
-      { label: 'Avg. decision time', value: '—', delta: '0 decisions this period' },
+      {
+        label: 'Approval requests',
+        value: '0',
+        lines: [{ label: 'Approval requests', value: '0' }, { label: 'Change vs previous period', value: '0%' }],
+        isTotal: true,
+      },
+      {
+        label: 'Approved request',
+        value: '0',
+        lines: [{ label: 'Approved request', value: '0' }, { label: 'Approval rate', value: '—' }],
+      },
+      { label: 'Pending request', value: '0' },
+      { label: 'Average approval time', value: '—' },
     ],
     chartLeft: {
       type: 'stacked-bar',
@@ -144,10 +169,23 @@ export const REPORT_TABS_CONFIG = {
     tableTitle: 'Blacklisted persons',
     tableCounter: '0 records',
     kpis: [
-      { label: 'On blacklist', value: '0', delta: '0 active', isTotal: true },
-      { label: 'Added this period', value: '0', delta: 'None added' },
-      { label: 'Blocked entry attempts', value: '0', delta: 'None blocked' },
-      { label: 'Gate screenings', value: '0', delta: '0 not blocked' },
+      {
+        label: 'Currently blacklisted',
+        value: '0',
+        lines: [{ label: 'Currently blacklisted', value: '0' }, { label: 'Expiring in 7 days', value: '0' }],
+        isTotal: true,
+      },
+      {
+        label: 'New Blacklisted Persons',
+        value: '0',
+        lines: [{ label: 'New Blacklisted Persons', value: '0' }, { label: 'Blacklist Removed', value: '0' }],
+      },
+      { label: 'Blocked entry attempts', value: '0' },
+      {
+        label: 'Total gate checks',
+        value: '0',
+        lines: [{ label: 'Total gate checks', value: '0' }, { label: 'Not blocked', value: '0' }],
+      },
     ],
     chartLeft: {
       type: 'stacked-bar',
@@ -184,9 +222,24 @@ export function KpiGrid({ kpis }) {
           '--report-kpi-background': kpiColors[index % kpiColors.length][1],
           '--report-kpi-border': kpiColors[index % kpiColors.length][2],
         }}>
-          <Typography className="reports-kpi-label">{kpi.label}</Typography>
-          <Typography className="reports-kpi-value">{kpi.value}</Typography>
-          <Typography className="reports-kpi-delta">{kpi.delta}</Typography>
+          {kpi.lines ? (
+            <Box className="reports-kpi-lines">
+              {kpi.lines.map((line) => (
+                <Box key={line.label} className="reports-kpi-line">
+                  <Typography className="reports-kpi-label">{line.label}<span>:</span></Typography>
+                  <Typography className="reports-kpi-line-value">{line.value}</Typography>
+                </Box>
+              ))}
+            </Box>
+          ) : (
+            <>
+              <Box className="reports-kpi-line">
+                <Typography className="reports-kpi-label">{kpi.label}<span>:</span></Typography>
+                <Typography className="reports-kpi-line-value">{kpi.value}</Typography>
+              </Box>
+              {kpi.delta && <Typography className="reports-kpi-delta">{kpi.delta}</Typography>}
+            </>
+          )}
         </Box>
       ))}
     </Box>

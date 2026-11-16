@@ -300,10 +300,8 @@ export function createReportsRepository(pool) {
              (SELECT count(*)::int
                 FROM staff_visit
                WHERE ${istDate('checkin_at')} BETWEEN $1::date AND $2::date AND checkout_at IS NOT NULL) AS completed_visits,
-             (SELECT count(*)::int FROM staff_visit WHERE status = 'OPEN' AND ${istDate('checkin_at')} < ${IST_TODAY}) AS missed_checkouts,
-             (SELECT to_char(min(checkin_at AT TIME ZONE 'Asia/Kolkata'), 'DD Mon')
-                FROM staff_visit
-               WHERE status = 'OPEN' AND ${istDate('checkin_at')} < ${IST_TODAY}) AS oldest_missed_date`,
+             (SELECT count(*)::int FROM staff_visit WHERE status = 'OPEN' AND checkin_at < now() - interval '12 hours') AS missed_checkouts,
+             (SELECT count(*)::int FROM staff_visit WHERE checkout_at IS NOT NULL AND ${istDate('checkout_at')} = ${IST_TODAY}) AS checked_out_today`,
           [startStr, endStr, ...scope],
         ),
         pool.query(
@@ -567,7 +565,9 @@ export function createReportsRepository(pool) {
     async blacklist({ name = '', category = '', search = '', pagination } = {}) {
       const result = await pool.query(
         `SELECT p.person_code, p.first_name || ' ' || p.last_name AS name,
-                c.name AS category, r.name AS reason, b.remarks, b.start_date, b.end_date,
+                c.name AS category, r.name AS reason, b.remarks,
+                 to_char(b.start_date, 'YYYY-MM-DD') AS start_date,
+                 to_char(b.end_date, 'YYYY-MM-DD') AS end_date,
                 CASE
                   WHEN b.lifted_at IS NOT NULL THEN 'LIFTED'
                   WHEN b.end_date < (now() AT TIME ZONE 'Asia/Kolkata')::date THEN 'EXPIRED'

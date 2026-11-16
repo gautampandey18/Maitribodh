@@ -6759,3 +6759,28 @@ body.notifications-panel-open .app-navigation-drawer .MuiDrawer-paper::after {
 .gate-lookup-fields .MuiInputBase-root {
   height: 40px;
 }
+
+.reports-kpi-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.reports-kpi-line {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: baseline;
+  justify-content: flex-start;
+  gap: 6px;
+}
+
+.reports-kpi-line .reports-kpi-label {
+  margin-bottom: 0;
+}
+
+.reports-kpi-line-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.1;
+}

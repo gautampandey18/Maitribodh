@@ -475,30 +475,38 @@ export function buildStaffAnalytics({ summary = {}, daily = [], onDutyByLocation
   const maxStaffLoc = Math.max(5, ...items.map((it) => it.value));
 
   const attendancePct = activeStaff > 0 ? Math.round(((summary.present_today || 0) / activeStaff) * 100) : 0;
-  const missedDelta = (summary.missed_checkouts || 0) > 0
-    ? `Open since ${summary.oldest_missed_date || 'prior days'}`
-    : 'All checked out';
-
   const kpis = [
     {
       label: 'Active staff',
       value: String(activeStaff),
-      delta: `${summary.joined_this_period || 0} registered this period`,
+      lines: [
+        { label: 'Active staff', value: String(activeStaff) },
+        { label: 'New Staff Registered', value: String(summary.joined_this_period || 0) },
+      ],
     },
     {
       label: 'Present today',
       value: String(summary.present_today || 0),
-      delta: `${attendancePct}% attendance`,
+      lines: [
+        { label: 'Present today', value: String(summary.present_today || 0) },
+        { label: 'Attendance', value: `${attendancePct}%` },
+      ],
     },
     {
       label: 'Avg. hours on site',
       value: `${(Number(summary.avg_hours) || 0).toFixed(1)} h`,
-      delta: `${summary.completed_visits || 0} completed visits`,
+      lines: [
+        { label: 'Avg. hours on site', value: `${(Number(summary.avg_hours) || 0).toFixed(1)} h` },
+        { label: 'Completed visits', value: String(summary.completed_visits || 0) },
+      ],
     },
     {
       label: 'Missed checkouts',
       value: String(summary.missed_checkouts || 0),
-      delta: missedDelta,
+      lines: [
+        { label: 'Missed checkouts (over 12 h)', value: String(summary.missed_checkouts || 0) },
+        { label: 'Checked out today', value: String(summary.checked_out_today || 0) },
+      ],
     },
   ];
 
@@ -570,36 +578,47 @@ export function buildApprovalsAnalytics({ summary = {}, daily = [], byOutcome = 
   const approved = Number(summary.approved_count) || 0;
   const decisions = approved + (Number(summary.rejected_count) || 0);
   const approvalRate = decisions > 0 ? Math.round((approved / decisions) * 100) : 0;
-  const pendingDelta = (summary.pending_count || 0) > 0
-    ? `${summary.waiting_over_1h || 0} waiting over 1 hour`
-    : 'None waiting';
+  const pendingCount = Number(summary.pending_count) || 0;
 
   const avgDecisionMin = Number(summary.avg_decision_min) || 0;
   const decisionTimeStr = avgDecisionMin >= 60
     ? `${(avgDecisionMin / 60).toFixed(1)} h`
     : `${avgDecisionMin} min`;
 
+  const pendingLines = [{ label: 'Pending request', value: String(pendingCount) }];
+  if (pendingCount > 0) {
+    pendingLines.push({ label: 'Waiting over 1 hour', value: String(summary.waiting_over_1h || 0) });
+  }
+
   const kpis = [
     {
       label: 'Approval requests',
       value: String(summary.total_requests || 0),
-      delta: formatDelta(summary.total_requests, summary.prev_requests, { label: periodDeltaLabel(dateRange) }),
+      lines: [
+        { label: 'Approval requests', value: String(summary.total_requests || 0) },
+        {
+          label: `Change ${periodDeltaLabel(dateRange)}`,
+          value: formatDelta(summary.total_requests, summary.prev_requests, { label: '' }).trim(),
+        },
+      ],
       isTotal: true,
     },
     {
-      label: 'Approved',
+      label: 'Approved request',
       value: String(approved),
-      delta: decisions > 0 ? `${approvalRate}% approval rate` : 'No decisions yet',
+      lines: [
+        { label: 'Approved request', value: String(approved) },
+        { label: 'Approval rate', value: decisions > 0 ? `${approvalRate}%` : '—' },
+      ],
     },
     {
-      label: 'Pending',
-      value: String(summary.pending_count || 0),
-      delta: pendingDelta,
+      label: 'Pending request',
+      value: String(pendingCount),
+      lines: pendingLines,
     },
     {
-      label: 'Avg. decision time',
+      label: 'Average approval time',
       value: decisions > 0 ? decisionTimeStr : '—',
-      delta: `${decisions} ${decisions === 1 ? 'decision' : 'decisions'} this period`,
     },
   ];
 
@@ -650,29 +669,36 @@ export function buildBlacklistAnalytics({ summary = {}, daily = [], reasons = []
 
   const blocked = Number(summary.blocked_attempts) || 0;
   const screenings = Number(summary.gate_screenings) || 0;
-  const blockedPct = screenings > 0 ? Math.round((blocked / screenings) * 100) : 0;
 
   const kpis = [
     {
-      label: 'On blacklist',
+      label: 'Currently blacklisted',
       value: String(summary.on_blacklist || 0),
-      delta: `${summary.expiring_soon || 0} expiring in 7 days`,
+      lines: [
+        { label: 'Currently blacklisted', value: String(summary.on_blacklist || 0) },
+        { label: 'Expiring in 7 days', value: String(summary.expiring_soon || 0) },
+      ],
       isTotal: true,
     },
     {
-      label: 'Added this period',
+      label: 'New Blacklisted Persons',
       value: String(summary.added_this_period || 0),
-      delta: `${summary.lifted_this_period || 0} lifted this period`,
+      lines: [
+        { label: 'New Blacklisted Persons', value: String(summary.added_this_period || 0) },
+        { label: 'Blacklist Removed', value: String(summary.lifted_this_period || 0) },
+      ],
     },
     {
       label: 'Blocked entry attempts',
       value: String(blocked),
-      delta: blocked > 0 ? `${blockedPct}% of gate screenings` : 'None this period',
     },
     {
-      label: 'Gate screenings',
+      label: 'Total gate checks',
       value: String(screenings),
-      delta: screenings > 0 ? `${screenings - blocked} not blocked` : 'None this period',
+      lines: [
+        { label: 'Total gate checks', value: String(screenings) },
+        { label: 'Not blocked', value: String(Math.max(0, screenings - blocked)) },
+      ],
     },
   ];
 

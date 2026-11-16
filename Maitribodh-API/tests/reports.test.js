@@ -637,9 +637,9 @@ test('approval analytics compute the rate from decisions only', () => {
     dateRange: getIstDateRange({ fromDate: '2026-10-01', toDate: '2026-10-02' }),
   });
 
-  assert.equal(analytics.kpis[1].delta, '75% approval rate');
-  assert.equal(analytics.kpis[2].delta, 'None waiting');
-  assert.equal(analytics.kpis[3].label, 'Avg. decision time');
+  assert.deepEqual(analytics.kpis[1].lines[1], { label: 'Approval rate', value: '75%' });
+  assert.equal(analytics.kpis[2].lines.length, 1);
+  assert.equal(analytics.kpis[3].label, 'Average approval time');
   assert.equal(analytics.kpis[3].value, '1.5 h');
   assert.equal(analytics.chartRight.totalValue, '14');
 });

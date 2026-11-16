@@ -85,11 +85,11 @@ it('runs the registration report with the selected status and renders returned r
   expect(await screen.findByText('Asha Patel')).toBeInTheDocument();
   await user.click(screen.getByRole('combobox', { name: 'Status' }));
   await user.click(screen.getByRole('option', { name: 'ACTIVE' }));
-  await user.click(screen.getByRole('button', { name: 'Run report' }));
+  await user.click(screen.getByRole('button', { name: 'Apply' }));
 
   expect(await screen.findByText('Asha Patel')).toBeInTheDocument();
   expect(screen.getByText('******3210')).toBeInTheDocument();
-  expect(screen.getByText('09-10-2026/08:00:00')).toBeInTheDocument();
+  expect(screen.getByText('09-10-2026/13:30:00')).toBeInTheDocument();
   await waitFor(() => expect(get).toHaveBeenCalledWith('/reports/registrations', { params: { status: 'ACTIVE', page: 1, pageSize: 5 } }));
 }, 30_000);
 
@@ -103,7 +103,7 @@ it('filters the blacklist report by name and category', async () => {
   await user.click(screen.getByRole('tab', { name: 'Blacklist' }));
   await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Asha');
   await user.type(screen.getByRole('textbox', { name: 'Category' }), 'Staff');
-  await user.click(screen.getByRole('button', { name: 'Run report' }));
+  await user.click(screen.getByRole('button', { name: 'Apply' }));
 
   await waitFor(() => expect(get).toHaveBeenCalledWith('/reports/blacklist', {
     params: { name: 'Asha', category: 'Staff', page: 1, pageSize: 5 },
@@ -119,7 +119,7 @@ it('filters the approvals report by user', async () => {
   render(<MemoryRouter><ReportsPage /></MemoryRouter>);
   await user.click(screen.getByRole('tab', { name: 'Approvals' }));
   await user.type(screen.getByRole('textbox', { name: 'User' }), 'approver');
-  await user.click(screen.getByRole('button', { name: 'Run report' }));
+  await user.click(screen.getByRole('button', { name: 'Apply' }));
 
   await waitFor(() => expect(get).toHaveBeenCalledWith('/reports/approvals', {
     params: { user: 'approver', page: 1, pageSize: 5 },
@@ -136,7 +136,7 @@ it('filters the staff report by name and job role', async () => {
   await user.click(screen.getByRole('tab', { name: 'Staff' }));
   await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Asha');
   await user.type(screen.getByRole('textbox', { name: 'Job Role' }), 'Coordinator');
-  await user.click(screen.getByRole('button', { name: 'Run report' }));
+  await user.click(screen.getByRole('button', { name: 'Apply' }));
 
   await waitFor(() => expect(get).toHaveBeenCalledWith('/reports/staff', {
     params: { name: 'Asha', jobRole: 'Coordinator', page: 1, pageSize: 5 },
@@ -175,8 +175,8 @@ it('uses the selected date range for Visit History and exports Excel', async () 
 
   render(<MemoryRouter><ReportsPage /></MemoryRouter>);
   expect(await screen.findByText('Asha Patel')).toBeInTheDocument();
-  expect(screen.getByText('04-11-2026/07:15:43')).toBeInTheDocument();
-  expect(screen.getByText('04-11-2026/08:20:10')).toBeInTheDocument();
+  expect(screen.getByText('04-11-2026/12:45:43')).toBeInTheDocument();
+  expect(screen.getByText('04-11-2026/13:50:10')).toBeInTheDocument();
   expect(screen.queryByLabelText('Location ID')).not.toBeInTheDocument();
   expect(screen.getAllByText('Main Gate')).toHaveLength(2);
   expect(screen.queryByRole('columnheader', { name: 'Checkin Location Id' })).not.toBeInTheDocument();
@@ -185,7 +185,7 @@ it('uses the selected date range for Visit History and exports Excel', async () 
   const toDate = screen.getByLabelText('To');
   fireEvent.change(fromDate, { target: { value: '2026-10-01' } });
   fireEvent.change(toDate, { target: { value: '2026-10-09' } });
-  await user.click(screen.getByRole('button', { name: 'Run report' }));
+  await user.click(screen.getByRole('button', { name: 'Apply' }));
   expect(await screen.findByText('Asha Patel')).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Export Excel' }));
 
@@ -389,8 +389,8 @@ it('allows selecting quick date presets or custom from-to dates, updating both c
     expect(lastAnalyticsCall?.params?.toDate).toBeDefined();
   });
 
-  // Verify Reset button is present and resets
-  const resetBtn = screen.getByRole('button', { name: 'Reset' });
+  // Verify Clear button is present and resets
+  const resetBtn = screen.getByRole('button', { name: 'Clear' });
   expect(resetBtn).toBeInTheDocument();
   await user.click(resetBtn);
 
@@ -428,7 +428,7 @@ it('scopes the table and the KPI charts to a searched person', async () => {
 
   render(<MemoryRouter><ReportsPage /></MemoryRouter>);
   await user.type(screen.getByRole('textbox', { name: 'Search person' }), ' MB-000007 ');
-  await user.click(screen.getByRole('button', { name: 'Run report' }));
+  await user.click(screen.getByRole('button', { name: 'Apply' }));
 
   expect(await screen.findByText('Asha Patel')).toBeInTheDocument();
   expect(await screen.findByText('25 min')).toBeInTheDocument();
@@ -460,7 +460,7 @@ it('filters visits by category and location chosen from report options and sends
   await user.click(screen.getByRole('option', { name: 'Visitor' }));
   await user.click(screen.getByRole('combobox', { name: 'Location' }));
   await user.click(await screen.findByRole('option', { name: 'Main Hall' }));
-  await user.click(screen.getByRole('button', { name: 'Run report' }));
+  await user.click(screen.getByRole('button', { name: 'Apply' }));
 
   await waitFor(() => expect(get).toHaveBeenCalledWith('/reports/visit-history', {
     params: { categoryId: 2, locationId: 4, page: 1, pageSize: 5 },
