@@ -14,7 +14,7 @@ afterEach(() => {
 
 it('loads all registrations, filters by category, and requests the next page', async () => {
   const get = vi.spyOn(api, 'get')
-    .mockResolvedValueOnce({ data: { categories: [{ category_id: 2, name: 'Staff' }] } })
+    .mockResolvedValueOnce({ data: { categories: [{ category_id: 2, name: 'Staff', approval_required: false }] } })
     .mockResolvedValueOnce({
       data: {
         items: [
@@ -57,6 +57,9 @@ it('loads all registrations, filters by category, and requests the next page', a
 
   expect(screen.getByText('Find people and manage their category registrations.')).toBeInTheDocument();
   expect(await screen.findByText('Initial Active')).toBeInTheDocument();
+  const personCode = screen.getByText('MB-000009');
+  expect(personCode).toBeInTheDocument();
+  expect(personCode.parentElement).toHaveStyle({ flexDirection: 'column', minHeight: '36px' });
   expect(screen.getByText('+91 98765 43210')).toBeInTheDocument();
   expect(screen.getByText('Initial Inactive')).toBeInTheDocument();
   expect(screen.getByText('Inactive')).toBeInTheDocument();
@@ -65,6 +68,9 @@ it('loads all registrations, filters by category, and requests the next page', a
 
   await user.click(screen.getByRole('combobox', { name: 'Category' }));
   await user.click(screen.getByRole('option', { name: 'Staff' }));
+  await user.click(screen.getByRole('combobox', { name: 'Status' }));
+  expect(screen.getByRole('option', { name: 'PENDING' })).toBeInTheDocument();
+  await user.keyboard('{Escape}');
   await user.type(screen.getByRole('textbox', { name: 'Search registrations' }), '9876543210');
   await user.click(screen.getByRole('button', { name: 'Search' }));
   expect(await screen.findByText('Asha Patel')).toBeInTheDocument();

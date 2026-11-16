@@ -3,9 +3,14 @@ export function createDashboardRepository(pool) {
     async summary() {
       const result = await pool.query(
         `SELECT
-           (SELECT count(DISTINCT COALESCE(identity_id, -person_id))::int
-              FROM mams.person
-             WHERE status = 'ACTIVE') AS active_persons,
+           (SELECT count(*)::int
+              FROM (
+                SELECT DISTINCT ON (COALESCE(identity_id, -person_id)) status
+                  FROM mams.person
+                 ORDER BY COALESCE(identity_id, -person_id),
+                          updated_at DESC, created_at DESC, person_id DESC
+              ) AS current_person
+             WHERE current_person.status = 'ACTIVE') AS active_persons,
            (SELECT count(*)::int FROM mams.person
              WHERE status <> 'DRAFT'
                AND (created_at AT TIME ZONE 'Asia/Kolkata')::date = (now() AT TIME ZONE 'Asia/Kolkata')::date

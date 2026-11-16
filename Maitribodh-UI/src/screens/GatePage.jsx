@@ -84,7 +84,10 @@ const states = {
   ELIGIBLE: { title: 'PROFILE FOUND', message: 'Active profile · No blacklist match', severity: 'success' },
   EVENT_COMPLETED: { title: 'EVENT COMPLETED - CONFIRM CHECK-IN', message: 'The event this participant registered for has ended. Confirm whether to continue check-in.', severity: 'warning' },
   ALREADY_INSIDE: { title: 'PERSON ALREADY INSIDE', message: 'Check out before another check-in.', severity: 'success' },
-  NOT_ACTIVE: { title: 'PENDING APPROVAL', message: 'Only Active profiles with valid access may check in.', severity: 'warning' },
+  NOT_ACTIVE: { title: 'NOT ACTIVE', message: 'Only approved active registrations may check in.', severity: 'warning' },
+  PENDING: { title: 'PENDING APPROVAL', message: 'This registration must be approved before check-in.', severity: 'warning' },
+  REJECTED: { title: 'REGISTRATION REJECTED', message: 'Rejected registrations cannot check in. Contact an approver to review or resubmit this registration.', severity: 'error' },
+  DEACTIVATED: { title: 'PROFILE INACTIVE', message: 'Inactive registrations cannot check in.', severity: 'warning' },
   EVENT_ACCESS_EXPIRED: { title: 'EVENT COMPLETED - ACCESS NOT VALID', message: 'Access is not valid for this user. The event has ended.', severity: 'error' },
   BLOCKED_BLACKLIST: { title: 'BLACKLISTED - ENTRY NOT ALLOWED', message: 'Blacklist match blocks check-in. Alert recorded.', severity: 'error' },
   LOCATION_WARNING: { title: 'LOCATION ACCESS WARNING', message: 'This person is not assigned to the selected restricted area. Verify access before proceeding.', severity: 'warning' },
@@ -135,7 +138,10 @@ export default function GatePage() {
   const selectedGate = gateId || gates[0]?.location_id;
   const selectedArea = areaId || areas[0]?.location_id;
   const state = selected?.eventWarning && selected?.outcome === 'ELIGIBLE'
-    ? states.EVENT_COMPLETED : states[selected?.outcome];
+    ? states.EVENT_COMPLETED
+    : selected?.outcome === 'NOT_ACTIVE'
+      ? states[selected.status] ?? states.NOT_ACTIVE
+      : states[selected?.outcome];
   const canRecoverPhoto = ['ELIGIBLE', 'LOCATION_WARNING', 'ALREADY_INSIDE'].includes(selected?.outcome);
   const selectedAreaDetails = areas.find((item) => String(item.location_id) === String(selectedArea));
   const maxOccupancy = areaOccupancy?.maxOccupancy ?? areaOccupancy?.max_occupancy ?? selectedAreaDetails?.max_occupancy;
@@ -244,12 +250,40 @@ export default function GatePage() {
   function selectPerson(person) {
     const assignedAreaIds = (person.assignedAreaIds ?? []).map(Number);
     const assignedArea = areas.find((area) => assignedAreaIds.includes(Number(area.location_id)));
+    const categories = (person.categories ?? []).filter((category) => category.status === 'ACTIVE');
     let locationId = selectedArea;
     if (assignedArea && !assignedAreaIds.includes(Number(selectedArea))) {
       locationId = assignedArea.location_id;
       setAreaId(assignedArea.location_id);
     }
-    setSelected(personForArea(person, locationId));
+    const category = categories.find((item) => String(item.categoryId) === String(person.categoryId));
+    setSelected(personForArea({
+      ...person,
+      categories,
+      category: person.openVisitId ? person.category : category?.name ?? person.category,
+    }, locationId));
+    setVerified(false);
+    setLocationAcknowledged(false);
+    setEventAcknowledged(false);
+    setAccompanyingCount(0);
+  }
+  function selectCheckInCategory(categoryId) {
+    const category = selected?.categories?.find((item) => String(item.categoryId) === String(categoryId));
+    if (!category || selected?.openVisitId) return;
+    setSelected((person) => personForArea({
+      ...person,
+      category: category.name,
+      categoryId: category.categoryId,
+      personId: category.personId,
+      status: category.status,
+      outcome: category.outcome,
+      eventWarning: category.eventWarning,
+      locationWarning: category.locationWarning,
+      assignedAreaIds: category.assignedAreaIds,
+      openVisitId: category.openVisitId,
+      insideSince: category.insideSince,
+      accompanyingCount: category.accompanyingCount,
+    }, selectedArea));
     setVerified(false);
     setLocationAcknowledged(false);
     setEventAcknowledged(false);
@@ -439,7 +473,7 @@ export default function GatePage() {
           fields={[
             ['Gate', gates.find((item) => String(item.location_id) === String(selectedGate))?.name],
             ['Area', areas.find((item) => String(item.location_id) === String(selectedArea))?.name],
-            ['Entry status', selected.eventWarning && selected.outcome === 'ELIGIBLE' ? 'Event completed - acknowledgement required' : selected.outcome?.replaceAll('_', ' ').toLowerCase() ?? 'Ready to verify'],
+            ['Check-in decision', state?.title ?? 'Ready to verify'],
             ['Additional people', selected.openVisitId ? (selected.accompanyingCount ?? 0) : accompanyingCount],
             ...(selected.insideSince ? [['Inside since', new Date(selected.insideSince).toLocaleString()]] : []),
           ]}
@@ -797,17 +831,46 @@ export default function GatePage() {
         {busy && <Box role="status" sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 2 }}><CircularProgress size={20} /><Typography>Loading person information...</Typography></Box>}
         <Alert severity={state?.severity ?? 'info'} sx={{ my: 3 }}><Typography variant="h3">{state?.title ?? (items?.length === 0 ? 'PERSON NOT FOUND' : 'READY TO VERIFY')}</Typography>{state?.message ?? (items?.length === 0 ? 'A valid person record is required before entry.' : 'Scan a QR code to automatically display the person, or search by registered mobile number.')}</Alert>
         {selected && !selected.openVisitId && (
-          <TextField
-            label="Additional people accompanying"
-            type="number"
-            size="small"
-            value={accompanyingCount}
-            onChange={(event) => setAccompanyingCount(Math.max(0, parseInt(event.target.value, 10) || 0))}
-            inputProps={{ min: 0, max: 32767, step: 1 }}
-            helperText="Number of guests entering together with this person"
-            sx={{ mb: 2, maxWidth: 300 }}
-            disabled={busy || !online}
-          />
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: selected.categories?.length > 1
+                ? 'minmax(0, 1fr) minmax(0, 1.5fr)'
+                : 'minmax(0, 1fr)',
+              alignItems: 'start',
+              gap: 2,
+              mb: 2,
+            }}
+          >
+            {selected.categories?.length > 1 && (
+              <TextField
+                select
+                label="Category to check in"
+                size="small"
+                value={selected.categoryId ?? ''}
+                onChange={(event) => selectCheckInCategory(event.target.value)}
+                sx={{ width: '100%', maxWidth: 150, minWidth: 0 }}
+                disabled={busy || !online}
+              >
+                {selected.categories.map((category) => (
+                  <MenuItem key={category.categoryId} value={category.categoryId}>
+                    {category.name}{category.status !== 'ACTIVE' ? ` (${category.status.replaceAll('_', ' ')})` : ''}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
+            <TextField
+              label="Additional people accompanying"
+              type="number"
+              size="small"
+              value={accompanyingCount}
+              onChange={(event) => setAccompanyingCount(Math.max(0, parseInt(event.target.value, 10) || 0))}
+              inputProps={{ min: 0, max: 32767, step: 1 }}
+              helperText="Number of guests entering together with this person"
+              sx={{ width: '100%', mb: 0, maxWidth: 300, minWidth: 0 }}
+              disabled={busy || !online}
+            />
+          </Box>
         )}
         <Box sx={{ display: 'flex', gap: 2 }}><Button variant="contained" startIcon={busy ? <CircularProgress size={18} /> : <LoginOutlinedIcon />} onClick={() => movement(true)} disabled={busy || !online || wouldExceedCapacity || !['ELIGIBLE', 'LOCATION_WARNING'].includes(selected?.outcome) || !verified || !photoUrl || (selected?.locationWarning && !locationAcknowledged) || (selected?.eventWarning && !eventAcknowledged) || !selectedGate}>Check-In</Button><Button variant="outlined" startIcon={<LogoutOutlinedIcon />} onClick={() => movement(false)} disabled={busy || !online || !selected?.openVisitId || !selectedGate}>Check-Out</Button></Box>
         {items?.length === 0 && <Button sx={{ mt: 3 }} component={Link} to={`/register?from=gate&gate=${selectedGate}&area=${selectedArea}`} disabled={!online}>Register Visitor</Button>}

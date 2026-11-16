@@ -1,10 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
-  Alert, Box, Button, Checkbox, CircularProgress, FormControl, FormControlLabel,
-  InputLabel, ListItemText, MenuItem, Select, TextField, Typography,
+  Alert, Avatar, Box, Button, Checkbox, Chip, CircularProgress, FormControl,
+  FormControlLabel, InputLabel, ListItemText, MenuItem, Select, Stack, TextField,
+  Typography,
 } from '@mui/material';
 import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
+import CategoryOutlinedIcon from '@mui/icons-material/CategoryOutlined';
+import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutlineOutlined';
+import FactCheckOutlinedIcon from '@mui/icons-material/FactCheckOutlined';
+import LocationOnOutlinedIcon from '@mui/icons-material/LocationOnOutlined';
+import PersonOutlineOutlinedIcon from '@mui/icons-material/PersonOutlineOutlined';
 import { api } from '../api.js';
 import { formatPhoneNumber } from '../utils/phone.js';
 import { requestMessage } from '../utils/resources.js';
@@ -47,6 +53,8 @@ export default function AssignCategoriesPage() {
     .filter((category) => !assignedIds.has(Number(category.category_id)));
   const selectedCategories = selectableCategories
     .filter((category) => selectedIds.includes(Number(category.category_id)));
+  const initials = `${profile?.first_name?.[0] ?? ''}${profile?.last_name?.[0] ?? ''}`.toUpperCase();
+  const personCode = profile?.person_code ?? profile?.qr_code;
 
   function changeCategories(event) {
     const nextIds = event.target.value.map(Number);
@@ -125,39 +133,67 @@ export default function AssignCategoriesPage() {
   if (!profile || !options) return <Alert severity="error">{error || 'Person details could not be loaded.'}</Alert>;
 
   return (
-    <Box>
-      <Box className="page-heading">
-        <Box>
-          <Typography variant="h1" component="h1">Assign categories</Typography>
+    <Box className="assign-categories-page">
+      <Box className="page-heading assign-categories-heading">
+        <Box className="assign-categories-title">
+          <Typography className="assign-categories-eyebrow">PERSON MANAGEMENT / CATEGORY ASSIGNMENT</Typography>
+          <Typography variant="h1" component="h1">Add categories</Typography>
           <Typography color="text.secondary">
-            Add one or more category registrations to {profile.first_name} {profile.last_name}. Common details come from this profile, and its QR identity remains the same.
+            Add category registrations to this person. Their shared profile and QR identity stay the same.
           </Typography>
         </Box>
-        <Button component={Link} to={`/persons/${personId}`} startIcon={<ArrowBackOutlinedIcon />}>Back to person</Button>
+        <Button component={Link} to={`/persons/${personId}`} startIcon={<ArrowBackOutlinedIcon />} variant="outlined">
+          Back to person
+        </Button>
       </Box>
       {error && <Alert severity="error" role="alert" sx={{ mb: 2 }}>{error}</Alert>}
 
-      <Box className="card" sx={{ p: 2, mb: 2 }}>
-        <Typography variant="h3" sx={{ mb: 1 }}>Shared profile</Typography>
-        <Typography>{profile.first_name} {profile.last_name} · {formatPhoneNumber(profile.mobile)}</Typography>
-        <Typography color="text.secondary">{profile.email || 'No email'}{profile.address ? ` · ${profile.address}` : ''}</Typography>
-        {profile.categories.length > 0 && (
-          <Box sx={{ mt: 1 }}>
-            <Typography variant="subtitle2">Current categories</Typography>
-            {profile.categories.map((category) => (
-              <Typography key={`${category.category_id}-${category.status}`} variant="body2">
-                {category.name} · {category.status}
-              </Typography>
-            ))}
+      <Box component="section" className="assign-profile-card" aria-label="Shared person profile">
+        <Avatar className="assign-profile-avatar">{initials || <PersonOutlineOutlinedIcon />}</Avatar>
+        <Box className="assign-profile-content">
+          <Box className="assign-profile-heading">
+            <Box>
+              <Typography className="assign-profile-label">SHARED PERSON PROFILE</Typography>
+              <Typography variant="h2">{profile.first_name} {profile.last_name}</Typography>
+            </Box>
+            {personCode && <Chip className="assign-person-code" label={personCode} size="small" variant="outlined" />}
           </Box>
-        )}
+          <Stack className="assign-profile-facts" direction="row" useFlexGap flexWrap="wrap" spacing={0.75}>
+            <Chip icon={<PersonOutlineOutlinedIcon />} label={formatPhoneNumber(profile.mobile)} variant="outlined" />
+            {profile.email && <Chip label={profile.email} variant="outlined" />}
+            {profile.address && <Chip label={profile.address} variant="outlined" />}
+          </Stack>
+          <Box className="assign-current-categories">
+            <Typography variant="body2" color="text.secondary">Currently assigned</Typography>
+            <Stack direction="row" useFlexGap flexWrap="wrap" spacing={0.75}>
+              {profile.categories.length > 0 ? profile.categories.map((category) => (
+                <Chip
+                  key={`${category.category_id}-${category.status}`}
+                  label={`${category.name} · ${statusLabel(category.status)}`}
+                  size="small"
+                  color={category.status === 'ACTIVE' ? 'success' : category.status === 'PENDING' ? 'warning' : 'default'}
+                  variant="outlined"
+                />
+              )) : <Typography variant="body2" color="text.secondary">No categories assigned yet</Typography>}
+            </Stack>
+          </Box>
+        </Box>
       </Box>
 
       <Box component="form" onSubmit={submit}>
-        <Box className="card" sx={{ p: 2, mb: 2 }}>
-          <Typography variant="h3" sx={{ mb: 2 }}>Choose categories</Typography>
+        <Box component="section" className="assign-category-picker">
+          <Box className="assign-section-heading">
+            <Box className="assign-step-number">1</Box>
+            <Box>
+              <Typography variant="h2">Choose categories</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Select one or more categories. A separate form will appear for each selection.
+              </Typography>
+            </Box>
+            {selectedIds.length > 0 && <Chip label={`${selectedIds.length} selected`} color="primary" size="small" />}
+          </Box>
           {selectableCategories.length ? (
-            <FormControl fullWidth>
+            <FormControl fullWidth className="assign-category-select">
               <InputLabel id="assign-categories-label">Categories</InputLabel>
               <Select
                 labelId="assign-categories-label"
@@ -166,10 +202,13 @@ export default function AssignCategoriesPage() {
                 value={selectedIds}
                 onChange={changeCategories}
                 label="Categories"
-                renderValue={(selected) => selected
-                  .map((id) => selectableCategories.find((category) => Number(category.category_id) === id)?.name)
-                  .filter(Boolean)
-                  .join(', ')}
+                renderValue={(selected) => (
+                  <Box className="assign-selected-chips">
+                    {selected.map((id) => selectableCategories.find((category) => Number(category.category_id) === id))
+                      .filter(Boolean)
+                      .map((category) => <Chip key={category.category_id} label={category.name} size="small" />)}
+                  </Box>
+                )}
               >
                 {selectableCategories.map((category) => (
                   <MenuItem
@@ -177,8 +216,13 @@ export default function AssignCategoriesPage() {
                     value={Number(category.category_id)}
                     disabled={category.approval_required === null}
                   >
-                    <Checkbox checked={selectedIds.includes(Number(category.category_id))} />
-                    <ListItemText primary={category.name} secondary={category.approval_required === null ? 'Approval rule needs confirmation' : undefined} />
+                    <Checkbox checked={selectedIds.includes(Number(category.category_id))} size="small" />
+                    <ListItemText
+                      primary={category.name}
+                      secondary={category.approval_required === null
+                        ? 'Approval rule needs confirmation'
+                        : category.approval_required ? 'Approval required' : 'No approval required'}
+                    />
                   </MenuItem>
                 ))}
               </Select>
@@ -191,105 +235,160 @@ export default function AssignCategoriesPage() {
         {selectedCategories.map((category) => {
           const current = registrations[category.category_id] ?? emptyRegistration;
           const details = current.categoryDetails;
+          const categoryFields = category.schema?.fields ?? [];
           return (
             <Box
               component="section"
-              className="card"
+              className="assign-category-card"
               aria-labelledby={`category-${category.category_id}`}
               key={category.category_id}
-              sx={{ p: 2, mb: 2 }}
             >
-              <Typography id={`category-${category.category_id}`} variant="h3" sx={{ mb: 2 }}>
-                {category.name} registration details
-              </Typography>
-              {(category.schema?.addressRequired && !profile.address)
-                || (category.schema?.emergencyRequired && (!profile.emergency_contact_name || !profile.emergency_contact_mobile))
-                ? <Alert severity="warning" sx={{ mb: 2 }}>
+              <Box className="assign-category-card-heading">
+                <Box className="assign-category-icon"><CategoryOutlinedIcon /></Box>
+                <Box>
+                  <Typography className="assign-category-step">CATEGORY REGISTRATION</Typography>
+                  <Typography id={`category-${category.category_id}`} variant="h2">
+                    {category.name}
+                  </Typography>
+                </Box>
+                <Chip
+                  icon={<FactCheckOutlinedIcon />}
+                  label={category.approval_required ? 'Approval required' : 'No approval required'}
+                  size="small"
+                  variant="outlined"
+                  color={category.approval_required ? 'warning' : 'success'}
+                />
+              </Box>
+              <Box className="assign-category-card-body">
+                <Box className="assign-form-intro">
+                  <Typography variant="subtitle2">Category-specific details</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    These details are saved for {category.name} only. Shared profile information is not requested again.
+                  </Typography>
+                </Box>
+                {(category.schema?.addressRequired && !profile.address)
+                  || (category.schema?.emergencyRequired && (!profile.emergency_contact_name || !profile.emergency_contact_mobile))
+                  ? <Alert severity="warning">
                     This category requires common address or emergency-contact details that are missing from the profile. Update the profile before assigning it.
                   </Alert>
-                : null}
-              <Box className="form-grid">
-                {(category.schema?.fields ?? []).map((field) => {
-                  if (field.type === 'select') {
-                    const fieldOptions = field.source
-                      ? optionsFor(field, category.category_id)
-                      : (field.options ?? []).map((value) => ({ value, label: value }));
-                    return (
-                      <TextField
-                        key={field.key}
-                        select
-                        label={field.label}
-                        value={details[field.key] ?? ''}
-                        onChange={(event) => changeField(category.category_id, field.key, event.target.value)}
-                        required={field.required}
-                        fullWidth
-                      >
-                        <MenuItem value="">Select</MenuItem>
-                        {fieldOptions.map((option) => (
-                          <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
-                        ))}
-                      </TextField>
-                    );
-                  }
-                  return (
-                    <TextField
-                      key={field.key}
-                      label={field.label}
-                      type={field.type ?? 'text'}
-                      value={details[field.key] ?? ''}
-                      onChange={(event) => changeField(category.category_id, field.key, event.target.value)}
-                      required={field.required}
-                      fullWidth
-                      inputProps={{ maxLength: 500, ...(field.type === 'number' ? { min: 1, step: 1 } : {}) }}
-                      InputLabelProps={field.type === 'date' ? { shrink: true } : undefined}
-                    />
-                  );
-                })}
-                {category.schema?.addressRequired && <TextField label="Residential address (required on profile)" value={profile.address ?? ''} fullWidth InputProps={{ readOnly: true }} />}
-                {category.schema?.emergencyRequired && (
-                  <>
-                    <TextField label="Emergency contact name (required on profile)" value={profile.emergency_contact_name ?? ''} fullWidth InputProps={{ readOnly: true }} />
-                    <TextField label="Emergency contact mobile (required on profile)" value={profile.emergency_contact_mobile ?? ''} fullWidth InputProps={{ readOnly: true }} />
-                  </>
+                  : null}
+                {categoryFields.length > 0 && (
+                  <Box className="form-grid assign-category-fields">
+                    {categoryFields.map((field) => {
+                      if (field.type === 'select') {
+                        const fieldOptions = field.source
+                          ? optionsFor(field, category.category_id)
+                          : (field.options ?? []).map((value) => ({ value, label: value }));
+                        return (
+                          <TextField
+                            key={field.key}
+                            select
+                            label={field.label}
+                            value={details[field.key] ?? ''}
+                            onChange={(event) => changeField(category.category_id, field.key, event.target.value)}
+                            required={field.required}
+                            fullWidth
+                          >
+                            <MenuItem value="">Select</MenuItem>
+                            {fieldOptions.map((option) => (
+                              <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                            ))}
+                          </TextField>
+                        );
+                      }
+                      return (
+                        <TextField
+                          key={field.key}
+                          label={field.label}
+                          type={field.type ?? 'text'}
+                          value={details[field.key] ?? ''}
+                          onChange={(event) => changeField(category.category_id, field.key, event.target.value)}
+                          required={field.required}
+                          fullWidth
+                          inputProps={{ maxLength: 500, ...(field.type === 'number' ? { min: 1, step: 1 } : {}) }}
+                          InputLabelProps={field.type === 'date' ? { shrink: true } : undefined}
+                        />
+                      );
+                  })}
+                  </Box>
                 )}
-              </Box>
-              {(options.locations ?? []).some((location) => location.location_type === 'AREA') && (
-                <Box sx={{ mt: 2 }}>
-                  <Typography variant="subtitle2">Area access (optional)</Typography>
-                  {(options.locations ?? []).filter((location) => location.location_type === 'AREA').map((location) => (
-                    <FormControlLabel
-                      key={location.location_id}
-                      control={<Checkbox
-                        checked={current.locationIds.includes(Number(location.location_id))}
-                        onChange={(event) => changeLocations(category.category_id, location.location_id, event.target.checked)}
-                      />}
-                      label={location.name}
-                    />
-                  ))}
+                {!categoryFields.length && <Alert severity="info">This category has no additional form fields.</Alert>}
+                {(category.schema?.addressRequired || category.schema?.emergencyRequired) && (
+                  <Box className="assign-common-details">
+                    <Typography variant="subtitle2">Shared details used for this category</Typography>
+                    {category.schema?.addressRequired && <TextField label="Residential address (required on profile)" value={profile.address ?? ''} fullWidth InputProps={{ readOnly: true }} />}
+                    {category.schema?.emergencyRequired && (
+                      <>
+                        <TextField label="Emergency contact name (required on profile)" value={profile.emergency_contact_name ?? ''} fullWidth InputProps={{ readOnly: true }} />
+                        <TextField label="Emergency contact mobile (required on profile)" value={profile.emergency_contact_mobile ?? ''} fullWidth InputProps={{ readOnly: true }} />
+                      </>
+                    )}
+                  </Box>
+                )}
+                {(options.locations ?? []).some((location) => location.location_type === 'AREA') && (
+                  <Box className="assign-area-access">
+                    <Box className="assign-subsection-heading">
+                      <LocationOnOutlinedIcon />
+                      <Box>
+                        <Typography variant="subtitle2">Area access</Typography>
+                        <Typography variant="body2" color="text.secondary">Optional · choose the areas this registration can access</Typography>
+                      </Box>
+                    </Box>
+                    <Box className="assign-area-options">
+                      {(options.locations ?? []).filter((location) => location.location_type === 'AREA').map((location) => (
+                        <FormControlLabel
+                          className="assign-area-option"
+                          key={location.location_id}
+                          control={<Checkbox
+                            checked={current.locationIds.includes(Number(location.location_id))}
+                            onChange={(event) => changeLocations(category.category_id, location.location_id, event.target.checked)}
+                          />}
+                          label={location.name}
+                        />
+                      ))}
+                    </Box>
+                  </Box>
+                )}
+                <Box className="assign-consent-box">
+                  <FormControlLabel
+                    control={<Checkbox
+                      checked={current.consent}
+                      onChange={(event) => setRegistrations((previous) => ({
+                        ...previous,
+                        [category.category_id]: { ...current, consent: event.target.checked },
+                      }))}
+                      required
+                    />}
+                    label={`Consent confirmed for ${category.name}`}
+                  />
                 </Box>
-              )}
-              <FormControlLabel
-                sx={{ mt: 1, display: 'flex' }}
-                control={<Checkbox
-                  checked={current.consent}
-                  onChange={(event) => setRegistrations((previous) => ({
-                    ...previous,
-                    [category.category_id]: { ...current, consent: event.target.checked },
-                  }))}
-                  required
-                />}
-                label={`Consent confirmed for ${category.name}`}
-              />
+              </Box>
             </Box>
           );
         })}
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-          <Button component={Link} to={`/persons/${personId}`} disabled={busy}>Cancel</Button>
-          <Button type="submit" variant="contained" disabled={busy || !selectedIds.length}>
-            {busy ? <CircularProgress size={18} /> : 'Assign selected categories'}
-          </Button>
+        <Box className="assign-form-footer">
+          <Box>
+            <Typography variant="subtitle2">
+              {selectedIds.length
+                ? `${selectedIds.length} ${selectedIds.length === 1 ? 'category' : 'categories'} selected`
+                : 'No categories selected'}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {selectedIds.length ? 'Confirm consent for each category before assigning.' : 'Choose categories above to continue.'}
+            </Typography>
+          </Box>
+          <Stack direction="row" spacing={1}>
+            <Button component={Link} to={`/persons/${personId}`} disabled={busy}>Cancel</Button>
+            <Button type="submit" variant="contained" disabled={busy || !selectedIds.length} startIcon={!busy && <CheckCircleOutlineOutlinedIcon />}>
+              {busy ? <CircularProgress size={18} /> : 'Assign categories'}
+            </Button>
+          </Stack>
         </Box>
       </Box>
     </Box>
   );
+}
+
+function statusLabel(status = '') {
+  return status.toLowerCase().replaceAll('_', ' ');
 }

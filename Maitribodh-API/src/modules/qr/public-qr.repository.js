@@ -44,7 +44,7 @@ export function createPublicQrRepository(pool) {
              JOIN mams.category AS c ON c.category_id = p.category_id
             WHERE (identity.mobile = $1
                OR ($1 ~ '^[0-9]{10}$' AND identity.mobile = '+91' || $1))
-              AND (p.status = 'ACTIVE' OR (p.status = 'PENDING' AND c.approval_required = false))
+              AND p.status = 'ACTIVE'
               AND identity.qr_code IS NOT NULL
               AND NOT EXISTS (
                 SELECT 1

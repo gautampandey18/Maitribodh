@@ -12,10 +12,11 @@ export function createGateRepository(pool) {
 
     async findCandidates({ personCode, mobile, query, locationId }) {
       const result = await pool.query(
-        `SELECT p.person_id, p.identity_id, identity.identity_id AS user_id,
+        `SELECT p.person_id, p.category_id AS registration_category_id,
+                c.name AS registration_category, p.identity_id, identity.identity_id AS user_id,
                 identity.qr_code AS person_code, identity.first_name, identity.last_name,
                 COALESCE(active_categories.category, '') AS category,
-                CASE WHEN c.approval_required = false AND p.status = 'PENDING' THEN 'ACTIVE' ELSE p.status END AS status,
+                p.status,
                 identity.qr_version, identity.photo_key, identity.mobile,
                 p.expires_on < (now() AT TIME ZONE 'Asia/Kolkata')::date AS access_expired,
                 (c.form_type = 'PARTICIPANT' AND NULLIF(program.extra->>'end_date', '')::date
@@ -49,8 +50,7 @@ export function createGateRepository(pool) {
              SELECT string_agg(DISTINCT active_category.name, ', ' ORDER BY active_category.name) AS category
                FROM mams.person AS membership
                JOIN mams.category AS active_category ON active_category.category_id = membership.category_id
-              WHERE (membership.status = 'ACTIVE'
-                  OR (membership.status = 'PENDING' AND active_category.approval_required = false))
+              WHERE membership.status = 'ACTIVE'
                 AND membership.identity_id = p.identity_id
            ) AS active_categories ON true
            LEFT JOIN mams.lookup_value AS program ON program.lookup_type = 'PROGRAM_BATCH'

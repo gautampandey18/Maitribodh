@@ -22,7 +22,7 @@ test('person details return the selected registration category and only active i
   assert.equal(person.identity_qr_code, 'MB-000008');
   assert.equal(person.identity_qr_version, 2);
   assert.match(query.sql, /membership\.status = 'ACTIVE'/);
-  assert.match(query.sql, /category\.approval_required = false/);
+  assert.doesNotMatch(query.sql, /membership\.status = 'PENDING'/);
   assert.match(query.sql, /\) AS category_summary ON true/);
   assert.deepEqual(query.values, [8]);
 });

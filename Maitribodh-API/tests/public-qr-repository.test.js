@@ -28,6 +28,8 @@ test('public lookup serializes by IP, returns active matches, and audits only ma
   assert.match(calls[1].sql, /pg_advisory_xact_lock/);
   assert.match(calls[2].sql, /interval '1 minute'/);
   assert.match(calls[2].sql, /interval '24 hours'/);
+  assert.match(calls[3].sql, /AND p\.status = 'ACTIVE'/);
+  assert.doesNotMatch(calls[3].sql, /approval_required|p\.status = 'PENDING'/);
   assert.match(calls[3].sql, /b\.lifted_at IS NULL/);
   assert.match(calls[4].sql, /PUBLIC_QR_LOOKUP/);
   assert.equal(calls[4].values[0], JSON.stringify({ mobile_masked: '******3210', matches: 1 }));

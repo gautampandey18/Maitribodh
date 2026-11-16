@@ -43,12 +43,12 @@ it('lets an admin select a dynamic category, fill its form, and submit its conse
 
   expect(screen.queryByRole('checkbox', { name: 'Existing' })).not.toBeInTheDocument();
   await user.click(await screen.findByRole('combobox', { name: 'Categories' }));
-  await user.click(await screen.findByRole('option', { name: 'Dynamic Category' }));
+  await user.click(await screen.findByRole('option', { name: /^Dynamic Category/ }));
   await user.keyboard('{Escape}');
   const reference = screen.getByRole('textbox', { name: 'Reference Number' });
   await user.type(reference, 'REF-001');
   await user.click(screen.getByRole('checkbox', { name: 'Consent confirmed for Dynamic Category' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Assign selected categories' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Assign categories' }));
 
   await waitFor(() => expect(post).toHaveBeenCalledWith('/persons/8/category-assignments', {
     registrations: [{

@@ -49,6 +49,8 @@ export function createGateService({ repository, qrService }) {
 
         return {
           personId: candidate.person_id,
+          categoryId: candidate.registration_category_id,
+          registrationCategory: candidate.registration_category,
           userId: candidate.user_id ?? candidate.identity_id,
           identityId: candidate.identity_id,
           personCode: candidate.person_code,
@@ -70,14 +72,41 @@ export function createGateService({ repository, qrService }) {
         };
       });
       const people = new Map();
+      const categoriesByIdentity = new Map();
       for (const item of mappedCandidates) {
         const key = item.identityId ?? `person:${item.personId}`;
+        if (item.status === 'ACTIVE' && item.categoryId != null && item.registrationCategory) {
+          const categories = categoriesByIdentity.get(key) ?? [];
+          if (!categories.some((category) => category.categoryId === Number(item.categoryId))) {
+            categories.push({
+              categoryId: Number(item.categoryId),
+              personId: item.personId,
+              name: item.registrationCategory,
+              status: item.status,
+              outcome: item.outcome,
+              eventWarning: item.eventWarning,
+              locationWarning: item.locationWarning,
+              assignedAreaIds: item.assignedAreaIds,
+              openVisitId: item.openVisitId,
+              insideSince: item.insideSince,
+              accompanyingCount: item.accompanyingCount,
+            });
+          }
+          categoriesByIdentity.set(key, categories);
+        }
         const current = people.get(key);
         if (!current || candidatePriority(item.outcome) < candidatePriority(current.outcome)) {
           people.set(key, item);
         }
       }
-      const items = [...people.values()];
+      const items = [...people.entries()].map(([key, person]) => {
+        const selectedPerson = { ...person };
+        delete selectedPerson.registrationCategory;
+        return {
+          ...selectedPerson,
+          categories: categoriesByIdentity.get(key) ?? [],
+        };
+      });
       const outcomes = items.length ? items.map((item) => item.outcome) : ['NOT_FOUND'];
 
       await repository.recordLookup({

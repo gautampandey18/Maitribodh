@@ -117,8 +117,7 @@ export function createRegistrationRepository(pool) {
           SELECT string_agg(DISTINCT category.name, ', ' ORDER BY category.name)
                    FILTER (WHERE membership.status <> 'DRAFT') AS categories,
                  string_agg(DISTINCT category.name, ', ' ORDER BY category.name)
-                   FILTER (WHERE membership.status = 'ACTIVE'
-                     OR (membership.status = 'PENDING' AND category.approval_required = false)) AS active_categories
+                   FILTER (WHERE membership.status = 'ACTIVE') AS active_categories
             FROM mams.person AS membership
             JOIN mams.category AS category ON category.category_id = membership.category_id
            WHERE ((p.identity_id IS NOT NULL AND membership.identity_id = p.identity_id)

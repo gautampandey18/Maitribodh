@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createPersonsRepository } from '../src/modules/persons/persons.repository.js';
 
-test('active QR lookup allows approval-exempt pending memberships', async () => {
+test('active QR lookup only returns a QR for the active registration', async () => {
   let query;
   const repository = createPersonsRepository({
     async query(sql, values) {
@@ -14,7 +14,8 @@ test('active QR lookup allows approval-exempt pending memberships', async () => 
   const qr = await repository.getActivePersonQr(8);
 
   assert.deepEqual(qr, { person_code: 'MB-000008', qr_version: 2 });
-  assert.match(query.sql, /category\.approval_required = false/);
+  assert.match(query.sql, /person\.status = 'ACTIVE'/);
+  assert.doesNotMatch(query.sql, /PENDING|approval_required/);
   assert.deepEqual(query.values, [8]);
 });
 
@@ -37,15 +38,18 @@ test('person search groups registrations by identity and accepts the page size',
   assert.match(queryInput.sql, /regexp_replace\(identity\.mobile/);
   assert.match(queryInput.sql, /identity\.identity_id AS user_id/);
   assert.match(queryInput.sql, /DISTINCT ON \(COALESCE\(identity_id, -person_id\)\)/);
-  assert.match(queryInput.sql, /array_agg\(DISTINCT c\.name ORDER BY c\.name\)/);
-  assert.match(queryInput.sql, /AS active_categories/);
+  assert.match(queryInput.sql, /updated_at DESC, created_at DESC, person_id DESC/);
+  assert.doesNotMatch(queryInput.sql, /\(status = 'ACTIVE'\) DESC/);
+  assert.match(queryInput.sql, /array_agg\(DISTINCT c\.name ORDER BY c\.name\) AS categories/);
+  assert.match(queryInput.sql, /WHERE membership\.status = 'ACTIVE'/);
+  assert.doesNotMatch(queryInput.sql, /membership\.status = 'PENDING'/);
   assert.match(queryInput.sql, /AS registration_category/);
   assert.match(queryInput.sql, /array_to_string\(COALESCE\(category_summary\.categories/);
   assert.doesNotMatch(queryInput.sql, /photo_key/);
   assert.deepEqual(queryInput.values, ['MB-000001', 4, 'ACTIVE', 25, 50]);
 });
 
-test('person search with pending status requires category approval', async () => {
+test('person search filters by raw registration status, including pending categories', async () => {
   let queryInput;
   const repository = createPersonsRepository({
     async query(sql, values) {
@@ -56,6 +60,6 @@ test('person search with pending status requires category approval', async () =>
 
   await repository.search({ query: '', categoryId: null, status: 'PENDING', offset: 0, pageSize: 10 });
 
-  assert.match(queryInput.sql, /c\.approval_required = true/);
-  assert.match(queryInput.sql, /CASE WHEN c\.approval_required = false AND p\.status = 'PENDING' THEN 'ACTIVE'/);
+  assert.match(queryInput.sql, /\(\$3::varchar IS NULL OR p\.status = \$3\)/);
+  assert.doesNotMatch(queryInput.sql, /CASE WHEN c\.approval_required = false AND p\.status = 'PENDING'/);
 });

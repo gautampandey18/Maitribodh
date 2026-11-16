@@ -55,7 +55,10 @@ it('loads live summary metrics and the inside list', async () => {
   expect(screen.getAllByText('Assembly Hall')).toHaveLength(2);
   expect(screen.getByText('Daily Check-In Trend')).toBeInTheDocument();
   expect(screen.getByText('Category Mix')).toBeInTheDocument();
-  expect(screen.getByRole('img', { name: 'Daily check-in trend for the last seven days' })).toBeInTheDocument();
+  const checkinTrend = screen.getByRole('img', { name: 'Daily check-in trend for the last seven days' });
+  expect(checkinTrend).toBeInTheDocument();
+  expect(checkinTrend.querySelector('.trend-value-label')).toHaveTextContent('2');
+  expect(checkinTrend.querySelector('.dashboard-trend-count')).toBeNull();
   expect(screen.getByRole('img', { name: 'Active person category mix' })).toBeInTheDocument();
   expect(screen.getByText('Occupancy by Location')).toBeInTheDocument();
   expect(screen.getByText('Occupancy by Category')).toBeInTheDocument();

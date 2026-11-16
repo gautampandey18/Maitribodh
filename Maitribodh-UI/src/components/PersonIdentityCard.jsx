@@ -122,7 +122,7 @@ async function createIdentityCardPng({ photoSrc, qrBlob, ...identity }) {
   }
 }
 
-export function QrPreview({ personId, personCode, onQrBlob, showPreview = true }) {
+export function QrPreview({ personId, personCode, onQrBlob, showPreview = true, showScanLabel = false }) {
   const [image, setImage] = useState('');
   const [error, setError] = useState('');
 
@@ -138,7 +138,11 @@ export function QrPreview({ personId, personCode, onQrBlob, showPreview = true }
         }
       })
       .catch((failure) => {
-        if (active) setError(requestMessage(failure, 'QR is not available for this person.'));
+        if (active) {
+          setError(failure.response?.status === 404
+            ? 'QR code is not available for this registration.'
+            : requestMessage(failure, 'QR code could not be loaded. Try again.'));
+        }
       });
     return () => {
       active = false;
@@ -146,12 +150,13 @@ export function QrPreview({ personId, personCode, onQrBlob, showPreview = true }
     };
   }, [personId, onQrBlob]);
 
-  if (error) return <Alert severity="warning">{error}</Alert>;
+  if (error) return <Alert className="idc-qr-unavailable" severity="warning">{error}</Alert>;
   if (!image) return <CircularProgress size={20} aria-label="Loading QR code" />;
   if (!showPreview) return null;
   return (
     <Box className="idc-qr-content">
       <Box component="img" src={image} alt={`QR code for ${personCode}`} className="idc-qr-image" />
+      {showScanLabel && <Typography className="idc-scan-label">Scan at gate</Typography>}
     </Box>
   );
 }
@@ -201,6 +206,7 @@ export default function PersonIdentityCard({
   const [qrBlob, setQrBlob] = useState(null);
   const [downloadError, setDownloadError] = useState('');
   const [downloading, setDownloading] = useState(false);
+  const qrUnavailable = Boolean(status && status !== 'ACTIVE');
   const receiveQrBlob = useCallback((blob) => {
     setQrBlob(blob);
     onQrBlob?.(blob);
@@ -242,8 +248,7 @@ export default function PersonIdentityCard({
             </Box>
           </Box>
           <Box className="idc-qr-panel">
-            <QrPreview personId={personId} personCode={personCode} onQrBlob={receiveQrBlob} />
-            <Typography className="idc-scan-label">Scan at gate</Typography>
+            <QrPreview personId={personId} personCode={personCode} onQrBlob={receiveQrBlob} showScanLabel={true} />
           </Box>
         </Box>
         <Box className="idc-details">
@@ -257,7 +262,7 @@ export default function PersonIdentityCard({
         <Box className="idc-card-actions">
           {footer}
           <Button size="small" startIcon={downloading ? <CircularProgress size={16} /> : <DownloadOutlinedIcon />} onClick={downloadCard} disabled={!qrBlob || downloading}>
-            {downloading ? 'Preparing ID card…' : 'Download ID card'}
+            {downloading ? 'Preparing ID card…' : qrUnavailable ? 'ID card unavailable' : 'Download ID card'}
           </Button>
         </Box>
       </Box>

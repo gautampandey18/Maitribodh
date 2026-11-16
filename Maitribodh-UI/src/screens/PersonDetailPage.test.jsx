@@ -262,11 +262,45 @@ it('displays the profile image and QR code on the person details page without id
 
   expect(screen.queryByLabelText('Identity card')).not.toBeInTheDocument();
   expect(await screen.findByRole('img', { name: 'Asha Patel profile' })).toBeInTheDocument();
+  expect(screen.getByText('Person ID')).toBeInTheDocument();
+  expect(screen.getByText('MB-000008')).toBeInTheDocument();
   expect(await screen.findByRole('img', { name: 'QR code for MB-000008' })).toBeInTheDocument();
   expect(screen.getByText('Scan at gate')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Download ID card' })).toBeInTheDocument();
   expect(screen.getByLabelText('ID card download')).toContainElement(screen.getByRole('button', { name: 'Download ID card' }));
 }, 30_000);
+
+it('shows the selected registration status when another category is active', async () => {
+  const person = {
+    person_id: 8,
+    person_code: 'MB-000008',
+    first_name: 'Asha',
+    last_name: 'Patel',
+    mobile: '+919820000000',
+    category: 'Staff, Visitor',
+    registration_category: 'Staff',
+    active_category: 'Visitor',
+    form_type: 'STAFF',
+    status: 'REJECTED',
+    documents: [],
+    category_details: {},
+    location_ids: [],
+    qr_version: 1,
+  };
+  mockPersonApi(person);
+
+  render(
+    <Provider store={store}>
+      <MemoryRouter initialEntries={['/persons/8']}>
+        <Routes><Route path="/persons/:personId" element={<PersonDetailPage />} /></Routes>
+      </MemoryRouter>
+    </Provider>,
+  );
+
+  const registrationStatus = await screen.findByText('Registration status');
+  expect(registrationStatus.parentElement).toHaveTextContent('REJECTED');
+  expect(screen.getByText('Registration category').parentElement).toHaveTextContent('Staff');
+});
 
 it('displays fallback avatar initials and QR code when person has no photo', async () => {
   const person = {

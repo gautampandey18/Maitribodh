@@ -113,10 +113,10 @@ test('mobile lookup returns a uniform not-found outcome and audits masked input'
   assert.equal(audit.mobileMasked, '******3210');
 });
 
-test('gate lookup shows one candidate per identity and prefers the usable category registration', async () => {
+test('gate lookup shows only active category registrations in the identity result', async () => {
   const rows = [
-    { person_id: 15, identity_id: 8, person_code: 'MB-000008', first_name: 'Asha', last_name: 'Patel', category: 'Visitor, Vendor', status: 'PENDING', is_blacklisted: false, access_expired: false, open_visit_id: null, location_warning: false },
-    { person_id: 12, identity_id: 8, person_code: 'MB-000008', first_name: 'Asha', last_name: 'Patel', category: 'Visitor, Vendor', status: 'ACTIVE', is_blacklisted: false, access_expired: false, open_visit_id: null, location_warning: false },
+    { person_id: 15, registration_category_id: 5, registration_category: 'Vendor', identity_id: 8, person_code: 'MB-000008', first_name: 'Asha', last_name: 'Patel', category: 'Visitor', status: 'PENDING', is_blacklisted: false, access_expired: false, open_visit_id: null, location_warning: false },
+    { person_id: 12, registration_category_id: 3, registration_category: 'Visitor', identity_id: 8, person_code: 'MB-000008', first_name: 'Asha', last_name: 'Patel', category: 'Visitor', status: 'ACTIVE', is_blacklisted: false, access_expired: false, open_visit_id: null, location_warning: false },
   ];
   const service = createGateService({
     repository: {
@@ -132,6 +132,11 @@ test('gate lookup shows one candidate per identity and prefers the usable catego
 
   assert.equal(result.items.length, 1);
   assert.equal(result.items[0].personId, 12);
-  assert.equal(result.items[0].category, 'Visitor, Vendor');
+  assert.equal(result.items[0].category, 'Visitor');
   assert.equal(result.items[0].outcome, 'ELIGIBLE');
+  assert.deepEqual(result.items[0].categories.map(({ categoryId, personId, name, status, outcome }) => ({
+    categoryId, personId, name, status, outcome,
+  })), [
+    { categoryId: 3, personId: 12, name: 'Visitor', status: 'ACTIVE', outcome: 'ELIGIBLE' },
+  ]);
 });

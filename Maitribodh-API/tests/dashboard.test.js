@@ -20,7 +20,7 @@ test('dashboard summary counts unique identities and uses local-day activity cou
 
   assert.match(sql, /status = 'OPEN'/);
   assert.match(sql, /AT TIME ZONE 'Asia\/Kolkata'/);
-  assert.match(sql, /count\(DISTINCT COALESCE\(identity_id, -person_id\)\)::int[\s\S]*status = 'ACTIVE'\) AS active_persons/);
+  assert.match(sql, /SELECT DISTINCT ON \(COALESCE\(identity_id, -person_id\)\) status[\s\S]*updated_at DESC, created_at DESC, person_id DESC[\s\S]*WHERE current_person\.status = 'ACTIVE'\) AS active_persons/);
   assert.match(sql, /count\(DISTINCT COALESCE\(identity_id, -person_id\)\)::int[\s\S]*status IN \('ACTIVE', 'PENDING'\)\) AS total_users/);
   assert.equal(summary.active_persons, 4);
 });

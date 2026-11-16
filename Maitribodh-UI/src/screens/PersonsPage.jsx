@@ -161,18 +161,8 @@ export default function PersonsPage() {
   }
 
   function handleCategoryChange(event) {
-    const nextCategory = event.target.value;
-    setCategoryId(nextCategory);
-    const cat = categories.find((c) => String(c.category_id) === String(nextCategory));
-    if (cat?.approval_required === false && status === 'PENDING') {
-      setStatus('');
-    }
+    setCategoryId(event.target.value);
   }
-
-  const selectedCategory = categories.find((c) => String(c.category_id) === String(categoryId));
-  const availableStatuses = selectedCategory?.approval_required === false
-    ? statuses.filter((item) => item !== 'PENDING')
-    : statuses;
 
   return (
     <Box className="persons-page">
@@ -210,7 +200,7 @@ export default function PersonsPage() {
             sx={{ minWidth: 170 }}
           >
             <MenuItem value="">All statuses</MenuItem>
-            {availableStatuses.map((item) => <MenuItem key={item} value={item}>{statusLabel(item)}</MenuItem>)}
+            {statuses.map((item) => <MenuItem key={item} value={item}>{statusLabel(item)}</MenuItem>)}
           </TextField>
           <Button type="submit" variant="contained" color="secondary" startIcon={<SearchOutlinedIcon />} disabled={loading}>
             Search
@@ -241,7 +231,12 @@ export default function PersonsPage() {
                 {items.map((item) => (
                   <TableRow key={item.person_id} hover>
                     <TableCell>
-                      <Button component={Link} to={`/persons/${item.person_id}`} color="primary" variant="text" sx={{ p: 0, justifyContent: 'flex-start', fontWeight: 600 }}>{item.name}</Button>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'flex-start', minHeight: 36 }}>
+                        <Button component={Link} to={`/persons/${item.person_id}`} color="primary" variant="text" sx={{ p: 0, minHeight: 0, lineHeight: 1.25, justifyContent: 'flex-start', fontWeight: 600 }}>
+                          {item.name}
+                        </Button>
+                        <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1, pt: '2px' }}>{item.person_code}</Typography>
+                      </Box>
                     </TableCell>
                     <TableCell>
                       <CategoryCell categories={item.categories} category={item.category} name={item.name} />

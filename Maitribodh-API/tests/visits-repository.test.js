@@ -58,6 +58,7 @@ test('check-in permits assigned location access and audits it atomically', async
   assert.match(calls[1].sql, /FOR UPDATE/);
   assert.match(calls[2].sql, /FOR UPDATE OF p/);
   assert.match(calls[4].sql, /location_override\)\s+VALUES .*\$8/s);
+  assert.equal(calls[4].values[0], 8);
   assert.equal(calls[4].values[7], false);
   assert.match(calls[5].sql, /INSERT INTO mams.audit_log/);
   assert.match(calls[5].values[3], /"location_warning":false/);
@@ -202,8 +203,12 @@ test('check-in records a location override for an unassigned restricted area', a
   assert.equal(calls.at(-1).sql, 'COMMIT');
 });
 
-test('check-in still blocks expired access without a visit', async () => {
-  for (const [flags, code] of [[{ access_expired: true }, 'NOT_ACTIVE']]) {
+test('check-in blocks non-active statuses and expired access without creating a visit', async () => {
+  for (const [flags, code] of [
+    [{ status: 'PENDING' }, 'NOT_ACTIVE'],
+    [{ status: 'REJECTED' }, 'NOT_ACTIVE'],
+    [{ access_expired: true }, 'NOT_ACTIVE'],
+  ]) {
     const calls = [];
     const client = {
       async query(sql) {

@@ -70,7 +70,17 @@ it('displays the current and maximum occupancy for the selected area', async () 
 
 it('requires lookup and photo confirmation before check-in', async () => {
   vi.spyOn(api, 'get').mockResolvedValue({ data: options });
-  const post = vi.spyOn(api, 'post').mockResolvedValue({ data: { items: [{ personId: 8, personCode: 'MB-000008', name: 'Asha Patel', category: 'Visitor', outcome: 'ELIGIBLE', status: 'ACTIVE', openVisitId: null }] } });
+  const post = vi.spyOn(api, 'post').mockResolvedValue({ data: { items: [{
+    personId: 8,
+    categoryId: 3,
+    personCode: 'MB-000008',
+    name: 'Asha Patel',
+    category: 'Visitor',
+    outcome: 'ELIGIBLE',
+    status: 'ACTIVE',
+    openVisitId: null,
+    categories: [{ categoryId: 3, personId: 8, name: 'Visitor', status: 'ACTIVE', outcome: 'ELIGIBLE' }],
+  }] } });
   const user = userEvent.setup();
   render(<MemoryRouter><GatePage /></MemoryRouter>);
   expect(screen.getByRole('button', { name: 'Check-In' })).toBeDisabled();
@@ -87,6 +97,7 @@ it('requires lookup and photo confirmation before check-in', async () => {
   expect(personCard.querySelector('.idc-main')).toBeInTheDocument();
   expect(personCard.querySelector('.idc-details')).toHaveTextContent('Gate');
   expect(personCard.querySelector('.idc-back')).not.toBeInTheDocument();
+  expect(screen.queryByRole('combobox', { name: 'Category to check in' })).not.toBeInTheDocument();
   expect(post).toHaveBeenCalledWith('/gate/lookups', { mobile: '9876543210', locationId: 2 });
   expect(screen.getByRole('button', { name: 'Check-In' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Check-Out' })).toBeDisabled();
@@ -405,18 +416,19 @@ it('identifies a person after Html5-QRCode image preparation retries', async () 
 });
 
 it.each([
-  ['INVALID_QR', 'INVALID QR'],
-  ['BLOCKED_BLACKLIST', 'BLACKLISTED - ENTRY NOT ALLOWED'],
-  ['NOT_ACTIVE', 'PENDING APPROVAL'],
-  ['ALREADY_INSIDE', 'PERSON ALREADY INSIDE'],
-])('preserves %s when scanning a person in an unassigned restricted area', async (outcome, title) => {
+  ['INVALID_QR', 'INVALID QR', 'ACTIVE'],
+  ['BLOCKED_BLACKLIST', 'BLACKLISTED - ENTRY NOT ALLOWED', 'ACTIVE'],
+  ['NOT_ACTIVE', 'PENDING APPROVAL', 'PENDING'],
+  ['NOT_ACTIVE', 'REGISTRATION REJECTED', 'REJECTED'],
+  ['ALREADY_INSIDE', 'PERSON ALREADY INSIDE', 'ACTIVE'],
+])('preserves %s when scanning a person in an unassigned restricted area', async (outcome, title, status) => {
   vi.spyOn(api, 'get').mockResolvedValue({ data: { ...options, locations: [options.locations[0], { ...options.locations[1], is_restricted: true }] } });
-  vi.spyOn(api, 'post').mockResolvedValue({ data: { items: [{ personId: 8, personCode: 'MB-000008', name: 'Asha Patel', outcome, assignedAreaIds: [] }] } });
+  vi.spyOn(api, 'post').mockResolvedValue({ data: { items: [{ personId: 8, personCode: 'MB-000008', name: 'Asha Patel', outcome, status, assignedAreaIds: [] }] } });
   const user = userEvent.setup();
   render(<MemoryRouter><GatePage /></MemoryRouter>);
   await waitFor(() => expect(screen.getByRole('button', { name: 'Upload QR image' })).toBeEnabled());
   await user.upload(screen.getByLabelText('Upload QR image'), new File(['qr'], 'qr.png', { type: 'image/png' }));
-  expect(await screen.findByText(title)).toBeInTheDocument();
+  expect(await screen.findAllByText(title)).not.toHaveLength(0);
   expect(screen.getByRole('button', { name: 'Check-In' })).toBeDisabled();
 });
 
@@ -556,9 +568,42 @@ it('allows entering accompanying visitors and submits accompanyingCount at check
   vi.stubGlobal('URL', { createObjectURL: vi.fn(() => 'blob:person-photo'), revokeObjectURL: vi.fn() });
   vi.spyOn(api, 'get').mockImplementation((path) => Promise.resolve({ data: path === '/persons/registration/options' ? options : new Blob(['photo'], { type: 'image/jpeg' }) }));
   const post = vi.spyOn(api, 'post')
-    .mockResolvedValueOnce({ data: { items: [{ personId: 21, personCode: 'MB-000021', name: 'Rohan Sharma', category: 'Visitor', outcome: 'ELIGIBLE', status: 'ACTIVE', hasPhoto: true, photoKey: 'rohan.jpg', openVisitId: null }] } })
+    .mockResolvedValueOnce({ data: { items: [{
+      personId: 21,
+      categoryId: 10,
+      personCode: 'MB-000021',
+      name: 'Rohan Sharma',
+      category: 'Visitor, Vendor',
+      outcome: 'ELIGIBLE',
+      status: 'ACTIVE',
+      hasPhoto: true,
+      photoKey: 'rohan.jpg',
+      openVisitId: null,
+      categories: [
+        { categoryId: 10, personId: 21, name: 'Visitor', status: 'ACTIVE', outcome: 'ELIGIBLE', assignedAreaIds: [] },
+        { categoryId: 20, personId: 22, name: 'Vendor', status: 'ACTIVE', outcome: 'ELIGIBLE', assignedAreaIds: [] },
+        { categoryId: 30, personId: 23, name: 'Staff', status: 'PENDING', outcome: 'NOT_ACTIVE', assignedAreaIds: [] },
+        { categoryId: 40, personId: 24, name: 'Contractor', status: 'REJECTED', outcome: 'NOT_ACTIVE', assignedAreaIds: [] },
+      ],
+    }] } })
     .mockResolvedValueOnce({ data: { visitId: 55 } })
-    .mockResolvedValue({ data: { items: [{ personId: 21, personCode: 'MB-000021', name: 'Rohan Sharma', category: 'Visitor', outcome: 'ALREADY_INSIDE', status: 'ACTIVE', hasPhoto: true, photoKey: 'rohan.jpg', openVisitId: 55, accompanyingCount: 3 }] } });
+    .mockResolvedValue({ data: { items: [{
+      personId: 22,
+      categoryId: 20,
+      personCode: 'MB-000021',
+      name: 'Rohan Sharma',
+      category: 'Visitor, Vendor',
+      outcome: 'ALREADY_INSIDE',
+      status: 'ACTIVE',
+      hasPhoto: true,
+      photoKey: 'rohan.jpg',
+      openVisitId: 55,
+      accompanyingCount: 3,
+      categories: [
+        { categoryId: 10, personId: 21, name: 'Visitor', status: 'ACTIVE', outcome: 'ALREADY_INSIDE', openVisitId: 55 },
+        { categoryId: 20, personId: 22, name: 'Vendor', status: 'ACTIVE', outcome: 'ALREADY_INSIDE', openVisitId: 55 },
+      ],
+    }] } });
 
   const user = userEvent.setup();
   render(<MemoryRouter><GatePage /></MemoryRouter>);
@@ -567,6 +612,16 @@ it('allows entering accompanying visitors and submits accompanyingCount at check
   await user.click(screen.getByRole('button', { name: 'Find Person' }));
 
   expect(await screen.findByText('Rohan Sharma')).toBeInTheDocument();
+  const categorySelect = screen.getByRole('combobox', { name: 'Category to check in' });
+  expect(categorySelect).toHaveTextContent('Visitor');
+  await user.click(categorySelect);
+  expect(screen.getByRole('option', { name: 'Visitor' })).toBeInTheDocument();
+  expect(screen.getByRole('option', { name: 'Vendor' })).toBeInTheDocument();
+  expect(screen.queryByRole('option', { name: 'Staff' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('option', { name: 'Contractor' })).not.toBeInTheDocument();
+  await user.click(screen.getByRole('option', { name: 'Vendor' }));
+  expect(categorySelect).toHaveTextContent('Vendor');
+
   const accompanyingInput = screen.getByRole('spinbutton', { name: 'Additional people accompanying' });
   expect(accompanyingInput).toBeInTheDocument();
   expect(accompanyingInput).toHaveValue(0);
@@ -581,13 +636,14 @@ it('allows entering accompanying visitors and submits accompanyingCount at check
 
   await user.click(screen.getByRole('button', { name: 'Check-In' }));
   expect(post).toHaveBeenCalledWith('/visits', {
-    personId: 21,
+    personId: 22,
     checkinGateId: 1,
     checkinLocationId: 2,
     device: 'Gate Terminal 01',
     accompanyingCount: 3,
   });
   expect(await screen.findByText('Check-In recorded.')).toBeInTheDocument();
+  expect(screen.queryByRole('combobox', { name: 'Category to check in' })).not.toBeInTheDocument();
 }, 30_000);
 
 it('only allows mobile numbers in the input box and validates before search', async () => {

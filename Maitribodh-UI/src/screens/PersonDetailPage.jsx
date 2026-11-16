@@ -62,7 +62,7 @@ function IdentityCard({ person, role, onToggleStatus, displayCard = false, photo
       personId={person.person_id}
       personCode={person.identity_qr_code || person.person_code}
       name={`${person.first_name} ${person.last_name}`}
-      category={person.active_category ?? person.category}
+      category={person.active_category ?? ''}
       status={cardStatus}
       photoSrc={resolvedPhoto}
       mobile={formatPhoneNumber(person.mobile)}
@@ -292,11 +292,14 @@ export default function PersonDetailPage() {
   });
 
   const profileReadFields = !person ? [] : [
+    ['Person ID', person.identity_qr_code || person.person_code],
     ['Full Name', `${person.first_name} ${person.last_name}`],
     ['Mobile Number', formatPhoneNumber(person.mobile)],
     ['Alternate Mobile', person.alternate_mobile],
     ['Email', person.email],
-    ['Category', person.category],
+    ['Categories', person.category],
+    ['Registration category', person.registration_category || person.category],
+    ['Registration status', person.status],
     ['Address', person.address],
     ['Emergency Contact', [person.emergency_contact_name, person.emergency_contact_mobile].filter(Boolean).join(' · ')],
     ['Passport Number', person.passport_last4 ? `******${person.passport_last4}` : ''],

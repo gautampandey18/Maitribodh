@@ -1,6 +1,6 @@
 import { Provider } from 'react-redux';
 import { MemoryRouter } from 'react-router-dom';
-import { render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import { api } from '../api.js';
@@ -8,8 +8,10 @@ import { sessionEnded, sessionStarted, store } from '../store.js';
 import ApprovalsPage from './ApprovalsPage.jsx';
 
 afterEach(() => {
+  cleanup();
   store.dispatch(sessionEnded());
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 it('loads pending registrations and submits an approval after confirmation', async () => {
@@ -41,12 +43,76 @@ it('loads pending registrations and submits an approval after confirmation', asy
   );
 
   expect(await screen.findByText('Asha Patel')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'View details for Asha Patel' })).toBeInTheDocument();
+  const personCode = screen.getByText('MB-000012');
+  expect(personCode.parentElement).toHaveStyle({ flexDirection: 'column', minHeight: '36px' });
   await userEvent.click(screen.getByRole('button', { name: 'Approve Asha Patel' }));
   await userEvent.click(screen.getByRole('button', { name: 'Confirm approval' }));
 
   await waitFor(() => expect(post).toHaveBeenCalledWith('/approvals/12/decisions', { decision: 'APPROVE' }));
   expect(await screen.findByText('No registrations are waiting for approval.')).toHaveClass('approval-empty-state');
 }, 30_000);
+
+it('opens a read-only person profile dialog from the approval queue', async () => {
+  const person = {
+    person_id: 12,
+    person_code: 'MB-000012',
+    identity_qr_code: 'MB-000012',
+    first_name: 'Asha',
+    last_name: 'Patel',
+    registration_category: 'Staff',
+    status: 'PENDING',
+    mobile: '+919820000000',
+    email: 'asha@example.com',
+    gender: 'Female',
+    date_of_birth: '1990-04-12',
+    address: 'Ashram Road',
+    emergency_contact_name: 'Ravi Patel',
+    emergency_contact_mobile: '+919820000001',
+    photo_key: 'asha-photo.jpg',
+  };
+  vi.stubGlobal('URL', {
+    createObjectURL: vi.fn(() => 'blob:asha-photo'),
+    revokeObjectURL: vi.fn(),
+  });
+  const get = vi.spyOn(api, 'get').mockImplementation((path) => {
+    if (path === '/approvals') {
+      return Promise.resolve({ data: { items: [{
+        person_id: 12,
+        person_code: 'MB-000012',
+        name: 'Asha Patel',
+        category: 'Staff',
+        approval_required: true,
+        has_photo: true,
+      }] } });
+    }
+    if (path === '/persons/12') return Promise.resolve({ data: person });
+    if (path === '/persons/12/files/asha-photo.jpg') return Promise.resolve({ data: new Blob(['photo'], { type: 'image/jpeg' }) });
+    return Promise.reject(new Error(`Unexpected request: ${path}`));
+  });
+  store.dispatch(sessionStarted({ accessToken: 'test-token', user: { id: 4, role: 'ADMIN' } }));
+  const user = userEvent.setup();
+
+  render(
+    <Provider store={store}>
+      <MemoryRouter>
+        <ApprovalsPage />
+      </MemoryRouter>
+    </Provider>,
+  );
+
+  await user.click(await screen.findByRole('button', { name: 'View details for Asha Patel' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Person details' });
+  expect(await within(dialog).findByRole('img', { name: 'Asha Patel profile photo' })).toHaveAttribute('src', 'blob:asha-photo');
+  expect(within(dialog).getByText('MB-000012')).toBeInTheDocument();
+  expect(within(dialog).getByText('asha@example.com')).toBeInTheDocument();
+  expect(within(dialog).getByText('Ashram Road')).toBeInTheDocument();
+  expect(within(dialog).getByText(/Ravi Patel.*\+919820000001/)).toBeInTheDocument();
+  expect(within(dialog).queryByText('Visit activity')).not.toBeInTheDocument();
+  expect(within(dialog).queryByText('Audit trail')).not.toBeInTheDocument();
+  expect(within(dialog).queryByRole('button', { name: 'Edit details' })).not.toBeInTheDocument();
+  expect(get).toHaveBeenCalledWith('/persons/12');
+});
 
 it('requires a ten-character rejection reason before submission', async () => {
   vi.spyOn(api, 'get').mockResolvedValue({
