@@ -2247,9 +2247,6 @@ body.notifications-panel-open .top-bar .top-toolbar>.MuiIconButton-root {
   justify-content: center;
   gap: 4px;
   padding: 8px;
-  border: 1px solid #F3D2B6;
-  border-radius: 10px;
-  background: #fff;
   text-align: center;
 }
 
@@ -5258,9 +5255,6 @@ body.notifications-panel-open .app-navigation-drawer .MuiDrawer-paper::after {
   justify-content: center;
   gap: 4px;
   padding: 8px;
-  border: 1px solid #F3D2B6;
-  border-radius: 10px;
-  background: #fff;
   text-align: center;
 }
 

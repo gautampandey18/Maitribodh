@@ -25,6 +25,28 @@ it('explains that a QR is unavailable for the registration after a 404 response'
   expect(screen.queryByText('Scan at gate')).not.toBeInTheDocument();
 });
 
+it('shows all active categories in a single row and keeps status as a badge', () => {
+  render(createElement(PersonIdentityCard, {
+    personId: 8,
+    personCode: 'MB-000008',
+    name: 'Asha Patel',
+    categories: ['Staff', 'Volunteer', 'Devotee'],
+    status: 'ACTIVE',
+    mobile: '+91 98765 43210',
+  }));
+
+  expect(screen.getByText('Staff')).toBeInTheDocument();
+  expect(screen.getByText('Volunteer')).toBeInTheDocument();
+  expect(screen.getByText('Devotee')).toBeInTheDocument();
+  expect(screen.getByLabelText('Active categories')).toBeInTheDocument();
+  expect(screen.getByText('ACTIVE')).toBeInTheDocument();
+  expect(screen.getByText('Mobile')).toBeInTheDocument();
+  const profileInfo = screen.getByText('Asha Patel').parentElement;
+  expect(profileInfo.children[2]).toHaveAttribute('aria-label', 'Status badge');
+  expect(profileInfo.children[3]).toHaveTextContent('Mobile');
+  expect(profileInfo.children[4]).toHaveAttribute('aria-label', 'Active categories');
+});
+
 it('explains when a rejected registration has no usable identity card', async () => {
   vi.spyOn(api, 'get').mockRejectedValue({ response: { status: 404 } });
 

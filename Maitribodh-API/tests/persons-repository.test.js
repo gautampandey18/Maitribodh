@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createPersonsRepository } from '../src/modules/persons/persons.repository.js';
 
-test('active QR lookup only returns a QR for the active registration', async () => {
+test('active QR lookup returns a QR when any registration for the identity is active', async () => {
   let query;
   const repository = createPersonsRepository({
     async query(sql, values) {
@@ -14,7 +14,9 @@ test('active QR lookup only returns a QR for the active registration', async () 
   const qr = await repository.getActivePersonQr(8);
 
   assert.deepEqual(qr, { person_code: 'MB-000008', qr_version: 2 });
-  assert.match(query.sql, /person\.status = 'ACTIVE'/);
+  assert.match(query.sql, /active_person\.status = 'ACTIVE'/);
+  assert.match(query.sql, /active_person\.identity_id = person\.identity_id/);
+  assert.match(query.sql, /active_person\.person_id = person\.person_id/);
   assert.doesNotMatch(query.sql, /PENDING|approval_required/);
   assert.deepEqual(query.values, [8]);
 });

@@ -51,14 +51,18 @@ it('shows one identity when the search uniquely matches an active user', async (
 
   expect(await screen.findByRole('table', { name: 'QR identity' })).toBeInTheDocument();
   expect(screen.getAllByText('Asha Patel')).toHaveLength(2);
+  expect(screen.getByRole('columnheader', { name: 'Name' })).toBeInTheDocument();
+  expect(screen.getByRole('columnheader', { name: 'Category' })).toBeInTheDocument();
+  expect(screen.getByRole('columnheader', { name: 'Mobile' })).toBeInTheDocument();
+  expect(screen.queryByRole('columnheader', { name: 'QR Status' })).not.toBeInTheDocument();
   expect(screen.getByRole('region', { name: 'QR preview' })).toBeInTheDocument();
   expect(screen.getByLabelText('Identity card')).toBeInTheDocument();
   expect(screen.getByText('MB-000005')).toBeInTheDocument();
-  expect(screen.getByText('Generated')).toBeInTheDocument();
+  expect(screen.getByText('Issued on')).toBeInTheDocument();
   expect(screen.getByText('13 Jul 2026')).toBeInTheDocument();
-  expect(screen.getByText('Registered mobile number')).toBeInTheDocument();
   expect(screen.getByText('Never')).toBeInTheDocument();
-  expect(within(screen.getByRole('region', { name: 'QR preview' })).getByText('Current')).toBeInTheDocument();
+  expect(screen.queryByText('Registered mobile number')).not.toBeInTheDocument();
+  expect(within(screen.getByRole('region', { name: 'QR preview' })).queryByText('Current')).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Download ID card' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Download QR' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Print' })).toBeInTheDocument();

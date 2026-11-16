@@ -116,7 +116,7 @@ test('mobile lookup returns a uniform not-found outcome and audits masked input'
 test('gate lookup shows only active category registrations in the identity result', async () => {
   const rows = [
     { person_id: 15, registration_category_id: 5, registration_category: 'Vendor', identity_id: 8, person_code: 'MB-000008', first_name: 'Asha', last_name: 'Patel', category: 'Visitor', status: 'PENDING', is_blacklisted: false, access_expired: false, open_visit_id: null, location_warning: false },
-    { person_id: 12, registration_category_id: 3, registration_category: 'Visitor', identity_id: 8, person_code: 'MB-000008', first_name: 'Asha', last_name: 'Patel', category: 'Visitor', status: 'ACTIVE', is_blacklisted: false, access_expired: false, open_visit_id: null, location_warning: false },
+    { person_id: 12, registration_category_id: 3, registration_category: 'Visitor', identity_id: 8, person_code: 'MB-000008', first_name: 'Asha', last_name: 'Patel', category: 'Visitor', status: 'ACTIVE', created_at: '2026-07-13T00:00:00.000Z', expires_on: '2027-07-12', is_blacklisted: false, access_expired: false, open_visit_id: null, location_warning: false },
   ];
   const service = createGateService({
     repository: {
@@ -134,9 +134,19 @@ test('gate lookup shows only active category registrations in the identity resul
   assert.equal(result.items[0].personId, 12);
   assert.equal(result.items[0].category, 'Visitor');
   assert.equal(result.items[0].outcome, 'ELIGIBLE');
-  assert.deepEqual(result.items[0].categories.map(({ categoryId, personId, name, status, outcome }) => ({
-    categoryId, personId, name, status, outcome,
+  assert.equal(result.items[0].createdAt, '2026-07-13T00:00:00.000Z');
+  assert.equal(result.items[0].expiresOn, '2027-07-12');
+  assert.deepEqual(result.items[0].categories.map(({ categoryId, personId, name, status, createdAt, expiresOn, outcome }) => ({
+    categoryId, personId, name, status, createdAt, expiresOn, outcome,
   })), [
-    { categoryId: 3, personId: 12, name: 'Visitor', status: 'ACTIVE', outcome: 'ELIGIBLE' },
+    {
+      categoryId: 3,
+      personId: 12,
+      name: 'Visitor',
+      status: 'ACTIVE',
+      createdAt: '2026-07-13T00:00:00.000Z',
+      expiresOn: '2027-07-12',
+      outcome: 'ELIGIBLE',
+    },
   ]);
 });

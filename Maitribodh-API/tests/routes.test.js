@@ -727,6 +727,7 @@ test('check-in route validates the registered person payload and forwards the ac
 
   const response = await request(app).post('/api/v1/visits').send({
     personId: 8,
+    categoryId: 4,
     checkinGateId: 2,
     checkinLocationId: 3,
   });
@@ -734,6 +735,7 @@ test('check-in route validates the registered person payload and forwards the ac
   assert.equal(response.status, 201);
   assert.equal(response.body.locationWarning, true);
   assert.equal(checkinInput.personId, 8);
+  assert.equal(checkinInput.categoryId, 4);
   assert.equal(checkinInput.actor.role, 'SECURITY_GUARD');
   assert.equal(checkinInput.eventAcknowledged, false);
   for (const eventAcknowledged of [true, false]) {

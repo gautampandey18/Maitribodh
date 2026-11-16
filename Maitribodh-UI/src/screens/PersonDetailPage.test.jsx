@@ -28,7 +28,9 @@ function mockPersonApi(person) {
       : url.endsWith('/activity') || url.startsWith('/audit')
         ? { items: [] }
         : url.endsWith('/qr')
-          ? new Blob(['qr'], { type: 'image/png' })
+          ? person.status === 'ACTIVE' || person.active_category
+            ? new Blob(['qr'], { type: 'image/png' })
+            : Promise.reject({ response: { status: 404 } })
           : person,
   }));
 }
@@ -270,7 +272,7 @@ it('displays the profile image and QR code on the person details page without id
   expect(screen.getByLabelText('ID card download')).toContainElement(screen.getByRole('button', { name: 'Download ID card' }));
 }, 30_000);
 
-it('shows the selected registration status when another category is active', async () => {
+it('shows the selected registration status and QR when another category is active', async () => {
   const person = {
     person_id: 8,
     person_code: 'MB-000008',
@@ -300,6 +302,7 @@ it('shows the selected registration status when another category is active', asy
   const registrationStatus = await screen.findByText('Registration status');
   expect(registrationStatus.parentElement).toHaveTextContent('REJECTED');
   expect(screen.getByText('Registration category').parentElement).toHaveTextContent('Staff');
+  expect(await screen.findByRole('img', { name: 'QR code for MB-000008' })).toBeInTheDocument();
 });
 
 it('displays fallback avatar initials and QR code when person has no photo', async () => {

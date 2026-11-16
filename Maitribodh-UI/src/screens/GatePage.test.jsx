@@ -1,5 +1,5 @@
 import { MemoryRouter } from 'react-router-dom';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { api } from '../api.js';
@@ -69,7 +69,12 @@ it('displays the current and maximum occupancy for the selected area', async () 
 });
 
 it('requires lookup and photo confirmation before check-in', async () => {
-  vi.spyOn(api, 'get').mockResolvedValue({ data: options });
+  vi.stubGlobal('URL', { ...URL, createObjectURL: vi.fn(() => 'blob:qr-code'), revokeObjectURL: vi.fn() });
+  vi.spyOn(api, 'get').mockImplementation((path) => Promise.resolve(
+    path === '/persons/registration/options'
+      ? { data: options }
+      : { data: new Blob(['qr'], { type: 'image/png' }) },
+  ));
   const post = vi.spyOn(api, 'post').mockResolvedValue({ data: { items: [{
     personId: 8,
     categoryId: 3,
@@ -78,6 +83,8 @@ it('requires lookup and photo confirmation before check-in', async () => {
     category: 'Visitor',
     outcome: 'ELIGIBLE',
     status: 'ACTIVE',
+    createdAt: '2026-07-13T00:00:00.000Z',
+    expiresOn: '2027-07-12',
     openVisitId: null,
     categories: [{ categoryId: 3, personId: 8, name: 'Visitor', status: 'ACTIVE', outcome: 'ELIGIBLE' }],
   }] } });
@@ -94,8 +101,12 @@ it('requires lookup and photo confirmation before check-in', async () => {
   expect(personCard).toHaveTextContent('Asha Patel');
   expect(personCard).toHaveTextContent('MB-000008');
   expect(personCard).toHaveTextContent('Scan at gate');
+  expect(within(personCard).getByText('Issued on')).toBeInTheDocument();
+  expect(within(personCard).getByText('13 Jul 2026')).toBeInTheDocument();
+  expect(within(personCard).getByText('Expiry')).toBeInTheDocument();
+  expect(within(personCard).getByText('12 Jul 2027')).toBeInTheDocument();
   expect(personCard.querySelector('.idc-main')).toBeInTheDocument();
-  expect(personCard.querySelector('.idc-details')).toHaveTextContent('Gate');
+  expect(personCard.querySelector('.idc-details')).not.toHaveTextContent('Gate');
   expect(personCard.querySelector('.idc-back')).not.toBeInTheDocument();
   expect(screen.queryByRole('combobox', { name: 'Category to check in' })).not.toBeInTheDocument();
   expect(post).toHaveBeenCalledWith('/gate/lookups', { mobile: '9876543210', locationId: 2 });
@@ -136,7 +147,7 @@ it('preserves selected person and id card section when gate changes', async () =
 
   const personCard = await screen.findByRole('region', { name: 'Selected person details' });
   expect(personCard).toBeInTheDocument();
-  expect(personCard.querySelector('.idc-details')).toHaveTextContent('Main Gate');
+  expect(personCard.querySelector('.idc-details')).not.toHaveTextContent('Main Gate');
 
   const gate = screen.getByRole('combobox', { name: 'Gate' });
   await user.click(gate);
@@ -145,7 +156,7 @@ it('preserves selected person and id card section when gate changes', async () =
   await user.click(await screen.findByRole('option', { name: 'North Gate' }));
 
   expect(screen.getByRole('region', { name: 'Selected person details' })).toBeInTheDocument();
-  expect(personCard.querySelector('.idc-details')).toHaveTextContent('North Gate');
+  expect(personCard.querySelector('.idc-details')).not.toHaveTextContent('North Gate');
 }, 30_000);
 it('auto-selects an assigned area and warns when another restricted area is selected', async () => {
   const restrictedOptions = {
@@ -222,9 +233,11 @@ it.each([
   if (eventWarning) {
     await user.click(screen.getByRole('button', { name: 'Check-In' }));
     await waitFor(() => expect(post).toHaveBeenCalledWith('/visits', expect.objectContaining({ eventAcknowledged: true })));
-    const acknowledgement = await screen.findByRole('checkbox', { name: 'I acknowledge that the event has ended and confirm this participant may check in' });
-    expect(acknowledgement).not.toBeChecked();
-    expect(screen.getByRole('button', { name: 'Check-In' })).toBeDisabled();
+    const successDialog = await screen.findByRole('dialog', { name: 'Success' });
+    expect(within(successDialog).getByText('Check-In recorded.')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Success' })).not.toBeInTheDocument());
+    expect(screen.queryByRole('region', { name: 'Selected person details' })).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Mobile number' })).toHaveValue('');
   } else {
     expect(screen.queryByRole('checkbox', { name: /I acknowledge that the event has ended/ })).not.toBeInTheDocument();
   }
@@ -566,7 +579,7 @@ it('offers missing photo recovery for a person already inside without allowing a
 
 it('allows entering accompanying visitors and submits accompanyingCount at check-in', async () => {
   vi.stubGlobal('URL', { createObjectURL: vi.fn(() => 'blob:person-photo'), revokeObjectURL: vi.fn() });
-  vi.spyOn(api, 'get').mockImplementation((path) => Promise.resolve({ data: path === '/persons/registration/options' ? options : new Blob(['photo'], { type: 'image/jpeg' }) }));
+  const get = vi.spyOn(api, 'get').mockImplementation((path) => Promise.resolve({ data: path === '/persons/registration/options' ? options : new Blob(['photo'], { type: 'image/jpeg' }) }));
   const post = vi.spyOn(api, 'post')
     .mockResolvedValueOnce({ data: { items: [{
       personId: 21,
@@ -612,6 +625,8 @@ it('allows entering accompanying visitors and submits accompanyingCount at check
   await user.click(screen.getByRole('button', { name: 'Find Person' }));
 
   expect(await screen.findByText('Rohan Sharma')).toBeInTheDocument();
+  const profilePhoto = await screen.findByRole('img', { name: 'Rohan Sharma profile' });
+  const identityQr = await screen.findByRole('img', { name: 'QR code for MB-000021' });
   const categorySelect = screen.getByRole('combobox', { name: 'Category to check in' });
   expect(categorySelect).toHaveTextContent('Visitor');
   await user.click(categorySelect);
@@ -621,6 +636,10 @@ it('allows entering accompanying visitors and submits accompanyingCount at check
   expect(screen.queryByRole('option', { name: 'Contractor' })).not.toBeInTheDocument();
   await user.click(screen.getByRole('option', { name: 'Vendor' }));
   expect(categorySelect).toHaveTextContent('Vendor');
+  expect(screen.getByRole('img', { name: 'Rohan Sharma profile' })).toBe(profilePhoto);
+  expect(screen.getByRole('img', { name: 'QR code for MB-000021' })).toBe(identityQr);
+  expect(get.mock.calls.filter(([path]) => path === '/persons/21/files/rohan.jpg')).toHaveLength(1);
+  expect(get.mock.calls.filter(([path]) => path === '/persons/21/qr')).toHaveLength(1);
 
   const accompanyingInput = screen.getByRole('spinbutton', { name: 'Additional people accompanying' });
   expect(accompanyingInput).toBeInTheDocument();
@@ -637,13 +656,60 @@ it('allows entering accompanying visitors and submits accompanyingCount at check
   await user.click(screen.getByRole('button', { name: 'Check-In' }));
   expect(post).toHaveBeenCalledWith('/visits', {
     personId: 22,
+    categoryId: 20,
     checkinGateId: 1,
     checkinLocationId: 2,
     device: 'Gate Terminal 01',
     accompanyingCount: 3,
   });
-  expect(await screen.findByText('Check-In recorded.')).toBeInTheDocument();
+  const successDialog = await screen.findByRole('dialog', { name: 'Success' });
+  expect(within(successDialog).getByText('Check-In recorded.')).toBeInTheDocument();
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Success' })).not.toBeInTheDocument());
+  expect(screen.queryByRole('region', { name: 'Selected person details' })).not.toBeInTheDocument();
+  expect(screen.getByRole('textbox', { name: 'Mobile number' })).toHaveValue('');
   expect(screen.queryByRole('combobox', { name: 'Category to check in' })).not.toBeInTheDocument();
+}, 30_000);
+
+it('clears the selected person and search after checkout', async () => {
+  vi.stubGlobal('URL', { createObjectURL: vi.fn(() => 'blob:person-photo'), revokeObjectURL: vi.fn() });
+  vi.spyOn(api, 'get').mockImplementation((path) => Promise.resolve(
+    path === '/persons/registration/options'
+      ? { data: options }
+      : { data: new Blob(['image'], { type: 'image/jpeg' }) },
+  ));
+  const post = vi.spyOn(api, 'post').mockImplementation((path) => Promise.resolve(
+    path === '/gate/lookups'
+      ? { data: { items: [{
+        personId: 25,
+        personCode: 'MB-000025',
+        name: 'Maya Rao',
+        category: 'Visitor',
+        outcome: 'ALREADY_INSIDE',
+        status: 'ACTIVE',
+        hasPhoto: true,
+        photoKey: 'maya.jpg',
+        openVisitId: 71,
+      }] } }
+      : { data: { visitId: 71 } },
+  ));
+  const user = userEvent.setup();
+  render(<MemoryRouter><GatePage /></MemoryRouter>);
+
+  await user.type(screen.getByRole('textbox', { name: 'Mobile number' }), '9876543225');
+  await user.click(screen.getByRole('button', { name: 'Find Person' }));
+  expect(await screen.findByRole('region', { name: 'Selected person details' })).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Check-Out' }));
+
+  const successDialog = await screen.findByRole('dialog', { name: 'Success' });
+  expect(within(successDialog).getByText('Check-Out recorded.')).toBeInTheDocument();
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Success' })).not.toBeInTheDocument());
+  expect(post).toHaveBeenCalledWith('/visits/71/check-outs', {
+    checkoutGateId: 1,
+    checkoutLocationId: 2,
+    device: 'Gate Terminal 01',
+  });
+  expect(screen.queryByRole('region', { name: 'Selected person details' })).not.toBeInTheDocument();
+  expect(screen.getByRole('textbox', { name: 'Mobile number' })).toHaveValue('');
 }, 30_000);
 
 it('only allows mobile numbers in the input box and validates before search', async () => {

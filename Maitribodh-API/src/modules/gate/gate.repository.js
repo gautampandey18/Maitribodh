@@ -16,7 +16,7 @@ export function createGateRepository(pool) {
                 c.name AS registration_category, p.identity_id, identity.identity_id AS user_id,
                 identity.qr_code AS person_code, identity.first_name, identity.last_name,
                 COALESCE(active_categories.category, '') AS category,
-                p.status,
+                p.status, p.created_at, p.expires_on,
                 identity.qr_version, identity.photo_key, identity.mobile,
                 p.expires_on < (now() AT TIME ZONE 'Asia/Kolkata')::date AS access_expired,
                 (c.form_type = 'PARTICIPANT' AND NULLIF(program.extra->>'end_date', '')::date

@@ -13,6 +13,7 @@ test('check-in permits assigned location access and audits it atomically', async
         return {
           rows: [{
             person_id: 8,
+            category_id: 4,
             status: 'ACTIVE',
             accompanying_count: 1,
             accompanying: [{ name: 'Guest' }],
@@ -44,6 +45,7 @@ test('check-in permits assigned location access and audits it atomically', async
 
   const visit = await repository.checkIn({
     personId: 8,
+    categoryId: 4,
     checkinGateId: 2,
     checkinLocationId: 3,
     actorUserId: 7,
@@ -54,6 +56,7 @@ test('check-in permits assigned location access and audits it atomically', async
 
   assert.equal(visit.locationWarning, false);
   assert.equal(visit.location_override, false);
+  assert.equal(visit.categoryId, 4);
   assert.equal(calls[0].sql, 'BEGIN');
   assert.match(calls[1].sql, /FOR UPDATE/);
   assert.match(calls[2].sql, /FOR UPDATE OF p/);
@@ -61,8 +64,32 @@ test('check-in permits assigned location access and audits it atomically', async
   assert.equal(calls[4].values[0], 8);
   assert.equal(calls[4].values[7], false);
   assert.match(calls[5].sql, /INSERT INTO mams.audit_log/);
+  assert.match(calls[5].values[3], /"category_id":4/);
   assert.match(calls[5].values[3], /"location_warning":false/);
   assert.equal(calls[6].sql, 'COMMIT');
+});
+
+test('check-in rejects a category that does not match the registration', async () => {
+  const calls = [];
+  const client = {
+    async query(sql) {
+      calls.push(sql);
+      if (sql.includes('SELECT location_id, max_occupancy')) return { rows: [{ location_id: 3, max_occupancy: null }] };
+      if (sql.includes('FROM mams.person AS p')) {
+        return { rows: [{ person_id: 8, category_id: 4, gate_valid: true, area_valid: true }] };
+      }
+      return { rows: [], rowCount: 1 };
+    },
+    release() {},
+  };
+  const repository = createVisitsRepository({ async connect() { return client; } });
+
+  await assert.rejects(
+    repository.checkIn({ personId: 8, categoryId: 5, checkinGateId: 2, checkinLocationId: 3 }),
+    (error) => error.statusCode === 400 && error.code === 'CATEGORY_MISMATCH',
+  );
+  assert.equal(calls.some((sql) => sql.includes('INSERT INTO mams.visit')), false);
+  assert.equal(calls.at(-1), 'ROLLBACK');
 });
 
 test('check-in rejects blacklisted people without inserting a visit', async () => {

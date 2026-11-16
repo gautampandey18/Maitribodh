@@ -17,6 +17,7 @@ test('gate candidate query uses active location and checks blacklist, open visit
   assert.match(queryInput.sql, /identity\.qr_code AS person_code/);
   assert.match(queryInput.sql, /p\.category_id AS registration_category_id/);
   assert.match(queryInput.sql, /c\.name AS registration_category/);
+  assert.match(queryInput.sql, /p\.status, p\.created_at, p\.expires_on/);
   assert.match(queryInput.sql, /p\.status,/);
   assert.doesNotMatch(queryInput.sql, /CASE WHEN c\.approval_required = false AND p\.status = 'PENDING'/);
   assert.match(queryInput.sql, /AS active_categories/);

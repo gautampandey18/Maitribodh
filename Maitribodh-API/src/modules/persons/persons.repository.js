@@ -6,7 +6,13 @@ export function createPersonsRepository(pool) {
            FROM mams.person AS person
            JOIN mams.person_identity AS identity USING (identity_id)
           WHERE person.person_id = $1
-            AND person.status = 'ACTIVE'
+            AND EXISTS (
+              SELECT 1
+                FROM mams.person AS active_person
+               WHERE active_person.status = 'ACTIVE'
+                 AND ((person.identity_id IS NOT NULL AND active_person.identity_id = person.identity_id)
+                   OR (person.identity_id IS NULL AND active_person.person_id = person.person_id))
+            )
              AND identity.qr_code IS NOT NULL`,
         [personId],
       );

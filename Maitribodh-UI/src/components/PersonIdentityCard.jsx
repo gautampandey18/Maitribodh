@@ -193,6 +193,7 @@ export default function PersonIdentityCard({
   personCode,
   name,
   category,
+  categories,
   status,
   photoSrc,
   mobile,
@@ -203,6 +204,18 @@ export default function PersonIdentityCard({
   displayCard = true,
 }) {
   const initials = name?.split(/\s+/).filter(Boolean).map((part) => part[0]).join('').slice(0, 2).toUpperCase() ?? '';
+  const parsedCategories = Array.isArray(categories)
+    ? categories.flatMap((entry) => {
+      if (!entry) return [];
+      if (typeof entry === 'string') return entry.split(',').map((item) => item.trim()).filter(Boolean);
+      const label = entry.name ?? entry.category ?? entry.label ?? entry.value;
+      return String(label ?? '').split(',').map((item) => item.trim()).filter(Boolean);
+    })
+    : typeof category === 'string'
+      ? category.split(',').map((entry) => entry.trim()).filter(Boolean)
+      : [];
+  const visibleCategories = parsedCategories.length ? parsedCategories : (category ? [String(category).trim()].filter(Boolean) : []);
+  const categoryText = visibleCategories.join(', ');
   const [qrBlob, setQrBlob] = useState(null);
   const [downloadError, setDownloadError] = useState('');
   const [downloading, setDownloading] = useState(false);
@@ -216,7 +229,7 @@ export default function PersonIdentityCard({
     setDownloading(true);
     setDownloadError('');
     try {
-      const blob = await createIdentityCardPng({ name, personCode, category, status, mobile, photoSrc, qrBlob, fields });
+      const blob = await createIdentityCardPng({ name, personCode, category: categoryText, status, mobile, photoSrc, qrBlob, fields });
       downloadBlob(blob, identityCardFilename(name, personCode));
     } catch (failure) {
       setDownloadError(requestMessage(failure, 'Could not download the complete ID card.'));
@@ -240,11 +253,17 @@ export default function PersonIdentityCard({
             <Box className="idc-profile-info">
               <Typography className="idc-name">{name || '—'}</Typography>
               <Box className="idc-id">{personCode || '—'}</Box>
-              <Box className="idc-badges">
-                {category && <Box component="span" className="idc-category">{category}</Box>}
+              <Box className="idc-badges" aria-label="Status badge">
                 <Box component="span" className="idc-status" style={statusSx(status)}>{statusLabel(status)}</Box>
               </Box>
               <CardField label="Mobile" value={mobile} />
+              {visibleCategories.length > 0 && (
+                <Box className="idc-badges" aria-label="Active categories">
+                  {visibleCategories.map((entry) => (
+                    <Box key={`${entry}-${personCode}`} component="span" className="idc-category">{entry}</Box>
+                  ))}
+                </Box>
+              )}
             </Box>
           </Box>
           <Box className="idc-qr-panel">
