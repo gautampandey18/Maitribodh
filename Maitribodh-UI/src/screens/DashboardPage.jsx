@@ -266,13 +266,13 @@ export default function DashboardPage() {
                 {hasLocationBreakdown && (
                   <Box>
                     <Typography className="dashboard-breakdown-title">Occupancy by Location</Typography>
-                    <OccupancyBarChart data={validLocationOccupancy} color="#E17324" />
+                    <OccupancyBreakdownList data={validLocationOccupancy} />
                   </Box>
                 )}
                 {hasCategoryBreakdown && (
                   <Box>
                     <Typography className="dashboard-breakdown-title">Occupancy by Category</Typography>
-                    <OccupancyBarChart data={validCategoryOccupancy} color="#2E9E6B" />
+                    <OccupancyBreakdownList data={validCategoryOccupancy} />
                   </Box>
                 )}
               </Box>
@@ -366,24 +366,15 @@ export default function DashboardPage() {
   );
 }
 
-function OccupancyBarChart({ data, color }) {
-  const max = Math.max(1, ...data.map((d) => Number(d.count)));
+function OccupancyBreakdownList({ data }) {
   return (
-    <Box sx={{ display: 'grid', gap: '10px', mt: 1 }}>
-      {data.map(({ name, count }) => {
-        const pct = Math.round((Number(count) / max) * 100);
-        return (
-          <Box key={name}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: '4px' }}>
-              <Typography variant="caption" sx={{ color: 'var(--th-text)', fontWeight: 500 }}>{name}</Typography>
-              <Typography variant="caption" sx={{ color, fontWeight: 700 }}>{count}</Typography>
-            </Box>
-            <Box sx={{ height: 8, borderRadius: 999, background: 'var(--th-fill)', overflow: 'hidden' }}>
-              <Box sx={{ height: '100%', width: `${pct}%`, borderRadius: 999, background: color, transition: 'width 600ms cubic-bezier(.2,.8,.2,1)' }} />
-            </Box>
-          </Box>
-        );
-      })}
+    <Box>
+      {data.map(({ name, count }) => (
+        <Box className="dashboard-breakdown-row" key={name}>
+          <Typography variant="caption" fontWeight={700}>{name}</Typography>
+          <Typography variant="caption" fontWeight={700}>{count}</Typography>
+        </Box>
+      ))}
     </Box>
   );
 }

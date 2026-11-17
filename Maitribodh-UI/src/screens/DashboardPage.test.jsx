@@ -63,6 +63,11 @@ it('loads live summary metrics and the inside list', async () => {
   expect(screen.getByText('Occupancy by Location')).toBeInTheDocument();
   expect(screen.getByText('Occupancy by Category')).toBeInTheDocument();
   expect(screen.getByRole('heading', { name: 'Occupancy Breakdown' })).toBeInTheDocument();
+  const locationBreakdown = screen.getByText('Occupancy by Location').parentElement;
+  expect(within(locationBreakdown).getByText('Assembly Hall')).toBeInTheDocument();
+  expect(within(locationBreakdown).getByText('Assembly Hall')).toHaveStyle({ fontWeight: '700' });
+  expect(within(locationBreakdown).getByText('1')).toBeInTheDocument();
+  expect(locationBreakdown.querySelectorAll('.dashboard-breakdown-row')).toHaveLength(1);
   expect(screen.getByRole('table', { name: 'People currently inside' }).closest('.dashboard-inside'))
     .not.toContainElement(screen.getByText('Occupancy by Location'));
   expect(screen.getByText('CHECK IN')).toBeInTheDocument();

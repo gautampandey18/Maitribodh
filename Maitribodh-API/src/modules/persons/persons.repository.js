@@ -27,6 +27,18 @@ export function createPersonsRepository(pool) {
                   identity.first_name || ' ' || identity.last_name AS name,
                   c.name AS registration_category, c.approval_required, identity.mobile,
                   p.status,
+                  EXISTS (
+                    SELECT 1
+                      FROM mams.blacklist AS blacklist
+                      JOIN mams.person AS blacklisted_person
+                        ON blacklisted_person.person_id = blacklist.person_id
+                     WHERE blacklist.lifted_at IS NULL
+                       AND blacklist.start_date <= (now() AT TIME ZONE 'Asia/Kolkata')::date
+                       AND (blacklist.end_date IS NULL
+                         OR blacklist.end_date >= (now() AT TIME ZONE 'Asia/Kolkata')::date)
+                       AND ((p.identity_id IS NOT NULL AND blacklisted_person.identity_id = p.identity_id)
+                         OR (p.identity_id IS NULL AND blacklisted_person.person_id = p.person_id))
+                  ) AS is_blacklisted,
                   p.created_at, p.updated_at, p.expires_on
              FROM mams.person AS p
              LEFT JOIN mams.person_identity AS identity USING (identity_id)
@@ -40,11 +52,17 @@ export function createPersonsRepository(pool) {
                     LIKE '%' || regexp_replace($1, '[^0-9]', '', 'g') || '%')
                 OR lower(identity.first_name || ' ' || identity.last_name) LIKE '%' || lower($1) || '%')
               AND ($2::smallint IS NULL OR p.category_id = $2)
-              AND ($3::varchar IS NULL OR p.status = $3)
+         ),
+         filtered AS (
+           SELECT *
+             FROM matching
+            WHERE $3::varchar IS NULL
+               OR ($3 = 'BLACKLISTED' AND is_blacklisted)
+               OR ($3 <> 'BLACKLISTED' AND status = $3 AND NOT is_blacklisted)
          ),
          people AS (
            SELECT DISTINCT ON (COALESCE(identity_id, -person_id)) *
-             FROM matching
+             FROM filtered
             ORDER BY COALESCE(identity_id, -person_id),
                       updated_at DESC, created_at DESC, person_id DESC
          )
@@ -55,7 +73,8 @@ export function createPersonsRepository(pool) {
                 COALESCE(category_summary.categories, ARRAY[]::text[]) AS categories,
                 array_to_string(COALESCE(category_summary.categories, ARRAY[]::text[]), ', ') AS category,
                 array_to_string(COALESCE(category_summary.categories, ARRAY[]::text[]), ', ') AS active_category,
-                people.approval_required, people.mobile, people.status,
+                people.approval_required, people.mobile,
+                CASE WHEN people.is_blacklisted THEN 'BLACKLISTED' ELSE people.status END AS status,
                 people.created_at, people.expires_on,
                 count(*) OVER () AS total
            FROM people

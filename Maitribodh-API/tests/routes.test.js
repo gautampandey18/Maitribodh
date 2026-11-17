@@ -399,6 +399,10 @@ test('person search route accepts registration roles and forwards filters', asyn
     pageSize: 5,
     actorRole: 'REG_OFFICER',
   });
+
+  const blacklistedResponse = await request(app).get('/api/v1/persons?status=BLACKLISTED');
+  assert.equal(blacklistedResponse.status, 200);
+  assert.equal(searchInput.status, 'BLACKLISTED');
 });
 
 test('person search route allows an omitted query to list all registrations', async () => {

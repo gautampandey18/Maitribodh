@@ -36,7 +36,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import { formatPhoneNumber } from '../utils/phone.js';
 
-const statuses = ['PENDING', 'ACTIVE', 'REJECTED', 'DEACTIVATED'];
+const statuses = ['PENDING', 'ACTIVE', 'REJECTED', 'DEACTIVATED', 'BLACKLISTED'];
 
 export default function PersonsPage() {
   const [query, setQuery] = useState('');
@@ -309,7 +309,7 @@ export default function PersonsPage() {
 
 function statusColor(status) {
   if (status === 'ACTIVE') return { background: '#E6F4EA', color: '#2E7D32', fontWeight: 600 };
-  if (status === 'REJECTED' || status === 'DEACTIVATED') return { background: '#FDECEA', color: '#C62828', fontWeight: 600 };
+  if (status === 'REJECTED' || status === 'DEACTIVATED' || status === 'BLACKLISTED') return { background: '#FDECEA', color: '#C62828', fontWeight: 600 };
   return { background: '#FFF3E0', color: '#E65100', fontWeight: 600 };
 }
 
@@ -341,7 +341,8 @@ function CategoryCell({ categories, category, name }) {
 }
 
 function statusLabel(status) {
-  return status === 'DEACTIVATED' ? 'Inactive' : status;
+  if (status === 'DEACTIVATED') return 'Inactive';
+  return status === 'BLACKLISTED' ? 'BLACKLISTED' : status;
 }
 
 function formatDate(value) {

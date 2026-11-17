@@ -187,3 +187,43 @@ it('keeps the selected status and applies it only after Search is clicked', asyn
     params: { status: 'DEACTIVATED', page: 1, pageSize: 5 },
   });
 }, 30_000);
+
+it('shows blacklisted people and filters for Blacklisted status', async () => {
+  const get = vi.spyOn(api, 'get')
+    .mockResolvedValueOnce({ data: { categories: [] } })
+    .mockResolvedValueOnce({
+      data: {
+        items: [{ person_id: 14, name: 'Kiran Shah', category: 'Visitor', mobile: '******1234', status: 'BLACKLISTED', created_at: '2026-10-10T09:30:00Z' }],
+        total: 1,
+        page: 1,
+        pageSize: 5,
+      },
+    })
+    .mockResolvedValueOnce({
+      data: {
+        items: [{ person_id: 14, name: 'Kiran Shah', category: 'Visitor', mobile: '******1234', status: 'BLACKLISTED', created_at: '2026-10-10T09:30:00Z' }],
+        total: 1,
+        page: 1,
+        pageSize: 5,
+      },
+    });
+  const user = userEvent.setup();
+
+  render(
+    <Provider store={store}>
+      <MemoryRouter>
+        <PersonsPage />
+      </MemoryRouter>
+    </Provider>,
+  );
+
+  expect(await screen.findByText('Kiran Shah')).toBeInTheDocument();
+  expect(screen.getByText('BLACKLISTED')).toBeInTheDocument();
+  await user.click(screen.getByRole('combobox', { name: 'Status' }));
+  await user.click(screen.getByRole('option', { name: 'BLACKLISTED' }));
+  await user.click(screen.getByRole('button', { name: 'Search' }));
+
+  expect(get).toHaveBeenLastCalledWith('/persons', {
+    params: { status: 'BLACKLISTED', page: 1, pageSize: 5 },
+  });
+}, 30_000);

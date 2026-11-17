@@ -51,7 +51,7 @@ test('person search groups registrations by identity and accepts the page size',
   assert.deepEqual(queryInput.values, ['MB-000001', 4, 'ACTIVE', 25, 50]);
 });
 
-test('person search filters by raw registration status, including pending categories', async () => {
+test('person search filters by effective status and lets an active blacklist take precedence', async () => {
   let queryInput;
   const repository = createPersonsRepository({
     async query(sql, values) {
@@ -62,6 +62,11 @@ test('person search filters by raw registration status, including pending catego
 
   await repository.search({ query: '', categoryId: null, status: 'PENDING', offset: 0, pageSize: 10 });
 
-  assert.match(queryInput.sql, /\(\$3::varchar IS NULL OR p\.status = \$3\)/);
+  assert.match(queryInput.sql, /WHERE \$3::varchar IS NULL/);
+  assert.match(queryInput.sql, /\$3 = 'BLACKLISTED' AND is_blacklisted/);
+  assert.match(queryInput.sql, /\$3 <> 'BLACKLISTED' AND status = \$3 AND NOT is_blacklisted/);
+  assert.match(queryInput.sql, /blacklist\.start_date <= \(now\(\) AT TIME ZONE 'Asia\/Kolkata'\)::date/);
+  assert.match(queryInput.sql, /blacklist\.end_date >= \(now\(\) AT TIME ZONE 'Asia\/Kolkata'\)::date/);
+  assert.match(queryInput.sql, /CASE WHEN people\.is_blacklisted THEN 'BLACKLISTED' ELSE people\.status END AS status/);
   assert.doesNotMatch(queryInput.sql, /CASE WHEN c\.approval_required = false AND p\.status = 'PENDING'/);
 });
