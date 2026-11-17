@@ -4,7 +4,7 @@ const deviceValue = (device) => device?.slice(0, 100) ?? null;
 
 export function createVisitsRepository(pool) {
   return {
-    async checkIn({ personId, checkinGateId, checkinLocationId, accompanyingCount, eventAcknowledged, actorUserId, actorRole, device, ipAddress }) {
+    async checkIn({ personId, categoryId, checkinGateId, checkinLocationId, accompanyingCount, eventAcknowledged, actorUserId, actorRole, device, ipAddress }) {
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
@@ -20,7 +20,7 @@ export function createVisitsRepository(pool) {
           throw new ApiError(400, 'INVALID_LOCATION', 'Select an active gate and area');
         }
         const personResult = await client.query(
-          `SELECT p.person_id, p.status, p.accompanying_count, p.accompanying,
+          `SELECT p.person_id, p.category_id, p.status, p.accompanying_count, p.accompanying,
               p.expires_on < (now() AT TIME ZONE 'Asia/Kolkata')::date AS access_expired,
                   (c.form_type = 'PARTICIPANT' AND NULLIF(program.extra->>'end_date', '')::date
                     < (now() AT TIME ZONE 'Asia/Kolkata')::date) AS event_expired,
@@ -57,6 +57,9 @@ export function createVisitsRepository(pool) {
         const person = personResult.rows[0];
         if (!person) {
           throw new ApiError(404, 'PERSON_NOT_FOUND', 'Person record not found');
+        }
+        if (categoryId != null && Number(categoryId) !== Number(person.category_id)) {
+          throw new ApiError(400, 'CATEGORY_MISMATCH', 'The selected category does not match this registration');
         }
         if (!person.gate_valid || !person.area_valid || checkinGateId === checkinLocationId) {
           throw new ApiError(400, 'INVALID_LOCATION', 'Select an active gate and area');
@@ -122,6 +125,7 @@ export function createVisitsRepository(pool) {
             visit.visit_id,
             JSON.stringify({
               person_id: personId,
+              category_id: person.category_id,
               checkin_gate_id: checkinGateId,
               checkin_location_id: checkinLocationId,
               location_warning: person.location_warning,
@@ -136,6 +140,7 @@ export function createVisitsRepository(pool) {
         await client.query('COMMIT');
         return {
           ...visit,
+          categoryId: person.category_id,
           locationWarning: person.location_warning,
           eventWarning: Boolean(person.event_expired && person.future_checkin_access),
           areaOccupancy: { currentOccupancy: nextOccupancy, maxOccupancy: area.max_occupancy },
@@ -221,10 +226,11 @@ export function createVisitsRepository(pool) {
         await client.query('BEGIN');
         const current = (await client.query(
           `SELECT v.visit_id, v.person_id, v.checkin_gate_id, v.checkin_location_id,
-                  v.checkin_at, p.first_name || ' ' || p.last_name AS name,
+                  v.checkin_at, identity.first_name || ' ' || identity.last_name AS name,
                   l.name AS location
              FROM mams.visit AS v
              JOIN mams.person AS p ON p.person_id = v.person_id
+             JOIN mams.person_identity AS identity USING (identity_id)
              JOIN mams.location AS l ON l.location_id = v.checkin_location_id
             WHERE v.visit_id = $1 AND v.status = 'OPEN'
             FOR UPDATE OF v`,

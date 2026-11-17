@@ -14,6 +14,7 @@ const checkoutSchema = z.object({
 
 const checkinSchema = z.object({
   personId: z.number().int().positive(),
+  categoryId: z.number().int().positive().optional(),
   checkinGateId: z.number().int().positive(),
   checkinLocationId: z.number().int().positive(),
   accompanyingCount: z.coerce.number().int().min(0).max(32767).optional().default(0),

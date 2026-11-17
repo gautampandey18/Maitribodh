@@ -56,16 +56,17 @@ function IdentityCard({ person, role, onToggleStatus, displayCard = false, photo
   const photoSrc = usePersonPhoto(person.person_id, person.photo_key);
   const resolvedPhoto = propPhotoSrc ?? photoSrc;
   const st = person.status;
+  const cardStatus = person.active_category ? 'ACTIVE' : st;
   return (
     <PersonIdentityCard
       personId={person.person_id}
-      personCode={person.person_code}
+      personCode={person.identity_qr_code || person.person_code}
       name={`${person.first_name} ${person.last_name}`}
-      category={person.category}
-      status={st}
+      category={person.active_category ?? ''}
+      status={cardStatus}
       photoSrc={resolvedPhoto}
       mobile={formatPhoneNumber(person.mobile)}
-      qrVersion={person.qr_version ?? 1}
+      qrVersion={person.identity_qr_version ?? person.qr_version ?? 1}
       displayCard={displayCard}
       fields={[
         ['Address', person.address],
@@ -107,7 +108,7 @@ function PersonMediaSection({ person, photoSrc }) {
         <Box className="person-media-block">
           <Typography variant="caption" className="person-media-title">Gate QR code</Typography>
           <Box className="person-media-qr">
-            <QrPreview personId={person.person_id} personCode={person.person_code} showPreview={true} />
+            <QrPreview personId={person.person_id} personCode={person.identity_qr_code || person.person_code} showPreview={true} />
             <Typography className="person-media-scan-label">Scan at gate</Typography>
           </Box>
         </Box>
@@ -275,7 +276,7 @@ export default function PersonDetailPage() {
   }
 
   /* derived */
-  const category = accessOptions?.categories.find((c) => c.name === person?.category);
+  const category = accessOptions?.categories.find((c) => c.name === (person?.registration_category ?? person?.category));
   const areas = accessOptions?.locations.filter((l) => l.location_type === 'AREA') ?? [];
   const locationNames = new Map(areas.map((a) => [String(a.location_id), a.name]));
   const categoryFieldNames = new Map((category?.schema?.fields ?? []).map((f) => [f.key, f.label]));
@@ -291,11 +292,14 @@ export default function PersonDetailPage() {
   });
 
   const profileReadFields = !person ? [] : [
+    ['Person ID', person.identity_qr_code || person.person_code],
     ['Full Name', `${person.first_name} ${person.last_name}`],
     ['Mobile Number', formatPhoneNumber(person.mobile)],
     ['Alternate Mobile', person.alternate_mobile],
     ['Email', person.email],
-    ['Category', person.category],
+    ['Categories', person.category],
+    ['Registration category', person.registration_category || person.category],
+    ['Registration status', person.status],
     ['Address', person.address],
     ['Emergency Contact', [person.emergency_contact_name, person.emergency_contact_mobile].filter(Boolean).join(' · ')],
     ['Passport Number', person.passport_last4 ? `******${person.passport_last4}` : ''],
@@ -316,6 +320,9 @@ export default function PersonDetailPage() {
     <Box className="person-detail-page">
       <Button size="small" component={Link} to="/persons" sx={{ mb: 1.5 }}>← Back to Person Management</Button>
       {(error || failure) && <Alert severity="error" sx={{ mb: 2 }}>{error || failure}</Alert>}
+      {location.state?.categoryAssignmentNotice && (
+        <Alert severity="success" sx={{ mb: 2 }}>{location.state.categoryAssignmentNotice}</Alert>
+      )}
 
       {person && (
         <Box className="idc-layout">
@@ -331,6 +338,11 @@ export default function PersonDetailPage() {
                 photoSrc={photoSrc}
                 onToggleStatus={() => setStatusTarget(person.status === 'DEACTIVATED' ? 'ACTIVE' : 'DEACTIVATED')}
               />
+              {['ADMIN', 'SUPER_ADMIN'].includes(role) && !edit && person.status !== 'DRAFT' && (
+                <Button size="small" component={Link} to={`/persons/${personId}/categories`}>
+                  Add categories
+                </Button>
+              )}
               {canEdit && !edit && <Button size="small" startIcon={<EditOutlinedIcon />} onClick={beginEdit}>Edit details</Button>}
               {canEdit && (person.documents?.length ?? 0) < 12 && (
                 <Button size="small" component="label" startIcon={<UploadOutlinedIcon />} disabled={documentBusy}>

@@ -795,7 +795,7 @@ Sources: [person routes](../Maitribodh-API/src/modules/persons/persons.routes.js
 | GET | `/api/v1/persons/:personId/qr` | REGISTRATION | Person ID | `200`, PNG; `X-Person-Code`, `X-QR-Version`, no-store headers |
 | POST | `/api/v1/persons/:personId/resubmissions` | MANAGEMENT | Person ID; no required body | `200`, resubmitted person |
 
-Search status values: `PENDING`, `ACTIVE`, `REJECTED`, `DEACTIVATED`; drafts are accessed separately.
+Search status values: `PENDING`, `ACTIVE`, `REJECTED`, `DEACTIVATED`, `BLACKLISTED`; `BLACKLISTED` reflects a current, unlifted blacklist entry within its date range and takes precedence over the registration status. Drafts are accessed separately.
 
 Registration `metadata` is a JSON string containing:
 

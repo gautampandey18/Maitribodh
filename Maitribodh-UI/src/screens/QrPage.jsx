@@ -114,8 +114,6 @@ export default function QrPage() {
     previewWindow.document.body.append(image);
   }
 
-  const isCurrent = selected?.status === 'ACTIVE' && (selected?.qr_version ?? 0) > 0;
-
   return (
     <Box>
       <Box className="page-heading"><Typography component="h1" variant="h1">QR / Identity Management</Typography></Box>
@@ -130,7 +128,7 @@ export default function QrPage() {
         <Box className="identity-layout">
           <TableContainer className="qr-identity-table-container">
             <Table className="qr-identity-table" aria-label="QR identity">
-              <TableHead><TableRow>{['Name', 'Category', 'Mobile', 'QR Status'].map((label) => <TableCell key={label}>{label}</TableCell>)}</TableRow></TableHead>
+              <TableHead><TableRow>{['Name', 'Category', 'Mobile'].map((label) => <TableCell key={label}>{label}</TableCell>)}</TableRow></TableHead>
               <TableBody>
                 {items.map((item) => {
                   const isSelected = selected?.person_id === item.person_id;
@@ -164,9 +162,8 @@ export default function QrPage() {
                           {item.name}
                         </Button>
                       </TableCell>
-                      <TableCell>{item.category}</TableCell>
+                      <TableCell>{Object.hasOwn(item, 'active_category') ? item.active_category : item.category}</TableCell>
                       <TableCell>{formatPhoneNumber(item.mobile)}</TableCell>
-                      <TableCell>{item.status === 'ACTIVE' && (item.qr_version ?? 0) > 0 ? 'Current' : item.status}</TableCell>
                     </TableRow>
                   );
                 })}
@@ -178,17 +175,15 @@ export default function QrPage() {
               personId={selected.person_id}
               personCode={selected.identity_qr_code || selected.person_code}
               name={selected.name}
-              category={selected.category}
+              category={Object.hasOwn(selected, 'active_category') ? selected.active_category : selected.category}
               status={selected.status}
               photoSrc={photoSrc}
               mobile={formatPhoneNumber(selected.mobile)}
               qrVersion={selected.qr_version}
               onQrBlob={setQrBlob}
               fields={[
-                ['Generated', formatDate(selected.created_at)],
-                ['Encodes', 'Registered mobile number'],
+                ['Issued on', formatDate(selected.created_at)],
                 ['Expiry', selected.expires_on ? formatDate(selected.expires_on) : 'Never'],
-                ['QR status', isCurrent ? 'Current' : selected.status],
               ]}
               footer={<>
                 <Button size="small" variant="outlined" startIcon={<DownloadOutlinedIcon />} disabled={!qrBlob} onClick={() => downloadBlob(qrBlob, `Maitribodh-QR-${selected.person_code}.png`)}>Download QR</Button>

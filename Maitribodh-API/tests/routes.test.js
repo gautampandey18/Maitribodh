@@ -399,6 +399,10 @@ test('person search route accepts registration roles and forwards filters', asyn
     pageSize: 5,
     actorRole: 'REG_OFFICER',
   });
+
+  const blacklistedResponse = await request(app).get('/api/v1/persons?status=BLACKLISTED');
+  assert.equal(blacklistedResponse.status, 200);
+  assert.equal(searchInput.status, 'BLACKLISTED');
 });
 
 test('person search route allows an omitted query to list all registrations', async () => {
@@ -727,6 +731,7 @@ test('check-in route validates the registered person payload and forwards the ac
 
   const response = await request(app).post('/api/v1/visits').send({
     personId: 8,
+    categoryId: 4,
     checkinGateId: 2,
     checkinLocationId: 3,
   });
@@ -734,6 +739,7 @@ test('check-in route validates the registered person payload and forwards the ac
   assert.equal(response.status, 201);
   assert.equal(response.body.locationWarning, true);
   assert.equal(checkinInput.personId, 8);
+  assert.equal(checkinInput.categoryId, 4);
   assert.equal(checkinInput.actor.role, 'SECURITY_GUARD');
   assert.equal(checkinInput.eventAcknowledged, false);
   for (const eventAcknowledged of [true, false]) {

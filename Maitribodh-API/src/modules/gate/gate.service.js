@@ -29,7 +29,7 @@ export function createGateService({ repository, qrService }) {
 
       const candidates = await repository.findCandidates({ personCode, mobile, locationId, ...(query ? { query } : {}) });
       const areaOccupancy = await repository.getAreaOccupancy(locationId);
-      const items = candidates.map((candidate) => {
+      const mappedCandidates = candidates.map((candidate) => {
         let outcome;
         if (qrVersion !== undefined && candidate.qr_version !== qrVersion) {
           outcome = 'INVALID_QR';
@@ -49,10 +49,16 @@ export function createGateService({ repository, qrService }) {
 
         return {
           personId: candidate.person_id,
+          categoryId: candidate.registration_category_id,
+          registrationCategory: candidate.registration_category,
+          userId: candidate.user_id ?? candidate.identity_id,
+          identityId: candidate.identity_id,
           personCode: candidate.person_code,
           name: `${candidate.first_name} ${candidate.last_name}`.trim(),
           category: candidate.category,
           status: candidate.status,
+          createdAt: candidate.created_at,
+          expiresOn: candidate.expires_on,
           hasPhoto: candidate.has_photo,
           photoKey: candidate.photo_key,
           mobileMasked: candidate.mobile ? maskMobile(candidate.mobile) : null,
@@ -65,6 +71,44 @@ export function createGateService({ repository, qrService }) {
           eventWarning: Boolean(candidate.event_expired && candidate.future_checkin_access
             && candidate.status === 'ACTIVE' && !candidate.is_blacklisted && !candidate.access_expired),
           outcome,
+        };
+      });
+      const people = new Map();
+      const categoriesByIdentity = new Map();
+      for (const item of mappedCandidates) {
+        const key = item.identityId ?? `person:${item.personId}`;
+        if (item.status === 'ACTIVE' && item.categoryId != null && item.registrationCategory) {
+          const categories = categoriesByIdentity.get(key) ?? [];
+          if (!categories.some((category) => category.categoryId === Number(item.categoryId))) {
+            categories.push({
+              categoryId: Number(item.categoryId),
+              personId: item.personId,
+              name: item.registrationCategory,
+              status: item.status,
+              createdAt: item.createdAt,
+              expiresOn: item.expiresOn,
+              outcome: item.outcome,
+              eventWarning: item.eventWarning,
+              locationWarning: item.locationWarning,
+              assignedAreaIds: item.assignedAreaIds,
+              openVisitId: item.openVisitId,
+              insideSince: item.insideSince,
+              accompanyingCount: item.accompanyingCount,
+            });
+          }
+          categoriesByIdentity.set(key, categories);
+        }
+        const current = people.get(key);
+        if (!current || candidatePriority(item.outcome) < candidatePriority(current.outcome)) {
+          people.set(key, item);
+        }
+      }
+      const items = [...people.entries()].map(([key, person]) => {
+        const selectedPerson = { ...person };
+        delete selectedPerson.registrationCategory;
+        return {
+          ...selectedPerson,
+          categories: categoriesByIdentity.get(key) ?? [],
         };
       });
       const outcomes = items.length ? items.map((item) => item.outcome) : ['NOT_FOUND'];
@@ -84,6 +128,18 @@ export function createGateService({ repository, qrService }) {
       return { items, outcome: items.length ? undefined : 'NOT_FOUND', areaOccupancy };
     },
   };
+}
+
+function candidatePriority(outcome) {
+  return ({
+    BLOCKED_BLACKLIST: 0,
+    ALREADY_INSIDE: 1,
+    ELIGIBLE: 2,
+    LOCATION_WARNING: 3,
+    EVENT_ACCESS_EXPIRED: 4,
+    NOT_ACTIVE: 5,
+    INVALID_QR: 6,
+  })[outcome] ?? 7;
 }
 
 function maskMobile(mobile) {

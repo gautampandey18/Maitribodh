@@ -16,6 +16,7 @@ import {
   IconButton,
   InputAdornment,
   MenuItem,
+  Snackbar,
   TextField,
   Typography,
 } from '@mui/material';
@@ -33,6 +34,13 @@ import { phoneCountries, toE164Phone } from '../utils/phone.js';
 import PersonIdentityCard from '../components/PersonIdentityCard.jsx';
 
 const profilePhotoDimension = 600;
+
+function formatDate(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).format(date);
+}
 
 function getInitials(name = '') {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -84,7 +92,10 @@ const states = {
   ELIGIBLE: { title: 'PROFILE FOUND', message: 'Active profile · No blacklist match', severity: 'success' },
   EVENT_COMPLETED: { title: 'EVENT COMPLETED - CONFIRM CHECK-IN', message: 'The event this participant registered for has ended. Confirm whether to continue check-in.', severity: 'warning' },
   ALREADY_INSIDE: { title: 'PERSON ALREADY INSIDE', message: 'Check out before another check-in.', severity: 'success' },
-  NOT_ACTIVE: { title: 'PENDING APPROVAL', message: 'Only Active profiles with valid access may check in.', severity: 'warning' },
+  NOT_ACTIVE: { title: 'NOT ACTIVE', message: 'Only approved active registrations may check in.', severity: 'warning' },
+  PENDING: { title: 'PENDING APPROVAL', message: 'This registration must be approved before check-in.', severity: 'warning' },
+  REJECTED: { title: 'REGISTRATION REJECTED', message: 'Rejected registrations cannot check in. Contact an approver to review or resubmit this registration.', severity: 'error' },
+  DEACTIVATED: { title: 'PROFILE INACTIVE', message: 'Inactive registrations cannot check in.', severity: 'warning' },
   EVENT_ACCESS_EXPIRED: { title: 'EVENT COMPLETED - ACCESS NOT VALID', message: 'Access is not valid for this user. The event has ended.', severity: 'error' },
   BLOCKED_BLACKLIST: { title: 'BLACKLISTED - ENTRY NOT ALLOWED', message: 'Blacklist match blocks check-in. Alert recorded.', severity: 'error' },
   LOCATION_WARNING: { title: 'LOCATION ACCESS WARNING', message: 'This person is not assigned to the selected restricted area. Verify access before proceeding.', severity: 'warning' },
@@ -103,6 +114,7 @@ export default function GatePage() {
   const [items, setItems] = useState(null);
   const [areaOccupancy, setAreaOccupancy] = useState(null);
   const [selected, setSelected] = useState(null);
+  const [cardPerson, setCardPerson] = useState(null);
   const [photoUrl, setPhotoUrl] = useState('');
   const [photoError, setPhotoError] = useState('');
   const [photoLoading, setPhotoLoading] = useState(false);
@@ -115,6 +127,7 @@ export default function GatePage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const [online, setOnline] = useState(navigator.onLine);
   const [scanning, setScanning] = useState(false);
   const [cameraStarting, setCameraStarting] = useState(false);
@@ -135,7 +148,10 @@ export default function GatePage() {
   const selectedGate = gateId || gates[0]?.location_id;
   const selectedArea = areaId || areas[0]?.location_id;
   const state = selected?.eventWarning && selected?.outcome === 'ELIGIBLE'
-    ? states.EVENT_COMPLETED : states[selected?.outcome];
+    ? states.EVENT_COMPLETED
+    : selected?.outcome === 'NOT_ACTIVE'
+      ? states[selected.status] ?? states.NOT_ACTIVE
+      : states[selected?.outcome];
   const canRecoverPhoto = ['ELIGIBLE', 'LOCATION_WARNING', 'ALREADY_INSIDE'].includes(selected?.outcome);
   const selectedAreaDetails = areas.find((item) => String(item.location_id) === String(selectedArea));
   const maxOccupancy = areaOccupancy?.maxOccupancy ?? areaOccupancy?.max_occupancy ?? selectedAreaDetails?.max_occupancy;
@@ -151,14 +167,19 @@ export default function GatePage() {
     return () => { window.removeEventListener('online', update); window.removeEventListener('offline', update); };
   }, []);
   useEffect(() => {
+    if (!successMessage) return undefined;
+    const timeoutId = window.setTimeout(() => setSuccessMessage(''), 1000);
+    return () => window.clearTimeout(timeoutId);
+  }, [successMessage]);
+  useEffect(() => {
     let active = true;
     let url;
     setPhotoUrl('');
     setPhotoError('');
     setPhotoMissing(false);
     setVerified(false);
-    setPhotoLoading(Boolean(selected?.photoKey));
-    if (selected?.photoKey) api.get(`/persons/${selected.personId}/files/${encodeURIComponent(selected.photoKey)}`, { responseType: 'blob' }).then(({ data }) => {
+    setPhotoLoading(Boolean(cardPerson?.photoKey));
+    if (cardPerson?.photoKey) api.get(`/persons/${cardPerson.personId}/files/${encodeURIComponent(cardPerson.photoKey)}`, { responseType: 'blob' }).then(({ data }) => {
       if (active) { url = URL.createObjectURL(data); setPhotoUrl(url); }
     }).catch(async (failure) => {
       const detail = await blobRequestMessage(failure);
@@ -168,7 +189,7 @@ export default function GatePage() {
       }
     }).finally(() => { if (active) setPhotoLoading(false); });
     return () => { active = false; if (url) URL.revokeObjectURL(url); };
-  }, [selected?.personId, selected?.photoKey, photoRevision]);
+  }, [cardPerson?.personId, cardPerson?.photoKey, photoRevision]);
   useEffect(() => () => {
     scannerSession.current += 1;
     const current = scanner.current;
@@ -221,7 +242,7 @@ export default function GatePage() {
 
   async function lookup(payload) {
     if (!selectedArea) { setError('Select a gate and area.'); return; }
-    setBusy(true); setError(''); setMobileError(''); setItems(null); setSelected(null); setVerified(false); setLocationAcknowledged(false); setPhotoUrl(''); setAccompanyingCount(0);
+    setBusy(true); setError(''); setMobileError(''); setItems(null); setSelected(null); setCardPerson(null); setVerified(false); setLocationAcknowledged(false); setPhotoUrl(''); setAccompanyingCount(0);
     try {
       const { data } = await api.post('/gate/lookups', { ...payload, locationId: Number(selectedArea) });
       setItems(data.items);
@@ -244,12 +265,44 @@ export default function GatePage() {
   function selectPerson(person) {
     const assignedAreaIds = (person.assignedAreaIds ?? []).map(Number);
     const assignedArea = areas.find((area) => assignedAreaIds.includes(Number(area.location_id)));
+    const categories = (person.categories ?? []).filter((category) => category.status === 'ACTIVE');
     let locationId = selectedArea;
     if (assignedArea && !assignedAreaIds.includes(Number(selectedArea))) {
       locationId = assignedArea.location_id;
       setAreaId(assignedArea.location_id);
     }
-    setSelected(personForArea(person, locationId));
+    const category = categories.find((item) => String(item.categoryId) === String(person.categoryId));
+    const selectedPerson = personForArea({
+      ...person,
+      categories,
+      category: person.openVisitId ? person.category : category?.name ?? person.category,
+    }, locationId);
+    setSelected(selectedPerson);
+    setCardPerson(selectedPerson);
+    setVerified(false);
+    setLocationAcknowledged(false);
+    setEventAcknowledged(false);
+    setAccompanyingCount(0);
+  }
+  function selectCheckInCategory(categoryId) {
+    const category = selected?.categories?.find((item) => String(item.categoryId) === String(categoryId));
+    if (!category || selected?.openVisitId) return;
+    setSelected((person) => personForArea({
+      ...person,
+      category: category.name,
+      categoryId: category.categoryId,
+      personId: category.personId,
+      createdAt: category.createdAt,
+      expiresOn: category.expiresOn,
+      status: category.status,
+      outcome: category.outcome,
+      eventWarning: category.eventWarning,
+      locationWarning: category.locationWarning,
+      assignedAreaIds: category.assignedAreaIds,
+      openVisitId: category.openVisitId,
+      insideSince: category.insideSince,
+      accompanyingCount: category.accompanyingCount,
+    }, selectedArea));
     setVerified(false);
     setLocationAcknowledged(false);
     setEventAcknowledged(false);
@@ -273,7 +326,7 @@ export default function GatePage() {
     if (scanning || busy) return;
     const session = scannerSession.current;
     setError(''); scanned.current = false;
-    setItems(null); setSelected(null); setVerified(false); setLocationAcknowledged(false); setPhotoUrl(''); setAccompanyingCount(0);
+    setItems(null); setSelected(null); setCardPerson(null); setVerified(false); setLocationAcknowledged(false); setPhotoUrl(''); setAccompanyingCount(0);
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
       setCameraFallback(true);
       setError('Live camera scanning requires HTTPS or localhost and a supported browser. Upload a QR image or capture it with the phone camera.');
@@ -328,7 +381,7 @@ export default function GatePage() {
     setScanning(true);
     setCameraStarting(true);
     setError('');
-    setItems(null); setSelected(null); setVerified(false); setLocationAcknowledged(false); setPhotoUrl(''); setAccompanyingCount(0);
+    setItems(null); setSelected(null); setCardPerson(null); setVerified(false); setLocationAcknowledged(false); setPhotoUrl(''); setAccompanyingCount(0);
     let current;
     let value;
     try {
@@ -363,6 +416,7 @@ export default function GatePage() {
     try {
       const { data } = await api.post(`/persons/${selected.personId}/photo`, form, { headers: { 'Content-Type': undefined } });
       setSelected((current) => current?.personId === selected.personId ? { ...current, hasPhoto: true, photoKey: data.photo_key } : current);
+      setCardPerson((current) => current ? { ...current, hasPhoto: true, photoKey: data.photo_key } : current);
       setVerified(false);
       setNotice('Photo saved. Verify the person against this photo before check-in.');
     } catch (failure) { setError(requestMessage(failure)); } finally { setPhotoCaptureBusy(false); }
@@ -403,6 +457,7 @@ export default function GatePage() {
     try {
       if (checkIn) await api.post('/visits', {
         personId: Number(selected.personId),
+        categoryId: Number(selected.categoryId),
         checkinGateId: Number(selectedGate),
         checkinLocationId: Number(selectedArea),
         device: 'Gate Terminal 01',
@@ -410,8 +465,18 @@ export default function GatePage() {
         ...(selected.eventWarning ? { eventAcknowledged } : {}),
       });
       else await api.post(`/visits/${selected.openVisitId}/check-outs`, { checkoutGateId: Number(selectedGate), checkoutLocationId: Number(selectedArea), device: 'Gate Terminal 01' });
-      setNotice(checkIn ? 'Check-In recorded.' : 'Check-Out recorded.');
-      await lookup({ query: selected.personCode });
+      setSuccessMessage(checkIn ? 'Check-In recorded.' : 'Check-Out recorded.');
+      setItems(null);
+      setSelected(null);
+      setCardPerson(null);
+      setQuery('');
+      setPhotoUrl('');
+      setPhotoError('');
+      setPhotoMissing(false);
+      setVerified(false);
+      setLocationAcknowledged(false);
+      setEventAcknowledged(false);
+      setAccompanyingCount(0);
     } catch (failure) {
       const message = requestMessage(failure);
       if (failure.response?.data?.error?.code === 'AREA_CAPACITY_REACHED') {
@@ -424,24 +489,26 @@ export default function GatePage() {
     <Box className="page-heading"><Typography component="h1" variant="h1">Security Gate</Typography></Box>
     {!online && <Alert severity="warning" sx={{ mb: 2 }}>System or network unavailable. Continue entry and exit on the manual paper register. Paper entries are not back-entered into MAMS.</Alert>}
     {(error || loadError) && <Alert severity="error" sx={{ mb: 2 }}>{error || loadError}</Alert>}
-    {notice && <Alert severity="success" role="status" sx={{ mb: 2 }}>{notice}</Alert>}
+    <Snackbar open={Boolean(notice)} autoHideDuration={3000} onClose={() => setNotice('')} message={notice} />
+    {successMessage && <Dialog open onClose={() => setSuccessMessage('')} maxWidth="sm" fullWidth transitionDuration={0} aria-labelledby="gate-success-title">
+      <DialogTitle id="gate-success-title">Success</DialogTitle>
+      <DialogContent>{successMessage}</DialogContent>
+    </Dialog>}
     {route.state?.registered && <Alert severity="success" sx={{ mb: 2 }}>Visitor registered. Find the profile and verify the photograph before check-in.</Alert>}
     <Box className={`gate-layout ${selected ? 'has-selected' : 'no-selected'}`}>
       {selected && <Box component="section" className="gate-person-panel" aria-label="Selected person details">
         <PersonIdentityCard
-          personId={selected.personId}
-          personCode={selected.personCode}
-          name={selected.name}
-          category={selected.category}
-          status={selected.status}
+          personId={cardPerson.personId}
+          personCode={cardPerson.personCode}
+          name={cardPerson.name}
+          category={cardPerson.category}
+          categories={cardPerson.categories?.filter((item) => item.status === 'ACTIVE').map((item) => item.name) ?? []}
+          status={cardPerson.status}
           photoSrc={photoUrl}
-          mobile={selected.mobileMasked}
+          mobile={cardPerson.mobileMasked}
           fields={[
-            ['Gate', gates.find((item) => String(item.location_id) === String(selectedGate))?.name],
-            ['Area', areas.find((item) => String(item.location_id) === String(selectedArea))?.name],
-            ['Entry status', selected.eventWarning && selected.outcome === 'ELIGIBLE' ? 'Event completed - acknowledgement required' : selected.outcome?.replaceAll('_', ' ').toLowerCase() ?? 'Ready to verify'],
-            ['Additional people', selected.openVisitId ? (selected.accompanyingCount ?? 0) : accompanyingCount],
-            ...(selected.insideSince ? [['Inside since', new Date(selected.insideSince).toLocaleString()]] : []),
+            ['Issued on', formatDate(cardPerson.createdAt)],
+            ['Expiry', cardPerson.expiresOn ? formatDate(cardPerson.expiresOn) : 'Never'],
           ]}
         />
         {selected.eventWarning && <Alert severity="warning" sx={{ my: 1 }}>
@@ -797,17 +864,46 @@ export default function GatePage() {
         {busy && <Box role="status" sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 2 }}><CircularProgress size={20} /><Typography>Loading person information...</Typography></Box>}
         <Alert severity={state?.severity ?? 'info'} sx={{ my: 3 }}><Typography variant="h3">{state?.title ?? (items?.length === 0 ? 'PERSON NOT FOUND' : 'READY TO VERIFY')}</Typography>{state?.message ?? (items?.length === 0 ? 'A valid person record is required before entry.' : 'Scan a QR code to automatically display the person, or search by registered mobile number.')}</Alert>
         {selected && !selected.openVisitId && (
-          <TextField
-            label="Additional people accompanying"
-            type="number"
-            size="small"
-            value={accompanyingCount}
-            onChange={(event) => setAccompanyingCount(Math.max(0, parseInt(event.target.value, 10) || 0))}
-            inputProps={{ min: 0, max: 32767, step: 1 }}
-            helperText="Number of guests entering together with this person"
-            sx={{ mb: 2, maxWidth: 300 }}
-            disabled={busy || !online}
-          />
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: selected.categories?.length > 1
+                ? 'minmax(0, 1fr) minmax(0, 1.5fr)'
+                : 'minmax(0, 1fr)',
+              alignItems: 'start',
+              gap: 2,
+              mb: 2,
+            }}
+          >
+            {selected.categories?.length > 1 && (
+              <TextField
+                select
+                label="Category to check in"
+                size="small"
+                value={selected.categoryId ?? ''}
+                onChange={(event) => selectCheckInCategory(event.target.value)}
+                sx={{ width: '100%', maxWidth: 150, minWidth: 0 }}
+                disabled={busy || !online}
+              >
+                {selected.categories.map((category) => (
+                  <MenuItem key={category.categoryId} value={category.categoryId}>
+                    {category.name}{category.status !== 'ACTIVE' ? ` (${category.status.replaceAll('_', ' ')})` : ''}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
+            <TextField
+              label="Additional people accompanying"
+              type="number"
+              size="small"
+              value={accompanyingCount}
+              onChange={(event) => setAccompanyingCount(Math.max(0, parseInt(event.target.value, 10) || 0))}
+              inputProps={{ min: 0, max: 32767, step: 1 }}
+              helperText="Number of guests entering together with this person"
+              sx={{ width: '100%', mb: 0, maxWidth: 300, minWidth: 0 }}
+              disabled={busy || !online}
+            />
+          </Box>
         )}
         <Box sx={{ display: 'flex', gap: 2 }}><Button variant="contained" startIcon={busy ? <CircularProgress size={18} /> : <LoginOutlinedIcon />} onClick={() => movement(true)} disabled={busy || !online || wouldExceedCapacity || !['ELIGIBLE', 'LOCATION_WARNING'].includes(selected?.outcome) || !verified || !photoUrl || (selected?.locationWarning && !locationAcknowledged) || (selected?.eventWarning && !eventAcknowledged) || !selectedGate}>Check-In</Button><Button variant="outlined" startIcon={<LogoutOutlinedIcon />} onClick={() => movement(false)} disabled={busy || !online || !selected?.openVisitId || !selectedGate}>Check-Out</Button></Box>
         {items?.length === 0 && <Button sx={{ mt: 3 }} component={Link} to={`/register?from=gate&gate=${selectedGate}&area=${selectedArea}`} disabled={!online}>Register Visitor</Button>}

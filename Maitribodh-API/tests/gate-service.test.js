@@ -112,3 +112,41 @@ test('mobile lookup returns a uniform not-found outcome and audits masked input'
   assert.deepEqual(result, { items: [], outcome: 'NOT_FOUND', areaOccupancy: null });
   assert.equal(audit.mobileMasked, '******3210');
 });
+
+test('gate lookup shows only active category registrations in the identity result', async () => {
+  const rows = [
+    { person_id: 15, registration_category_id: 5, registration_category: 'Vendor', identity_id: 8, person_code: 'MB-000008', first_name: 'Asha', last_name: 'Patel', category: 'Visitor', status: 'PENDING', is_blacklisted: false, access_expired: false, open_visit_id: null, location_warning: false },
+    { person_id: 12, registration_category_id: 3, registration_category: 'Visitor', identity_id: 8, person_code: 'MB-000008', first_name: 'Asha', last_name: 'Patel', category: 'Visitor', status: 'ACTIVE', created_at: '2026-07-13T00:00:00.000Z', expires_on: '2027-07-12', is_blacklisted: false, access_expired: false, open_visit_id: null, location_warning: false },
+  ];
+  const service = createGateService({
+    repository: {
+      async isActiveLocation() { return true; },
+      async findCandidates() { return rows; },
+      async getAreaOccupancy() { return null; },
+      async recordLookup() {},
+    },
+    qrService: {},
+  });
+
+  const result = await service.lookup({ mobile: '9876543210', locationId: 2, actor: { userId: 8 } });
+
+  assert.equal(result.items.length, 1);
+  assert.equal(result.items[0].personId, 12);
+  assert.equal(result.items[0].category, 'Visitor');
+  assert.equal(result.items[0].outcome, 'ELIGIBLE');
+  assert.equal(result.items[0].createdAt, '2026-07-13T00:00:00.000Z');
+  assert.equal(result.items[0].expiresOn, '2027-07-12');
+  assert.deepEqual(result.items[0].categories.map(({ categoryId, personId, name, status, createdAt, expiresOn, outcome }) => ({
+    categoryId, personId, name, status, createdAt, expiresOn, outcome,
+  })), [
+    {
+      categoryId: 3,
+      personId: 12,
+      name: 'Visitor',
+      status: 'ACTIVE',
+      createdAt: '2026-07-13T00:00:00.000Z',
+      expiresOn: '2027-07-12',
+      outcome: 'ELIGIBLE',
+    },
+  ]);
+});

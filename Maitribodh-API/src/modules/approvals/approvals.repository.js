@@ -4,7 +4,6 @@ export function createApprovalsRepository(pool) {
       const result = await pool.query(
         `UPDATE mams.person AS p
             SET status = 'ACTIVE',
-                qr_version = CASE WHEN p.qr_version = 0 THEN 1 ELSE p.qr_version END,
                 approved_at = COALESCE(p.approved_at, now()),
                 updated_at = now()
            FROM mams.category AS c
@@ -22,11 +21,13 @@ export function createApprovalsRepository(pool) {
 
     async listPending({ pageSize, offset, name = '', category = '' }) {
       const result = await pool.query(
-        `SELECT p.person_id, p.person_code, p.first_name || ' ' || p.last_name AS name,
-                c.name AS category, c.form_type, c.approval_required, p.photo_key IS NOT NULL AS has_photo,
+        `SELECT p.person_id, identity.identity_id AS user_id, identity.qr_code AS person_code,
+                identity.first_name || ' ' || identity.last_name AS name,
+                c.name AS category, c.form_type, c.approval_required, identity.photo_key IS NOT NULL AS has_photo,
                 h.acted_by AS submitted_by, h.acted_at AS submitted_at,
                 count(*) OVER()::int AS total
            FROM mams.person AS p
+           JOIN mams.person_identity AS identity USING (identity_id)
            JOIN mams.category AS c ON c.category_id = p.category_id
            JOIN LATERAL (
              SELECT acted_by, acted_at
@@ -40,7 +41,7 @@ export function createApprovalsRepository(pool) {
             AND c.approval_required = true
             AND lower(trim(c.name)) NOT IN ('visitor', 'vendor', 'contractor', 'participant')
             AND upper(trim(c.form_type)) NOT IN ('VISITOR', 'VENDOR', 'CONTRACTOR', 'PARTICIPANT')
-            AND ($1 = '' OR concat_ws(' ', p.first_name, p.last_name) ILIKE '%' || $1 || '%')
+            AND ($1 = '' OR concat_ws(' ', identity.first_name, identity.last_name) ILIKE '%' || $1 || '%')
             AND ($2 = '' OR c.name ILIKE '%' || $2 || '%')
           ORDER BY h.acted_at
           LIMIT $3 OFFSET $4`,
@@ -51,11 +52,13 @@ export function createApprovalsRepository(pool) {
 
     async listByStatus({ status, pageSize, offset, name = '', category = '' }) {
       const result = await pool.query(
-        `SELECT p.person_id, p.person_code, p.first_name || ' ' || p.last_name AS name,
-                c.name AS category, c.form_type, c.approval_required, p.photo_key IS NOT NULL AS has_photo,
+        `SELECT p.person_id, identity.identity_id AS user_id, identity.qr_code AS person_code,
+                identity.first_name || ' ' || identity.last_name AS name,
+                c.name AS category, c.form_type, c.approval_required, identity.photo_key IS NOT NULL AS has_photo,
                 COALESCE(h.acted_at, p.created_at) AS submitted_at,
                 count(*) OVER()::int AS total
            FROM mams.person AS p
+           JOIN mams.person_identity AS identity USING (identity_id)
            JOIN mams.category AS c ON c.category_id = p.category_id
            LEFT JOIN LATERAL (
              SELECT acted_at
@@ -68,7 +71,7 @@ export function createApprovalsRepository(pool) {
             AND c.approval_required = true
             AND lower(trim(c.name)) NOT IN ('visitor', 'vendor', 'contractor', 'participant')
             AND upper(trim(c.form_type)) NOT IN ('VISITOR', 'VENDOR', 'CONTRACTOR', 'PARTICIPANT')
-            AND ($2 = '' OR concat_ws(' ', p.first_name, p.last_name) ILIKE '%' || $2 || '%')
+            AND ($2 = '' OR concat_ws(' ', identity.first_name, identity.last_name) ILIKE '%' || $2 || '%')
             AND ($3 = '' OR c.name ILIKE '%' || $3 || '%')
           ORDER BY COALESCE(h.acted_at, p.created_at) DESC, p.person_id DESC
           LIMIT $4 OFFSET $5`,
@@ -82,8 +85,11 @@ export function createApprovalsRepository(pool) {
       try {
         await client.query('BEGIN');
         const personResult = await client.query(
-          `SELECT p.person_id, p.status, p.registered_by, c.approval_required, c.form_type, c.name AS category_name
+          `SELECT p.person_id, p.identity_id, p.status, p.registered_by,
+                  identity.qr_code AS person_code, identity.qr_version,
+                  c.approval_required, c.form_type, c.name AS category_name
              FROM mams.person AS p
+             JOIN mams.person_identity AS identity USING (identity_id)
              JOIN mams.category AS c ON c.category_id = p.category_id
             WHERE p.person_id = $1
             FOR UPDATE OF p`,
@@ -132,24 +138,23 @@ export function createApprovalsRepository(pool) {
           approved
             ? `UPDATE mams.person
                   SET status = 'ACTIVE',
-                      qr_version = CASE WHEN qr_version < 1 THEN 1 ELSE qr_version END,
                       approved_by = $2,
                       approved_at = now(), updated_at = now()
                 WHERE person_id = $1 AND (status = 'PENDING' OR status = 'REJECTED')
-              RETURNING person_id, person_code, status, qr_version, approved_by, approved_at`
+              RETURNING person_id, status, approved_by, approved_at`
             : `UPDATE mams.person
                   SET status = 'REJECTED',
-                      qr_version = CASE WHEN status = 'ACTIVE' THEN qr_version + 1 ELSE qr_version END,
                       approved_by = NULL, approved_at = NULL,
                       updated_by = $2, updated_at = now()
                 WHERE person_id = $1 AND status = $3
-              RETURNING person_id, person_code, status`,
+              RETURNING person_id, status`,
           approved ? [personId, actorUserId] : [personId, actorUserId, person.status],
         );
-        const updatedPerson = updatedResult.rows[0];
-        if (!updatedPerson) {
+        const updatedRecord = updatedResult.rows[0];
+        if (!updatedRecord) {
           throw repositoryError('PERSON_NOT_PENDING', 'Person is not pending approval');
         }
+        const updatedPerson = { ...updatedRecord, person_code: person.person_code, qr_version: person.qr_version };
 
         const historyAction = approved ? 'APPROVED' : 'REJECTED';
         const message = approved ? 'Your registration was approved.' : 'Your registration was rejected.';
@@ -197,8 +202,11 @@ export function createApprovalsRepository(pool) {
       try {
         await client.query('BEGIN');
         const personResult = await client.query(
-          `SELECT p.person_id, p.status, p.registered_by, c.approval_required, c.form_type, c.name AS category_name
+          `SELECT p.person_id, p.identity_id, p.status, p.registered_by,
+                  identity.qr_code AS person_code, identity.qr_version,
+                  c.approval_required, c.form_type, c.name AS category_name
              FROM mams.person AS p
+             JOIN mams.person_identity AS identity USING (identity_id)
              JOIN mams.category AS c ON c.category_id = p.category_id
             WHERE p.person_id = $1
             FOR UPDATE OF p`,
@@ -230,13 +238,14 @@ export function createApprovalsRepository(pool) {
               SET status = 'PENDING',
                   updated_by = $2, updated_at = now()
             WHERE person_id = $1 AND status = 'REJECTED'
-          RETURNING person_id, person_code, status, qr_version, updated_at`,
+          RETURNING person_id, status, updated_at`,
           [personId, actorUserId],
         );
-        const updatedPerson = updateResult.rows[0];
-        if (!updatedPerson) {
+        const updatedRecord = updateResult.rows[0];
+        if (!updatedRecord) {
           throw repositoryError('PERSON_NOT_REJECTED', 'Only rejected registrations can be resubmitted');
         }
+        const updatedPerson = { ...updatedRecord, person_code: person.person_code, qr_version: person.qr_version };
 
         await client.query(
           `INSERT INTO mams.approval_history (person_id, action, acted_by)

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
 import {
   Alert,
+  Avatar,
   Box,
   Button,
   CircularProgress,
@@ -56,6 +57,7 @@ export default function ApprovalsPage() {
   const [categoryFilter, setCategoryFilter] = useState('');
   const [activeFilters, setActiveFilters] = useState({ name: '', category: '' });
   const [selected, setSelected] = useState(null);
+  const [previewItem, setPreviewItem] = useState(null);
   const [reason, setReason] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -219,8 +221,18 @@ export default function ApprovalsPage() {
                 {items.map((item) => (
                   <TableRow key={item.person_id} hover>
                     <TableCell>
-                      <Typography fontWeight={600}>{item.name}</Typography>
-                      <Typography variant="caption" color="text.secondary">{item.person_code}</Typography>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'flex-start', minHeight: 36 }}>
+                        <Button
+                          onClick={() => setPreviewItem(item)}
+                          aria-label={`View details for ${item.name}`}
+                          color="primary"
+                          variant="text"
+                          sx={{ p: 0, minHeight: 0, lineHeight: 1.25, justifyContent: 'flex-start', fontWeight: 600 }}
+                        >
+                          {item.name}
+                        </Button>
+                        <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1, pt: '2px' }}>{item.person_code}</Typography>
+                      </Box>
                     </TableCell>
                     <TableCell>{item.category}</TableCell>
                     <TableCell>{formatDate(item.submitted_at)}</TableCell>
@@ -288,6 +300,8 @@ export default function ApprovalsPage() {
         />
       </Paper>
 
+      {previewItem && <ApprovalPersonDialog item={previewItem} onClose={() => setPreviewItem(null)} />}
+
       <Dialog open={Boolean(selected)} onClose={() => !saving && setSelected(null)} fullWidth maxWidth="sm">
         <DialogTitle>{selected?.decision === 'APPROVE' ? 'Approve registration' : 'Reject registration'}</DialogTitle>
         <DialogContent>
@@ -325,6 +339,103 @@ export default function ApprovalsPage() {
       </Dialog>
       <Snackbar open={Boolean(notice)} autoHideDuration={3000} onClose={() => setNotice('')} message={notice} />
     </Box>
+  );
+}
+
+function ApprovalPersonDialog({ item, onClose }) {
+  const [person, setPerson] = useState(null);
+  const [photoUrl, setPhotoUrl] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [photoError, setPhotoError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    let objectUrl;
+    setPerson(null);
+    setPhotoUrl('');
+    setLoading(true);
+    setError('');
+    setPhotoError('');
+
+    api.get(`/persons/${item.person_id}`)
+      .then(async ({ data }) => {
+        if (!active) return;
+        setPerson(data);
+        if (!data.photo_key) return;
+        try {
+          const photo = await api.get(`/persons/${item.person_id}/files/${encodeURIComponent(data.photo_key)}`, { responseType: 'blob' });
+          if (active) {
+            objectUrl = URL.createObjectURL(photo.data);
+            setPhotoUrl(objectUrl);
+          }
+        } catch {
+          if (active) setPhotoError('Profile photo could not be loaded.');
+        }
+      })
+      .catch((requestError) => {
+        if (active) setError(requestMessage(requestError, 'Person details could not be loaded.'));
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [item.person_id]);
+
+  const fullName = person ? `${person.first_name ?? ''} ${person.last_name ?? ''}`.trim() : item.name;
+  const initials = fullName.split(/\s+/).filter(Boolean).map((part) => part[0]).join('').slice(0, 2).toUpperCase();
+  const fields = person ? [
+    ['Person ID', person.identity_qr_code || person.person_code || item.person_code],
+    ['Category', person.registration_category || person.category || item.category],
+    ['Status', person.status],
+    ['Mobile number', person.mobile],
+    ['Email', person.email],
+    ['Gender', person.gender],
+    ['Date of birth', person.date_of_birth ? String(person.date_of_birth).slice(0, 10) : ''],
+    ['Resident status', person.resident_status],
+    ['Address', person.address],
+    ['Emergency contact', [person.emergency_contact_name, person.emergency_contact_mobile].filter(Boolean).join(' · ')],
+  ].filter(([, value]) => value !== null && value !== undefined && value !== '') : [];
+
+  return (
+    <Dialog open onClose={onClose} fullWidth maxWidth="md">
+      <DialogTitle>Person details</DialogTitle>
+      <DialogContent dividers>
+        {loading && <Box role="status" sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>}
+        {error && <Alert severity="error">{error}</Alert>}
+        {photoError && <Alert severity="warning" sx={{ mb: 2 }}>{photoError}</Alert>}
+        {person && (
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '160px minmax(0, 1fr)' }, gap: 3 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+              {photoUrl ? (
+                <Box component="img" src={photoUrl} alt={`${fullName} profile photo`} sx={{ width: 150, height: 170, objectFit: 'cover', borderRadius: 2 }} />
+              ) : (
+                <Avatar aria-label={`${fullName} profile photo`} sx={{ width: 120, height: 120, fontSize: '2rem' }}>{initials}</Avatar>
+              )}
+              {!person.photo_key && <Typography variant="caption" color="text.secondary">No profile photo available.</Typography>}
+            </Box>
+            <Box>
+              <Typography variant="h2" sx={{ mb: 2 }}>{fullName || item.name}</Typography>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 2 }}>
+                {fields.map(([label, value]) => (
+                  <Box key={label}>
+                    <Typography variant="caption" color="text.secondary">{label}</Typography>
+                    <Typography sx={{ overflowWrap: 'anywhere' }}>{value}</Typography>
+                  </Box>
+                ))}
+              </Box>
+            </Box>
+          </Box>
+        )}
+      </DialogContent>
+      <DialogActions className="dialog-actions">
+        <Button onClick={onClose}>Close</Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 

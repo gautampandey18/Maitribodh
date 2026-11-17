@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Box,
   Button,
   Chip,
@@ -28,11 +31,12 @@ import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined';
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import MoreVertOutlinedIcon from '@mui/icons-material/MoreVertOutlined';
+import ExpandMoreOutlinedIcon from '@mui/icons-material/ExpandMoreOutlined';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import { formatPhoneNumber } from '../utils/phone.js';
 
-const statuses = ['PENDING', 'ACTIVE', 'REJECTED', 'DEACTIVATED'];
+const statuses = ['PENDING', 'ACTIVE', 'REJECTED', 'DEACTIVATED', 'BLACKLISTED'];
 
 export default function PersonsPage() {
   const [query, setQuery] = useState('');
@@ -157,18 +161,8 @@ export default function PersonsPage() {
   }
 
   function handleCategoryChange(event) {
-    const nextCategory = event.target.value;
-    setCategoryId(nextCategory);
-    const cat = categories.find((c) => String(c.category_id) === String(nextCategory));
-    if (cat?.approval_required === false && status === 'PENDING') {
-      setStatus('');
-    }
+    setCategoryId(event.target.value);
   }
-
-  const selectedCategory = categories.find((c) => String(c.category_id) === String(categoryId));
-  const availableStatuses = selectedCategory?.approval_required === false
-    ? statuses.filter((item) => item !== 'PENDING')
-    : statuses;
 
   return (
     <Box className="persons-page">
@@ -176,7 +170,7 @@ export default function PersonsPage() {
         <Box>
           <Typography component="h1" variant="h1">Person Management</Typography>
           <Typography variant="body2" color="text.secondary">
-            Find registrations, review their status, and manage person profiles.
+            Find people and manage their category registrations.
           </Typography>
         </Box>
         <Button component={Link} to="/register" variant="contained">Register Person</Button>
@@ -206,16 +200,16 @@ export default function PersonsPage() {
             sx={{ minWidth: 170 }}
           >
             <MenuItem value="">All statuses</MenuItem>
-            {availableStatuses.map((item) => <MenuItem key={item} value={item}>{statusLabel(item)}</MenuItem>)}
+            {statuses.map((item) => <MenuItem key={item} value={item}>{statusLabel(item)}</MenuItem>)}
           </TextField>
           <Button type="submit" variant="contained" color="secondary" startIcon={<SearchOutlinedIcon />} disabled={loading}>
             Search
           </Button>
         </Box>
         <Box className="table-panel-heading">
-          <Typography variant="h3">Registration records</Typography>
+          <Typography variant="h3">People</Typography>
           <Typography variant="body2" color="text.secondary">
-            {loading ? 'Loading registrations' : `${total} registrations`}
+            {loading ? 'Loading people' : `${total} people`}
           </Typography>
         </Box>
         {loading ? (
@@ -237,9 +231,16 @@ export default function PersonsPage() {
                 {items.map((item) => (
                   <TableRow key={item.person_id} hover>
                     <TableCell>
-                      <Button component={Link} to={`/persons/${item.person_id}`} color="primary" variant="text" sx={{ p: 0, justifyContent: 'flex-start', fontWeight: 600 }}>{item.name}</Button>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'flex-start', minHeight: 36 }}>
+                        <Button component={Link} to={`/persons/${item.person_id}`} color="primary" variant="text" sx={{ p: 0, minHeight: 0, lineHeight: 1.25, justifyContent: 'flex-start', fontWeight: 600 }}>
+                          {item.name}
+                        </Button>
+                        <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1, pt: '2px' }}>{item.person_code}</Typography>
+                      </Box>
                     </TableCell>
-                    <TableCell>{item.category}</TableCell>
+                    <TableCell>
+                      <CategoryCell categories={item.categories} category={item.category} name={item.name} />
+                    </TableCell>
                     <TableCell>{formatPhoneNumber(item.mobile) || '—'}</TableCell>
                     <TableCell><Chip size="small" label={statusLabel(item.status)} sx={statusColor(item.status)} /></TableCell>
                     <TableCell>{formatDate(item.created_at)}</TableCell>
@@ -291,7 +292,7 @@ export default function PersonsPage() {
         <DialogContent>
           {deleteError && <Alert severity="error" sx={{ mb: 2 }}>{deleteError}</Alert>}
           <Typography>
-            Delete {deleteTarget?.name}? This permanently removes the person, their uploaded files, and their visit, blacklist, and approval history. Their category will not be deleted.
+            Delete {deleteTarget?.name}&apos;s selected category registration? Its visit, blacklist, and approval history will also be removed. Other category registrations and the shared person identity will remain.
           </Typography>
         </DialogContent>
         <DialogActions>
@@ -308,12 +309,40 @@ export default function PersonsPage() {
 
 function statusColor(status) {
   if (status === 'ACTIVE') return { background: '#E6F4EA', color: '#2E7D32', fontWeight: 600 };
-  if (status === 'REJECTED' || status === 'DEACTIVATED') return { background: '#FDECEA', color: '#C62828', fontWeight: 600 };
+  if (status === 'REJECTED' || status === 'DEACTIVATED' || status === 'BLACKLISTED') return { background: '#FDECEA', color: '#C62828', fontWeight: 600 };
   return { background: '#FFF3E0', color: '#E65100', fontWeight: 600 };
 }
 
+function CategoryCell({ categories, category, name }) {
+  const names = Array.isArray(categories) && categories.length
+    ? categories
+    : (category ?? '').split(',').map((item) => item.trim()).filter(Boolean);
+
+  if (names.length <= 3) return names.join(', ') || '—';
+
+  return (
+    <Accordion
+      disableGutters
+      elevation={0}
+      sx={{ bgcolor: 'transparent', '&::before': { display: 'none' } }}
+    >
+      <AccordionSummary
+        expandIcon={<ExpandMoreOutlinedIcon fontSize="small" />}
+        aria-label={`View all categories for ${name}`}
+        sx={{ minHeight: 32, px: 0, '& .MuiAccordionSummary-content': { my: 0.5 } }}
+      >
+        <Typography variant="body2">{`${names.slice(0, 2).join(', ')} +${names.length - 2} more`}</Typography>
+      </AccordionSummary>
+      <AccordionDetails sx={{ px: 0, py: 0.5 }}>
+        <Typography variant="body2">{names.join(', ')}</Typography>
+      </AccordionDetails>
+    </Accordion>
+  );
+}
+
 function statusLabel(status) {
-  return status === 'DEACTIVATED' ? 'Inactive' : status;
+  if (status === 'DEACTIVATED') return 'Inactive';
+  return status === 'BLACKLISTED' ? 'BLACKLISTED' : status;
 }
 
 function formatDate(value) {

@@ -87,7 +87,7 @@ test('blacklist report filters by person name and category before pagination', a
     pagination: { page: 2, pageSize: 10, offset: 10 },
   });
 
-  assert.match(call.sql, /p\.first_name \|\| ' ' \|\| p\.last_name ILIKE/);
+  assert.match(call.sql, /identity\.first_name \|\| ' ' \|\| identity\.last_name ILIKE/);
   assert.match(call.sql, /c\.name ILIKE/);
   assert.match(call.sql, /LIMIT \$4 OFFSET \$5/);
   assert.deepEqual(call.values, ['Asha', 'Staff', '', 10, 10]);
@@ -105,7 +105,7 @@ test('staff report filters by person name and job role before pagination', async
     pagination: { page: 2, pageSize: 10, offset: 10 },
   });
 
-  assert.match(call.sql, /p\.first_name \|\| ' ' \|\| p\.last_name ILIKE/);
+  assert.match(call.sql, /identity\.first_name \|\| ' ' \|\| identity\.last_name ILIKE/);
   assert.match(call.sql, /j\.name ILIKE/);
   assert.match(call.sql, /LIMIT \$4 OFFSET \$5/);
   assert.deepEqual(call.values, ['Asha', 'Coordinator', '', 10, 10]);
@@ -531,7 +531,7 @@ test('every report table query applies the person search', async () => {
 
   assert.equal(calls.length, 6);
   for (const call of calls) {
-    assert.match(call.sql, /p\.person_code = upper\(\$\d+\)/);
+    assert.match(call.sql, /profile\.qr_code = upper\(\$\d+\)/);
     assert.ok(call.values.includes('MB-0001'));
   }
 });
@@ -556,7 +556,7 @@ test('analytics queries are scoped by person search and tab filters', async () =
     assert.ok(calls.length > 0, `${tab} should query`);
     for (const call of calls) {
       assert.ok(call.values.includes('MB-0001'), `${tab} query should include the person search`);
-      assert.match(call.sql, /person_code = upper\(\$\d+\)/);
+      assert.match(call.sql, /profile\.qr_code = upper\(\$\d+\)/);
       // Pending registrations have no acting user yet, so only that count ignores the user filter.
       const isPendingCount = tab === 'approvals' && call.sql.includes('pending_count');
       for (const value of Object.values(filters)) {

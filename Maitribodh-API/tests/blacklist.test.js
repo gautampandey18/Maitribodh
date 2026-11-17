@@ -18,7 +18,7 @@ test('blacklist list applies name and category filters before pagination', async
 
   await repository.listEntries({ pageSize: 10, offset: 10, name: 'Asha', category: 'Staff' });
 
-  assert.match(query.sql, /p\.first_name \|\| ' ' \|\| p\.last_name ILIKE/);
+  assert.match(query.sql, /identity\.first_name \|\| ' ' \|\| identity\.last_name ILIKE/);
   assert.match(query.sql, /c\.name ILIKE/);
   assert.match(query.sql, /b\.lifted_at IS NULL/);
   assert.match(query.sql, /b\.start_date <= \(now\(\) AT TIME ZONE 'Asia\/Kolkata'\)::date/);

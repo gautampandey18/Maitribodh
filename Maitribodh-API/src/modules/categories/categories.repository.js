@@ -144,7 +144,6 @@ export function createCategoriesRepository(pool) {
           await client.query(
             `UPDATE mams.person
                 SET status = 'ACTIVE',
-                    qr_version = CASE WHEN qr_version = 0 THEN 1 ELSE qr_version END,
                     updated_by = $2,
                     updated_at = now()
               WHERE category_id = $1

@@ -4,9 +4,10 @@ export function createBlacklistRepository(pool) {
   return {
     async listEntries({ pageSize, offset, name = '', category = '' }) {
       const result = await pool.query(
-        `SELECT b.blacklist_id, b.person_id, p.person_code,
-                p.first_name || ' ' || p.last_name AS name,
-                p.mobile, c.name AS category, r.name AS reason,
+        `SELECT b.blacklist_id, b.person_id, identity.identity_id AS user_id,
+                identity.qr_code AS person_code,
+                identity.first_name || ' ' || identity.last_name AS name,
+                identity.mobile, c.name AS category, r.name AS reason,
                 b.remarks, b.start_date, b.end_date, b.added_by,
                 b.added_at, b.lifted_by, b.lifted_at, b.lift_note,
                 CASE
@@ -19,9 +20,10 @@ export function createBlacklistRepository(pool) {
                 count(*) OVER()::int AS total
            FROM mams.blacklist AS b
            JOIN mams.person AS p ON p.person_id = b.person_id
+           JOIN mams.person_identity AS identity USING (identity_id)
            JOIN mams.category AS c ON c.category_id = p.category_id
            JOIN mams.lookup_value AS r ON r.lookup_id = b.reason_id
-           WHERE ($1 = '' OR p.first_name || ' ' || p.last_name ILIKE '%' || $1 || '%')
+           WHERE ($1 = '' OR identity.first_name || ' ' || identity.last_name ILIKE '%' || $1 || '%')
              AND ($2 = '' OR c.name ILIKE '%' || $2 || '%')
              AND b.lifted_at IS NULL
              AND b.start_date <= (now() AT TIME ZONE 'Asia/Kolkata')::date

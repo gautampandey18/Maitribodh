@@ -122,7 +122,7 @@ async function createIdentityCardPng({ photoSrc, qrBlob, ...identity }) {
   }
 }
 
-export function QrPreview({ personId, personCode, onQrBlob, showPreview = true }) {
+export function QrPreview({ personId, personCode, onQrBlob, showPreview = true, showScanLabel = false }) {
   const [image, setImage] = useState('');
   const [error, setError] = useState('');
 
@@ -138,7 +138,11 @@ export function QrPreview({ personId, personCode, onQrBlob, showPreview = true }
         }
       })
       .catch((failure) => {
-        if (active) setError(requestMessage(failure, 'QR is not available for this person.'));
+        if (active) {
+          setError(failure.response?.status === 404
+            ? 'QR code is not available for this registration.'
+            : requestMessage(failure, 'QR code could not be loaded. Try again.'));
+        }
       });
     return () => {
       active = false;
@@ -146,12 +150,13 @@ export function QrPreview({ personId, personCode, onQrBlob, showPreview = true }
     };
   }, [personId, onQrBlob]);
 
-  if (error) return <Alert severity="warning">{error}</Alert>;
+  if (error) return <Alert className="idc-qr-unavailable" severity="warning">{error}</Alert>;
   if (!image) return <CircularProgress size={20} aria-label="Loading QR code" />;
   if (!showPreview) return null;
   return (
     <Box className="idc-qr-content">
       <Box component="img" src={image} alt={`QR code for ${personCode}`} className="idc-qr-image" />
+      {showScanLabel && <Typography className="idc-scan-label">Scan at gate</Typography>}
     </Box>
   );
 }
@@ -188,6 +193,7 @@ export default function PersonIdentityCard({
   personCode,
   name,
   category,
+  categories,
   status,
   photoSrc,
   mobile,
@@ -198,9 +204,22 @@ export default function PersonIdentityCard({
   displayCard = true,
 }) {
   const initials = name?.split(/\s+/).filter(Boolean).map((part) => part[0]).join('').slice(0, 2).toUpperCase() ?? '';
+  const parsedCategories = Array.isArray(categories)
+    ? categories.flatMap((entry) => {
+      if (!entry) return [];
+      if (typeof entry === 'string') return entry.split(',').map((item) => item.trim()).filter(Boolean);
+      const label = entry.name ?? entry.category ?? entry.label ?? entry.value;
+      return String(label ?? '').split(',').map((item) => item.trim()).filter(Boolean);
+    })
+    : typeof category === 'string'
+      ? category.split(',').map((entry) => entry.trim()).filter(Boolean)
+      : [];
+  const visibleCategories = parsedCategories.length ? parsedCategories : (category ? [String(category).trim()].filter(Boolean) : []);
+  const categoryText = visibleCategories.join(', ');
   const [qrBlob, setQrBlob] = useState(null);
   const [downloadError, setDownloadError] = useState('');
   const [downloading, setDownloading] = useState(false);
+  const qrUnavailable = Boolean(status && status !== 'ACTIVE');
   const receiveQrBlob = useCallback((blob) => {
     setQrBlob(blob);
     onQrBlob?.(blob);
@@ -210,7 +229,7 @@ export default function PersonIdentityCard({
     setDownloading(true);
     setDownloadError('');
     try {
-      const blob = await createIdentityCardPng({ name, personCode, category, status, mobile, photoSrc, qrBlob, fields });
+      const blob = await createIdentityCardPng({ name, personCode, category: categoryText, status, mobile, photoSrc, qrBlob, fields });
       downloadBlob(blob, identityCardFilename(name, personCode));
     } catch (failure) {
       setDownloadError(requestMessage(failure, 'Could not download the complete ID card.'));
@@ -234,16 +253,21 @@ export default function PersonIdentityCard({
             <Box className="idc-profile-info">
               <Typography className="idc-name">{name || '—'}</Typography>
               <Box className="idc-id">{personCode || '—'}</Box>
-              <Box className="idc-badges">
-                {category && <Box component="span" className="idc-category">{category}</Box>}
+              <Box className="idc-badges" aria-label="Status badge">
                 <Box component="span" className="idc-status" style={statusSx(status)}>{statusLabel(status)}</Box>
               </Box>
               <CardField label="Mobile" value={mobile} />
+              {visibleCategories.length > 0 && (
+                <Box className="idc-badges" aria-label="Active categories">
+                  {visibleCategories.map((entry) => (
+                    <Box key={`${entry}-${personCode}`} component="span" className="idc-category">{entry}</Box>
+                  ))}
+                </Box>
+              )}
             </Box>
           </Box>
           <Box className="idc-qr-panel">
-            <QrPreview personId={personId} personCode={personCode} onQrBlob={receiveQrBlob} />
-            <Typography className="idc-scan-label">Scan at gate</Typography>
+            <QrPreview personId={personId} personCode={personCode} onQrBlob={receiveQrBlob} showScanLabel={true} />
           </Box>
         </Box>
         <Box className="idc-details">
@@ -257,7 +281,7 @@ export default function PersonIdentityCard({
         <Box className="idc-card-actions">
           {footer}
           <Button size="small" startIcon={downloading ? <CircularProgress size={16} /> : <DownloadOutlinedIcon />} onClick={downloadCard} disabled={!qrBlob || downloading}>
-            {downloading ? 'Preparing ID card…' : 'Download ID card'}
+            {downloading ? 'Preparing ID card…' : qrUnavailable ? 'ID card unavailable' : 'Download ID card'}
           </Button>
         </Box>
       </Box>

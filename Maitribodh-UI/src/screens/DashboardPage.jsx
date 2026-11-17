@@ -266,13 +266,13 @@ export default function DashboardPage() {
                 {hasLocationBreakdown && (
                   <Box>
                     <Typography className="dashboard-breakdown-title">Occupancy by Location</Typography>
-                    <OccupancyBarChart data={validLocationOccupancy} color="#E17324" />
+                    <OccupancyBreakdownList data={validLocationOccupancy} />
                   </Box>
                 )}
                 {hasCategoryBreakdown && (
                   <Box>
                     <Typography className="dashboard-breakdown-title">Occupancy by Category</Typography>
-                    <OccupancyBarChart data={validCategoryOccupancy} color="#2E9E6B" />
+                    <OccupancyBreakdownList data={validCategoryOccupancy} />
                   </Box>
                 )}
               </Box>
@@ -366,24 +366,15 @@ export default function DashboardPage() {
   );
 }
 
-function OccupancyBarChart({ data, color }) {
-  const max = Math.max(1, ...data.map((d) => Number(d.count)));
+function OccupancyBreakdownList({ data }) {
   return (
-    <Box sx={{ display: 'grid', gap: '10px', mt: 1 }}>
-      {data.map(({ name, count }) => {
-        const pct = Math.round((Number(count) / max) * 100);
-        return (
-          <Box key={name}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: '4px' }}>
-              <Typography variant="caption" sx={{ color: 'var(--th-text)', fontWeight: 500 }}>{name}</Typography>
-              <Typography variant="caption" sx={{ color, fontWeight: 700 }}>{count}</Typography>
-            </Box>
-            <Box sx={{ height: 8, borderRadius: 999, background: 'var(--th-fill)', overflow: 'hidden' }}>
-              <Box sx={{ height: '100%', width: `${pct}%`, borderRadius: 999, background: color, transition: 'width 600ms cubic-bezier(.2,.8,.2,1)' }} />
-            </Box>
-          </Box>
-        );
-      })}
+    <Box>
+      {data.map(({ name, count }) => (
+        <Box className="dashboard-breakdown-row" key={name}>
+          <Typography variant="caption" fontWeight={700}>{name}</Typography>
+          <Typography variant="caption" fontWeight={700}>{count}</Typography>
+        </Box>
+      ))}
     </Box>
   );
 }
@@ -401,7 +392,48 @@ function TrendChart({ trend }) {
     item,
   }));
   const line = points.map(({ x, y }) => `${x},${y}`).join(' ');
-  return <Box className="dashboard-trend-chart"><svg viewBox="0 0 400 132" preserveAspectRatio="none" aria-hidden="true"><line x1="0" y1="120" x2="400" y2="120" className="trend-axis" /><polygon points={`0,120 ${line} 400,120`} className="trend-area" /><polyline points={line} className="trend-line" />{points.map(({ x, y, item }) => <circle key={String(item.day)} cx={x} cy={y} r="3.5" className="trend-point"><title>{`${item.checkins} check-ins`}</title></circle>)}</svg><Box className="dashboard-trend-labels">{points.map(({ item }) => <Box key={String(item.day)}><Typography variant="caption">{shortDay(item.day)}</Typography><Typography className="dashboard-trend-count">{item.checkins}</Typography></Box>)}</Box></Box>;
+  return (
+    <Box className="dashboard-trend-chart">
+      <svg viewBox="0 0 400 132" preserveAspectRatio="none" aria-hidden="true">
+        <line x1="0" y1="120" x2="400" y2="120" className="trend-axis" />
+        <polygon points={`0,120 ${line} 400,120`} className="trend-area" />
+        <polyline points={line} className="trend-line" />
+        {points.map(({ x, y, item }, index) => {
+          const count = Number(item.checkins) || 0;
+          const textAnchor = points.length === 1 ? 'middle' : index === 0 ? 'start' : index === points.length - 1 ? 'end' : 'middle';
+          return (
+            <g key={String(item.day)}>
+              <circle cx={x} cy={y} r="3.5" className="trend-point">
+                <title>{`${count} check-ins`}</title>
+              </circle>
+              <text
+                className="trend-value-label"
+                x={x}
+                y={Math.max(y - 10, 12)}
+                textAnchor={textAnchor}
+                fill="var(--th-text)"
+                fontSize="11"
+                fontWeight="700"
+                stroke="var(--th-surface)"
+                strokeWidth="3"
+                paintOrder="stroke"
+                strokeLinejoin="round"
+              >
+                {count}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+      <Box className="dashboard-trend-labels">
+        {points.map(({ item }) => (
+          <Box key={String(item.day)}>
+            <Typography variant="caption">{shortDay(item.day)}</Typography>
+          </Box>
+        ))}
+      </Box>
+    </Box>
+  );
 }
 
 function CategoryDonut({ mix, total }) {

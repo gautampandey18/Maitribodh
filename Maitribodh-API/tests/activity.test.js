@@ -50,8 +50,8 @@ test('audit free-text search covers visible actor, action, module, entity and pe
   assert.match(calls[0].sql, /a\.entity_type ILIKE/);
   assert.match(calls[0].sql, /a\.entity_id::text ILIKE/);
   assert.match(calls[0].sql, /u\.username ILIKE/);
-  assert.match(calls[0].sql, /p\.mobile ILIKE/);
-  assert.match(calls[0].sql, /p\.first_name \|\| ' ' \|\| p\.last_name ILIKE/);
+  assert.match(calls[0].sql, /profile\.mobile ILIKE/);
+  assert.match(calls[0].sql, /profile\.first_name \|\| ' ' \|\| profile\.last_name ILIKE/);
   assert.equal(calls[0].values[0], 'security');
   assert.equal(response.body.total, 0);
 });

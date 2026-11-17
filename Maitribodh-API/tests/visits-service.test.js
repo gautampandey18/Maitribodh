@@ -8,9 +8,10 @@ test('check-in service forwards event acknowledgement to the transaction', async
     async checkIn(input) { received = input; return { visit_id: 4 }; },
   } });
   await service.checkIn({
-    personId: 8, checkinGateId: 1, checkinLocationId: 2, eventAcknowledged: true,
+    personId: 8, categoryId: 4, checkinGateId: 1, checkinLocationId: 2, eventAcknowledged: true,
     actor: { userId: 7, role: 'SECURITY_GUARD' },
   });
+  assert.equal(received.categoryId, 4);
   assert.equal(received.eventAcknowledged, true);
   assert.equal(received.actorUserId, 7);
 });

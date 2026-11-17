@@ -6,7 +6,7 @@ import { authorize } from '../../middleware/authorize.js';
 import { ROLES } from '../../constants/roles.js';
 import { parsePagination } from '../../utils/pagination.js';
 
-const statuses = ['PENDING', 'ACTIVE', 'REJECTED', 'DEACTIVATED'];
+const statuses = ['PENDING', 'ACTIVE', 'REJECTED', 'DEACTIVATED', 'BLACKLISTED'];
 
 export function createPersonsRouter({ personsService, approvalsService, qrService, authenticate, registrationRouter }) {
   const router = express.Router();

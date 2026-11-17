@@ -7,7 +7,7 @@ import { createDashboardRouter } from '../src/modules/dashboard/dashboard.routes
 import { createDashboardService } from '../src/modules/dashboard/dashboard.service.js';
 import { createDashboardRepository } from '../src/modules/dashboard/dashboard.repository.js';
 
-test('dashboard summary uses open visits and local-day activity counts', async () => {
+test('dashboard summary counts unique identities and uses local-day activity counts', async () => {
   let sql;
   const repository = createDashboardRepository({
     async query(query) {
@@ -20,7 +20,8 @@ test('dashboard summary uses open visits and local-day activity counts', async (
 
   assert.match(sql, /status = 'OPEN'/);
   assert.match(sql, /AT TIME ZONE 'Asia\/Kolkata'/);
-  assert.match(sql, /status IN \('ACTIVE', 'PENDING'\)\) AS total_users/);
+  assert.match(sql, /SELECT DISTINCT ON \(COALESCE\(identity_id, -person_id\)\) status[\s\S]*updated_at DESC, created_at DESC, person_id DESC[\s\S]*WHERE current_person\.status = 'ACTIVE'\) AS active_persons/);
+  assert.match(sql, /count\(DISTINCT COALESCE\(identity_id, -person_id\)\)::int[\s\S]*status IN \('ACTIVE', 'PENDING'\)\) AS total_users/);
   assert.equal(summary.active_persons, 4);
 });
 
