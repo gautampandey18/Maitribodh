@@ -1,64 +1,44 @@
 # MAMS Implementation Status
 
-**Snapshot:** 2026-10-27. This document describes the checked-in API/UI implementation and migration files; actual migration state, configuration, and availability depend on each deployment.
+**Source snapshot reviewed:** 2026-11-18. This inventory describes the checked-in API/UI and migrations `0001`–`0018`; it does not assert that a particular deployment has applied the migrations or has matching configuration/data.
 
-## Sources and Decisions
+## Current implementation decisions
 
-Earlier requirements, mockups, and feature lists conflict in several areas. This status inventory describes implemented behavior from the current source, not a promise that every source requirement is delivered. Duplicate person mobiles remain allowed; gates and areas remain distinct; QR codes are signed and versioned. No email, OTP, WhatsApp delivery, or demo role switcher is implemented.
-
-## RBAC Spec Alignment
-
-- AUTHZ-11 now rejects self-approval for Admin, Super Admin and Approver alike. This supersedes the earlier sole-Admin/Super-Admin self-approval exception.
-- GATE-11 now treats an unassigned restricted area as a warning rather than a hard block. Security must acknowledge the warning; the visit stores `location_override` and the audit records the warning.
-- REG-Photo now requires a JPG/PNG photo during new registration, max 2 MB. Migration `0007_require_person_photo.sql` requires photos for new rows while preserving legacy photo-less records for Gate camera capture.
-- The generated Gate camera image is resized to the configured 600-pixel dimension before upload.
-- These changes align the corresponding API, UI and focused tests. They do not complete all requirements in the specification; see the remaining gaps below.
+- One unique E.164 primary mobile identifies a shared person profile and QR identity. An identity may have multiple category registrations, each with its own status, category details, expiry, consent, approval history, and area assignment. A duplicate active, pending, or deactivated registration in the same category is rejected.
+- Portal accounts can hold multiple built-in roles. UI navigation and API authorization use the union of those roles; a legacy representative `role` remains in the database.
+- Gates and Areas remain distinct. An unassigned restricted Area is an acknowledged warning, while an Area maximum occupancy is enforced during transactional check-in.
+- Participant registration can allow post-event access. The Program/Batch master `extra.end_date` determines when an event has ended; allowed post-event check-in still requires guard acknowledgement.
+- Audit rows can be permanently deleted by Admin/Super Admin. The append-only database trigger from migration `0004` is dropped by migration `0012`.
+- Person deletion is a destructive API operation, not soft-delete: it deletes a category registration and its visits/blacklist rows. The shared profile/files are removed when no category registrations remain. There is no reason-required restore workflow.
+- No email/OTP/WhatsApp credential delivery or username-first account-claim flow is implemented.
 
 ## Implemented capabilities
 
-- Shared screen RBAC, guard landing on the gate, Super Admin approval access, Approver report access, no duplicate Reports navigation, responsive shell and breadcrumbs.
-- Registration wizard using API-provided category field schemas, master dropdowns and department/job-role cascades. Six configured form types are supported, plus the Generic fallback. Categories with an unconfirmed approval flag cannot submit.
-- Server validation for names, international/Indian primary mobile rules, Indian alternate/emergency mobile numbers, gender, dates, passport, ID proofs, required category fields, address/emergency contacts and master references.
-- Private multipart photo/document uploads, image decoding/resizing, file limits, encrypted passport/ID-proof values and authenticated downloads. New registration requires a JPG/PNG photo up to 2 MB; legacy profiles without a photo can be repaired at the Gate. Registration transaction includes area assignments, approval history, audit and notifications.
-- Per-user drafts, listed for seven days after their last update. Sensitive identity numbers and uploaded files must be supplied again on resume; consent is confirmed again at submission.
-- Profile overview, basic contact editing, documents, area IDs/access expiry, recent visits, administrator audit tab and scannable QR download/print. Contact edits advance QR versions on mobile changes.
-- Confirmed person deactivation/reactivation with audit. Only active profiles can be deactivated, preventing approval bypass through reactivation.
-- Gate camera scanning, exact name/mobile/Person ID lookup, signed QR validation, multiple-match selection, photo-confirmation UI, result states, check-in/out and offline paper-register notice.
-- Transactional check-in warning/acknowledged override for unassigned restricted areas, plus denial for expired access, blacklist/status failures and an existing open visit. Checkout remains available for inside blacklisted persons.
-- Mockup-aligned dashboard KPI labels, occupancy columns and location/category breakdowns, SVG line/area trend, category donut, recent activity fields, and Admin manual-reconciliation confirmation with an audit-backed API transaction.
-- User-scoped notifications and mark-all-read drawer, paginated/filterable administrator audit browser/detail, CSV export of the displayed audit page.
-- Lookup master administration with inactive-value retrieval/reactivation. Category field editor supports field type, labels, required flags, master sources, custom options and ordering. Category status controls prevent disabling the last active category. Registration category cards show seeded icons and descriptions; category APIs persist this metadata.
-- The repository contains migrations `0001`–`0010`. In addition to registration schemas/drafts and append-only audit enforcement, migration `0008` normalizes primary person mobile numbers to E.164, `0009` removes category overstay cutoffs, and `0010` removes permission-level lookup/assignment fields. The presence of these files does not establish whether a particular database has applied them. Private uploads are ignored by Git.
+- Authentication, first-login temporary-password change, role-aware routes/navigation, session invalidation, and idle logout.
+- Six built-in roles, including multiple-role assignment; Administrator account creation, temporary-password provisioning, activation/deactivation, and guarded user deletion.
+- Dynamic category schemas, registration drafts, duplicate-mobile/category precheck, shared-profile registration, and Admin/Super Admin category assignment.
+- Server-side validation of identity/contact data, category fields, category/master references, consent, and registration state; required photo upload and optional private documents; encrypted passport/ID-proof data.
+- Profile/contact editing, QR/photo/document handling, access assignments/expiry, approval/rejection/resubmission, blacklist management, and audited status changes.
+- Signed/versioned shared QR identity, public multi-match QR retrieval, Gate QR/mobile/name lookup, identity/photo confirmation, and explicit check-in/check-out.
+- Transactional check-in rules for registration status, blacklist, expiry, open visits, restricted-area override, participant event access/acknowledgement, and Area occupancy limits.
+- Dashboard, six report endpoints with filtered XLSX export, notifications, paginated/filterable audit browsing, displayed-page audit CSV export, and administrator audit deletion.
+- Administration for portal users, categories, schema fields, lookup values, Gate/Area locations, maximum Area occupancy, and blacklist entries. Unreferenced categories and lookup values can be permanently deleted; referenced values are protected.
+- Migrations `0001`–`0018` evolve the schema, including shared person identity/profile data, multiple user roles, international phone columns, area capacity, and operational-history retention after user deletion. Migration files do not establish deployment migration state.
 
-## Existing Features Retained
+## Not complete or not claimed
 
-Dashboard metrics/charts/occupancy, approval/rejection/resubmission, blacklist add/lift, six report endpoints, portal users with temporary-password provisioning, login/password change and public multi-match QR retrieval.
+- Bulk CSV/photo-package registration, templates, and row-level import result reports. The `bulk_upload` table and `can_bulk_upload` flag are not a bulk-upload workflow.
+- Username-first/password-free account claims, OTP/email/WhatsApp delivery, custom roles, or a database-driven fine-grained permission matrix.
+- Full category-specific profile editing/resubmission, cross-page audit export/print, full report-filter parity, and all requested dashboard/QR metrics and filter combinations.
+- Category document-schema editor and named mandatory-document rules; master-value merge/deletion cleanup beyond guarded deletion of unreferenced rows.
+- No dedicated Program/Batch event lifecycle beyond generic lookup management; Program/Batch values must include a valid `extra.end_date` for participant event checks.
+- Gate/device/shift assignment, torch controls, automatic walk-in check-in, and accompanying-person name editing at check-in. Offline gate events are not queued or replayed; staff use the paper register.
+- Automated overstay scheduling/alerts, all requested occupancy groupings, assigned-gate administration, and gate-scoped Security audit/occupancy.
+- Recoverable person soft-delete with required reason. Current API deletion is permanent and removes associated visit/blacklist records for the selected registration.
+- S3/object storage, malware scanning, production deployment/retention automation, and operational encryption-key rotation.
 
-## Not Complete
+## Verification boundaries
 
-- Bulk CSV/photo-package upload, template generation and row error reports.
-- Username-first password-free onboarding and unauthenticated old/new-password portal flow from the newer mockup. Existing temporary-password provisioning remains in place; no insecure account-claim endpoint was introduced.
-- Custom portal roles and database-driven screen/action permission matrices. Current permissions use the existing built-in roles.
-- Full person-list category/status filtering and export, category-specific profile edit parity, and edited-data resubmission through the registration wizard.
-- Category document-schema editor, mandatory named-document rules and master deletion rules. Migration `0005_seed_registration_masters.sql` contains six mockup-oriented categories, which differs from the alternative Volunteer / Active Member / Visitor seed set. Participant program/batch masters also need configuration before participant registration.
-- Gate torch controls, shift/device configuration, accompanying-name/count edits at check-in and automatic walk-in check-in. Walk-in registration currently returns to the gate for explicit lookup/photo verification/check-in.
-- Participant expiry derived from program/batch master dates, automated overstay scheduling/alerts, and full occupancy grouping parity. Category overstay-cutoff configuration was removed by migration `0009`.
-- Full audit filtered-result export/print, report-filter parity and real XLSX exports. Audit export is explicitly limited to the displayed page.
-- QR KPI/category-filter parity and the older feature list's explicit manual reissue workflow.
-- Automatic session-warning/keep-alive parity, global shell person search and full profile menu/display-name parity.
-- S3 storage, upload malware scanning, production deployment and production data-retention/key-rotation policies.
-- Full RBAC permission-code matrix and the alternative four-role model. The application still contains six built-in roles; converting existing users/data requires a coordinated role migration.
-- Username-first password-free onboarding and the alternative password policy. Current temporary-password/first-login flows remain.
-- Registration requirements beyond current rules, including a 150-character name maximum, per-category default-location rules, and accompanying-member name/count entry at check-in. Visitor primary mobiles support valid international E.164 numbers; other registration categories require Indian primary numbers. Alternate/emergency mobile fields remain Indian-format.
-- The alternative seed category set (`Volunteer`, `Active Member`, `Visitor`) and related master data. Permission-level lookup/assignment fields were removed by migration `0010` and are not current application controls.
-- Person profile soft delete with mandatory reason, assigned-gate administration, gate-scoped Security occupancy/audit, visit-history filter parity (gate/person/status), and real XLSX export.
+The repository contains API and UI test suites and ESLint/build scripts. This documentation update did not run them. Automated tests and synthetic browser fixtures do not establish production configuration, migration state, real camera/torch behavior, or a live-database registration-to-checkout workflow.
 
-## Verification and Runtime Limits
-
-The checked-in API/UI test suites include coverage for category validation, uploads/encryption/image resizing, authorization, transaction rollback, restricted-area/expiry checks, notification isolation, role navigation, drafts, guard category restrictions, and gate controls. The statements below record previously reported project verification; they are not results of running tests for this documentation update.
-
-Desktop/mobile browser checks use synthetic in-page API fixtures, not live person data. Registration layout was checked at 1440px and 390px; mobile gate navigation/result controls were checked at 390px. Real camera hardware/torch and a full live database registration-to-checkout flow remain unverified.
-
-Apply pending migrations with `npm run migrate:local` and restart the API to load code changes. Migration `0007_require_person_photo.sql` is required for the database-side photo rule; migrations `0008`–`0010` update the primary mobile constraint and remove obsolete category/permission-level fields. Check the target database's `public.schema_migrations` rather than inferring its state from repository files. Do not provide passwords to chat.
-
-Real camera hardware/torch operation and a full live-database registration-through-checkout path remain unverified. Local scripts and synthetic fixtures do not certify production configuration or deployment readiness.
+Before deploying, apply pending migrations through `npm run migrate:local` for the configured local database, or the approved migration process for another target. Verify `public.schema_migrations`; do not infer database state from files in the repository. Migration `0018` moves shared person profile and QR data into `mams.person_identity`, so the API and database must be on compatible versions.

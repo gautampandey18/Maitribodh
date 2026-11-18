@@ -50,20 +50,21 @@ The schema starts from a core set of entities in migration `0001_initial_schema.
 
 | Entity | Purpose |
 |---|---|
-| `app_user` | Portal accounts, built-in role, active status, password hash, login lock/version state |
+| `app_user` | Portal accounts, multiple built-in roles, active status, password hash, login lock/version state |
 | `lookup_value` | Configurable lookup/master values such as departments, job roles, and proof types |
 | `category` | Person categories, form type, approval setting, configurable registration schema, and category metadata |
 | `location` | Gate and area records; gates and areas are distinct location types |
-| `person` | Identity/profile fields, encrypted identity values, registration/access status, QR version, and workflow metadata |
+| `person_identity` | Shared profile, E.164 mobile, encrypted identity values, common media, and identity-level QR code/version |
+| `person` | Category registration, category details, consent, approval/status, expiry, drafts, and workflow metadata |
 | `person_location` | Person-to-area access assignments |
 | `approval_history` | Registration approval decisions and history |
 | `blacklist` | Blacklist records and their status/reason |
 | `visit` | Check-in/check-out events and operational overrides |
 | `notification` | Per-user notifications and read state |
-| `audit_log` | Append-oriented audit history |
+| `audit_log` | Application activity history; Admin/Super Admin deletion is supported |
 | `bulk_upload` | Persistence model for upload batches; the complete bulk-upload workflow is not implemented |
 
-The exact column definitions, constraints, indexes, and foreign keys are in the migration files. Migrations `0008`–`0010` additionally normalize person primary mobile numbers to E.164, remove category overstay cutoffs, and remove permission-level lookup/assignment fields. Migrations are checksum-tracked: applied SQL files must not be edited; new schema changes belong in a new migration.
+The exact column definitions, constraints, indexes, and foreign keys are in the migration files. Migrations `0008`–`0018` additionally normalize phone data, remove category overstay cutoffs and permission-level fields, allow audit deletion, support independent user deletion and multiple roles, establish shared person identities, and add Area occupancy limits. Migrations are checksum-tracked: applied SQL files must not be edited; new schema changes belong in a new migration.
 
 ## 3. Delivered functional areas
 
@@ -101,7 +102,7 @@ The registration screen requests active categories, category-specific form schem
 
 The API validates the submission, including profile names and contact details, gender/date values, passport and proof requirements, required category fields, address/emergency contacts, and master references. Registration sends multipart form data containing JSON metadata, a required JPG/PNG photograph (up to 2 MB), and optional documents. Image inputs are decoded and resized to the configured maximum image dimension (600 pixels). The broader API file limits and accepted input behavior are documented in the API README.
 
-Registration persistence is transactional: profile data, area assignments, approval history, audit entries, and notification rows are written together. If persistence fails, newly uploaded files are removed. New registrations that require approval enter the review flow; category approval configuration that has not been confirmed cannot be submitted as though approval were optional.
+The primary mobile identifies a shared `person_identity`. A new category registration using that mobile reuses common profile/contact/photo/document/QR data; a second current registration in the same category is rejected. Category fields, consent, access assignments, status, and approval history remain per-registration. Registration persistence is transactional: identity/profile creation, category registration, area assignments, approval history, audit entries, and notification rows are written together. If persistence fails, newly uploaded files are removed. New registrations that require approval enter the review flow; category approval configuration that has not been confirmed cannot be submitted as though approval were optional.
 
 Users can save and resume per-user drafts. Drafts deliberately do not preserve passport/ID-proof numbers or uploaded file bytes; those sensitive values and files must be supplied again when a draft is resumed. Existing photo-less legacy profiles can be repaired at Gate; new registrations require a photo.
 
@@ -134,9 +135,9 @@ QR payloads are signed and versioned. The QR service validates signatures and cu
 ### 3.7 Dashboard, reports, audit, and notifications
 
 - The dashboard presents summary metrics, occupancy, recent activity, and category/location breakdowns.
-- Reports include six API report endpoints and CSV export behavior in the UI. Full report-filter parity and real XLSX generation are not implemented.
-- Audit browsing is paginated and filterable for administrators, with a detail view. CSV export currently covers the displayed audit page, not the complete filtered result set.
-- Audit rows are append-only: migration `0004_registration_workflows.sql` installs a database trigger rejecting update/delete operations.
+- Reports include six API report endpoints and filtered XLSX export. Full report-filter parity is not implemented.
+- Audit browsing is paginated and filterable for administrators, with a detail view and selected/filter-matching delete operations. CSV export covers the displayed audit page, not the complete filtered result set.
+- Audit records are deletable by Admin/Super Admin; migration `0012_allow_audit_log_deletion.sql` drops the append-only trigger installed by migration `0004`.
 - Notifications are scoped to the authenticated user; notification read updates use that user identity. The UI includes a notifications drawer and mark-all-read action.
 - Dashboard manual reconciliation is explicitly confirmed in the UI and persisted by an audit-backed API transaction.
 
@@ -146,12 +147,12 @@ Admin/Super Admin screens cover:
 
 - Portal user administration.
 - Category status and category form-schema editing (field types, labels, required flags, master sources, custom options, ordering).
-- Lookup/master-data administration, including retrieving and reactivating inactive values.
-- Gate and area administration as separate location types.
+- Lookup/master-data administration, including retrieving/reactivating inactive values and deleting unreferenced values.
+- Gate and area administration as separate location types, including per-Area maximum occupancy.
 - Blacklist add/lift operations with audit context.
 - QR identity lookup and audit browsing.
 
-Category status controls prevent disabling the last active category. Category icons/descriptions and category metadata are persisted through category APIs. Deleting master values, editing document schemas, and enforcing named required-document rules are not complete.
+Category status controls prevent disabling the last active category. Unreferenced categories and lookup values can be permanently deleted; referenced records are protected. Category icons/descriptions and category metadata are persisted through category APIs. Editing document schemas and enforcing named required-document rules are not complete.
 
 ## 4. End-to-end application flows
 
@@ -210,7 +211,7 @@ Across these surfaces, the implemented checks include:
 - Login rate limiting with explicitly configured window and maximum.
 - JSON request size limit, CORS origin configuration, Helmet security headers, request logging, and centralized error handling.
 - Parameterized PostgreSQL operations, foreign-key/check constraints, and transactional repository workflows where required.
-- Database-enforced append-only audit records.
+- Database constraints protect relational/data invariants; administrator audit deletion is supported in the final schema.
 - Multipart file limits, supported image handling, encrypted passport/ID-proof values, and private authenticated file routes.
 - Check-in validation at the service/API boundary, including restriction override acknowledgement and open-visit/blacklist/expiry checks.
 
@@ -225,13 +226,21 @@ The migration set is sequential; run migrations before starting/restarting the A
 | `0001_initial_schema.sql` | Initial MAMS schema and core entities/constraints |
 | `0002_login_failure_window.sql` | Login failure-window/authentication schema evolution |
 | `0003_first_login_temporary_password.sql` | Temporary-password/first-login support |
-| `0004_registration_workflows.sql` | Category form schema, expiry, draft storage, append-only audit enforcement |
+| `0004_registration_workflows.sql` | Category form schema, expiry, draft storage, initial audit deletion protection |
 | `0005_seed_registration_masters.sql` | Mockup-oriented registration category/master seed values |
 | `0006_optional_person_photo.sql` | Preserves compatibility with existing photo-less people |
 | `0007_require_person_photo.sql` | Requires photos for newly registered people while retaining the legacy exception |
 | `0008_international_person_mobile.sql` | Normalizes existing Indian primary mobile values to E.164 and adds the database E.164 constraint |
 | `0009_drop_overstay_cutoff.sql` | Removes category overstay-cutoff data |
 | `0010_remove_permission_levels.sql` | Removes permission-level lookup/assignment fields and schema/draft references |
+| `0011_distinct_mobile_per_category.sql` | Adds a temporary mobile/category uniqueness rule, later superseded by shared identity |
+| `0012_allow_audit_log_deletion.sql` | Drops the audit append-only trigger |
+| `0013_international_phone_columns.sql` | Widens user and secondary/guardian phone columns |
+| `0014_independent_user_lifecycle.sql` | Preserves operational rows when users are deleted by detaching actor references |
+| `0015_multiple_user_roles.sql` | Adds multi-role assignments and backfills existing users |
+| `0016_person_identity_and_area_capacity.sql` | Adds shared identity records, category membership identity links, and Area occupancy limits |
+| `0017_remove_security_head.sql` | Removes the obsolete user security-head flag |
+| `0018_normalize_person_identity_profile.sql` | Moves common person profile/media/QR fields from registrations into shared identities |
 
 Development fixtures are synthetic and guarded for loopback development databases. Do not run development/demo seeding against shared or production data. The reset script is destructive to all data in the `mams` schema and should only be used for an explicitly disposable local database after confirming the connection target. Uploaded files are on local disk by default and are not removed by the database reset.
 
@@ -293,13 +302,13 @@ The following limits are known and should be considered before treating the impl
 - Bulk CSV/photo-package upload, template generation, and row-level import error reporting are not complete.
 - User onboarding remains temporary-password/first-login based; username-first password-free account claims and the described alternative password flow are not implemented.
 - Custom portal roles, a database-driven permission-code matrix, and migration to the newer four-role model are not implemented.
-- Person list category/status filtering and export, category-specific full profile editing, and edited-data resubmission through the registration wizard are incomplete.
-- Required category document schemas, named-document enforcement, master deletion rules, and the exact requested seeded category/master set are not aligned/completed. Participant program/batch master configuration is still needed.
-- Gate torch/shift/device administration, accompanying names/count edits at check-in, and automatic walk-in check-in are incomplete.
-- Program/batch-derived participant expiry, automated overstay scheduling/alerts, and full occupancy grouping parity are incomplete.
-- Full filtered audit export/print, report-filter parity, real XLSX exports, QR KPI/filter parity, and explicit manual QR reissue workflow are incomplete.
+- Full person-management filter/export parity, category-specific profile editing, and edited-data resubmission through the registration wizard are incomplete. A shared profile can receive additional category registrations through the Admin category-assignment flow.
+- Required category document schemas, named-document enforcement, and the exact requested seeded category/master set are not aligned/completed. Participant Program/Batch master configuration is still needed for event-end checks.
+- Gate torch/shift/device administration, accompanying-person name editing at check-in, and automatic walk-in check-in are incomplete. Area capacity enforcement and accompanying count input are implemented.
+- Automated overstay scheduling/alerts and full occupancy grouping parity are incomplete. Participant event-end access and its guard acknowledgement are implemented.
+- Full filtered audit export/print, report-filter parity, QR KPI/filter parity, and explicit manual QR reissue workflow are incomplete. Report XLSX export is implemented; audit CSV remains displayed-page only.
 - Automatic session warning/keep-alive, global shell person search, and complete profile menu/display-name parity are incomplete.
-- Person soft-delete with mandatory reason, assigned-gate administration, gate-scoped Security occupancy/audit, and full visit-history filter parity are incomplete.
+- Recoverable person soft-delete with mandatory reason is not implemented; the current API has a permanent delete operation. Assigned-gate administration, gate-scoped Security occupancy/audit, and full visit-history filter parity are also incomplete.
 - File storage is local-disk based by default, not S3; malware scanning, production deployment, retention operations, and key-rotation procedures are not delivered here.
 - The frontend layout has been checked with synthetic fixtures at desktop/mobile widths as recorded in the status inventory. Real camera hardware/torch operation and a full live-database registration-through-checkout path are not verified by that browser check.
 
@@ -315,7 +324,7 @@ Only Admin and Super Admin can use the Users screen and the user-management APIs
 
 **Create flow**
 
-1. Admin opens **Users → Add user** and enters first/last name, mobile, optional email, username, roles, and the security-head/bulk-upload flags.
+1. Admin opens **Users → Add user** and enters first/last name, mobile, optional email, username, and one or more roles.
 2. UI validation requires non-empty names and username (up to 100/100/50 characters respectively), a valid mobile, valid optional email, at least one supported role, and boolean flags.
 3. UI posts `POST /api/v1/users`. The API validates the same core fields and rejects a Super Admin role assignment unless the caller is itself Super Admin.
 4. The database creates the user without accepting a plaintext password from the client. Duplicate username/email/mobile values are translated to a conflict response.
@@ -348,7 +357,7 @@ The temporary credential can be used for only one successful login. If it has be
 - There is also an HTTP login rate limiter. Its time window and request limit are deployment settings (`LOGIN_RATE_LIMIT_WINDOW_MS`, `LOGIN_RATE_LIMIT_MAX`); configure them explicitly for the environment.
 - JWTs have no absolute expiry; token-version revocation remains available through logout, password changes, and account changes. The client signs out after 30 minutes of inactivity, preserves the inactivity deadline across refresh, and shows the reason on the sign-in page.
 - Logout increments the account token version. Authentication resolves the account and checks current status/token version, so deactivated users and revoked tokens are not accepted.
-- Admins can list/search users with pagination and filters for role/status; set or clear the bulk-upload flag; and deactivate an active account. Deactivation and permission changes go through audited repository operations.
+- Admins can list/search users with pagination and filters for role/status; set or clear the bulk-upload flag; deactivate an active account; and delete accounts subject to safeguards. User deletion is prohibited for the current user, and only Super Admin can delete Admin/Super Admin accounts. Deactivation, role changes, and deletion are audited; operational actor references are detached rather than blocking deletion.
 
 ### 9.2 Category setup and registration form design
 
@@ -368,7 +377,7 @@ Categories determine which form applies to a person. The current category API ma
 
 The list above is the default schema in `Maitribodh-API/src/constants/registration.js`. If a category has a persisted non-empty `form_schema`, that category-specific schema takes precedence over the built-in schema.
 
-The Visitor screen also collects optional driver availability (`YES`/`NO`). If `YES` is selected, optional driver name and Indian 10-digit contact fields are shown. API validation rejects driver details when availability is not `YES`; these conditional fields are not part of the default schema table.
+The Visitor screen also collects optional driver availability (`YES`/`NO`). If `YES` is selected, optional driver name and contact fields are shown; a supplied number must be a valid Indian or international phone number. API validation rejects driver details when availability is not `YES`; these conditional fields are not part of the default schema table.
 
 **Schema editor**
 
@@ -399,10 +408,10 @@ Common information comprises first/last name, primary/alternate mobile, date of 
 Current API input checks include:
 
 - Names: 1–100 characters, Unicode letters/combining marks/spaces/hyphens.
-- Primary mobile: a valid phone number in E.164 form; Visitor registrations may use an international number, while non-Visitor categories require an Indian number. Alternate and emergency mobile fields use the Indian 10-digit pattern beginning 6–9.
+- Primary mobile: a valid phone number in E.164 form; Visitor registrations may use an international number, while non-Visitor categories require an Indian number. Alternate and emergency mobile fields accept valid Indian or international phone numbers.
 - Gender: `MALE`, `FEMALE`, or `OTHER`.
 - Date of birth cannot be in the future; date values must be valid ISO dates.
-- Email must be valid and at most 150 characters if supplied.
+- Email is required, valid, and at most 150 characters.
 - Non-resident registrations require a 6–9 alphanumeric passport number. Resident registrations do not require passport.
 - If an ID proof number is supplied, an ID proof type is required. Default category/master definitions can also encode specific Aadhaar/PAN/passport formats.
 - Category schema required fields must be populated. Category `date` values must be ISO dates; `number` values must be positive whole numbers; custom dropdown values must match an allowed option.
@@ -435,6 +444,7 @@ The UI requests JPG/PNG photos only, up to 2 MB. The API verifies the image can 
 - Because files are written before the database transaction, the route tracks every new file. Any later validation/storage/database error deletes those newly written files; successful writes retain them for authenticated retrieval.
 - Repository creates the person and associated records atomically: assigned areas, approval history, audit record, and notifications. Status depends on category approval configuration/workflow; a pending person cannot be treated as approved for Gate entry.
 - The response includes person code and resulting status. UI reports that a QR is available for active status or will follow approval otherwise.
+- A primary mobile already present in another category reuses the shared identity and common profile. The API rejects another active, pending, or deactivated registration in the same category; each new category registration still has its own consent and workflow state.
 - Gate-originated visitor registration returns an active visitor to Gate with the visitor's person code and selected gate/area for explicit identity/photo check and check-in. Registration itself does not silently check the person in.
 
 **Draft save/resume**
@@ -453,6 +463,8 @@ An authorized person-detail page can show identity/profile, category fields, doc
 
 - **Edit contact/profile basics:** first/last name, mobile, alternate mobile, email, address, and emergency contact fields are validated. The full category-specific registration form is not yet an edit workflow.
 - **Update access:** set area IDs and expiry date. This is a dedicated access update rather than a full profile resubmission.
+- **Assign another category:** Admin/Super Admin can create a category registration for the existing identity. The added registration shares identity-level profile/media/QR data but has its own category fields, consent, status, and access/approval state.
+- **Delete registration:** management API `DELETE /api/v1/persons/:personId` permanently deletes that category registration and its visits/blacklist rows. If no registrations remain, the shared identity and its files are deleted. This is an API operation, not a person-detail UI control; it has no reason-required restore workflow.
 - **Photo repair/change:** upload a JPG/PNG photo (2 MB max); decode and resize it with the same 600-pixel policy. When replacement succeeds, the previous photo file can be removed.
 - **Add documents:** management roles can add up to 12 PDF/image documents, each up to 5 MB; database/file failure triggers cleanup of newly written files.
 - **Activity:** person activity and visits can be viewed through the detail/activity routes; administrator audit access is separately role-gated.
@@ -482,8 +494,9 @@ An authorized person-detail page can show identity/profile, category fields, doc
 
 - API accepts person ID, check-in gate ID, check-in location/area ID, and optional device metadata.
 - Only Guard, Admin, and Super Admin can execute the write check-in route.
-- API/repository rechecks status, blacklist, access expiry, current open visit, and location assignment in the authoritative write operation; a successful UI lookup is not a reservation and can become stale.
+- API/repository rechecks status, blacklist, access expiry, current open visit, location assignment, participant event end-date permission, and Area occupancy in the authoritative write operation; a successful UI lookup is not a reservation and can become stale.
 - An unassigned restricted area is surfaced as `LOCATION_WARNING`. User acknowledgement sends the override marker; repository records `location_override` and the audit records actor and warning context. No silent bypass is intended.
+- When `max_occupancy` is configured, check-in enforces open-visit occupancy plus the incoming person and accompanying count transactionally. Participant `PROGRAM_BATCH.extra.end_date` is evaluated in IST; after the event end, check-in requires future-access permission and guard acknowledgement.
 - Existing open visit, expired/inactive person, blocked person, and invalid QR prevent check-in.
 - Check-in is transactional and generates an open visit; dashboard occupancy reflects the open visit.
 
@@ -514,16 +527,15 @@ An authorized person-detail page can show identity/profile, category fields, doc
 
 **Reports**
 
-- Reports screen loads six existing API report sections/endpoints, renders paged result sets, and offers the implemented CSV export behavior.
+- Reports screen loads six existing API report sections/endpoints, renders paged result sets, and exports actual XLSX files through ExcelJS. Export applies the report filters and is unpaginated; report/filter parity with all prior mockup requirements is still incomplete.
 - In implemented UI tests, registration status and visit-history date filters are applied; pagination uses requested page/page size; overlapping requests do not replace a newer selected page with stale data.
-- Exact mockup parity for filters and real XLSX output is not present; CSV is the supported export in the tested flows.
 
 **Audit**
 
 - Admin/Super Admin can browse paginated/filterable audit records and open a detail drawer.
-- Current export is CSV of the displayed page, not all matching audit records.
+- Current CSV export covers the displayed page, not all matching audit records. Admin/Super Admin can permanently delete selected audit rows or all rows matching submitted filters; final audit records are not append-only.
 - Audit writes preserve actor ID/role, module/activity/entity, before/after values as applicable, request IP, and device where the feature supplies those fields.
-- Application exposes no normal update/delete path for audit rows, and the database trigger rejects those operations as a second enforcement layer.
+- Audit updates are not exposed; the API does expose administrator-only deletion, and no append-only database trigger remains in the final schema.
 
 **Notifications**
 
@@ -536,13 +548,14 @@ An authorized person-detail page can show identity/profile, category fields, doc
 
 - Lookup types currently include Department, Job Role, Subcategory, Program/Batch, ID Proof Type, and Blacklist Reason. Category schema fields can also refer to Area as a selection source.
 - Authenticated users can read active lookup values; parent IDs support dependent values such as Job Role → Department. Admins can search, paginate where requested, include inactive values, create new values, and update name/extra/status.
-- Inactive values are restricted to Admin/Super Admin. No hard-delete API is provided; deactivation preserves references/history.
+- Inactive values are restricted to Admin/Super Admin. Admin/Super Admin can permanently delete unreferenced lookup values; referenced values are protected by database constraints. Deactivation remains available to preserve referenced values/history.
 - Duplicate and invalid parent/category/master references are rejected by service/database constraints.
 - Master data should be configured before registering categories that require it; Participant form selection needs Program/Batch data, for example.
 
 **Locations**
 
-- Admin/Super Admin creates and edits `GATE` or `AREA` separately. A location has a name, active/inactive status, optional department association, and restricted flag.
+- Admin/Super Admin creates and edits `GATE` or `AREA` separately. A location has a name, active/inactive status, optional department association, restricted flag, and (for Areas) optional maximum occupancy.
+- Unreferenced categories can be permanently deleted; categories referenced by registrations cannot be deleted.
 - API prohibits a Gate from being restricted. Gate check-in requires both a Gate ID and an Area/location ID; this supports separate entry point and destination-area records.
 - The location screen supports active-location search/filter by name/type and pagination. Full assigned-gate administration and gate-specific security policy are gaps.
 
@@ -560,7 +573,7 @@ Use this list to avoid interpreting an implemented screen/API as complete parity
 - **People:** No bulk CSV/photo-package import workflow, complete category-specific profile edit/resubmit, full list filter/export parity, or soft delete with mandatory reason.
 - **Category and masters:** No named document-schema/mandatory-document policy, master-value delete workflow, exact alignment of seeded category set to every spec, or full Participant program/batch lifecycle configuration.
 - **Gate:** No torch control, gate/device/shift assignment administration, automatic walk-in check-in, accompanying-person names/count edits at check-in, or offline queue/replay.
-- **Reports/oversight:** No full filtered audit export/print, real XLSX export, full report filter parity, automated overstay scheduler/alerts, or complete occupancy grouping parity.
+- **Reports/oversight:** No full filtered audit export/print, full report filter parity, automated overstay scheduler/alerts, or complete occupancy grouping parity. Filtered, unpaginated report XLSX exports are implemented.
 - **Operations/security:** No S3 object storage, malware scanning, production deployment automation, retention automation, or encryption-key rotation migration.
 
 ## 11. Related project references

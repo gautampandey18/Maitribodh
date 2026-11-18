@@ -6,7 +6,7 @@
 | Document type | Functional Requirements Document (FRD) |
 | System | Maitribodh Access Management System (MAMS) |
 | Baseline | Current implementation in this repository |
-| Implementation snapshot | API/UI source and database migrations 0001–0010 |
+| Implementation snapshot | API/UI source and database migrations 0001–0018 |
 | Status | As-implemented functional specification |
 | Related documents | [Business Requirements Document](./MAMS_BRD.md), [Implementation and Flow Guide](./MAMS_IMPLEMENTATION_GUIDE.md), [Implementation Status](./MAMS_IMPLEMENTATION_STATUS.md) |
 
@@ -49,11 +49,11 @@ Public QR lookup is an unauthenticated user-facing operation with reduced output
 | API prefix / route family | Primary function |
 |---|---|
 | `/api/v1/auth` | Login, logout, password change |
-| `/api/v1/users` | User listing, creation, details, password reset, deactivation, and bulk-upload flag updates |
+| `/api/v1/users` | User listing, creation, details, password reset, activation/deactivation, and deletion |
 | `/api/v1/categories` | Category CRUD/status/schema administration |
 | `/api/v1/lookups` | Lookup/master values |
 | `/api/v1/locations` | Gate and Area administration |
-| `/api/v1/persons` | Registration options, drafts, profile, photo/documents, access, status |
+| `/api/v1/persons` | Registration options/mobile check, drafts, profile, photo/documents, category assignments, access, status, deletion |
 | `/api/v1/approvals` | Approval queue and decisions/resubmission |
 | `/api/v1/public` | Public QR lookup |
 | `/api/v1/gate` | Gate identity lookup |
@@ -61,7 +61,7 @@ Public QR lookup is an unauthenticated user-facing operation with reduced output
 | `/api/v1/blacklist` | List/add/lift blacklist entries |
 | `/api/v1/dashboard` | Dashboard summaries/occupancy |
 | `/api/v1/reports` | Six report sections |
-| `/api/v1` activity routes | User notifications and administrator audit browsing |
+| `/api/v1` activity routes | User notifications and administrator audit browsing/deletion |
 
 ## 4. Functional requirements
 
@@ -106,14 +106,15 @@ Public QR lookup is an unauthenticated user-facing operation with reduced output
 | ID | Requirement | Status |
 |---|---|---|
 | FR-USER-001 | Admin/Super Admin shall list users with pagination, text search, role filter, and active/inactive status filter. | Implemented |
-| FR-USER-002 | Admin/Super Admin shall create and update users with one or more built-in roles selected in the Roles field, alongside identity/contact data, security-head flag, and bulk-upload permission flag. | Implemented |
+| FR-USER-002 | Admin/Super Admin shall create and update users with one or more built-in roles selected in the Roles field, alongside identity/contact data and the bulk-upload permission flag. | Implemented |
 | FR-USER-003 | Only a Super Admin shall be able to assign the Super Admin role. | Implemented |
 | FR-USER-004 | Duplicate username/email/mobile shall produce a conflict response. | Implemented |
 | FR-USER-005 | Admin/Super Admin shall view an individual account, reset active user's password, toggle bulk-upload permission, and deactivate an active account. | Implemented |
 | FR-USER-006 | User creation and sensitive user changes shall retain actor context in audit records where implemented. | Implemented |
+| FR-USER-010 | Admin/Super Admin shall permanently delete another user. Only Super Admin may delete Admin/Super Admin accounts; self-deletion is prohibited. Operational history is retained with actor references detached, and the deleted user's notifications are removed. | Implemented |
 | FR-USER-007 | Admin shall define arbitrary custom roles and permission grants. | Not implemented |
 | FR-USER-008 | Account shall be claimed through a password-free username onboarding flow. | Not implemented |
-| FR-USER-009 | Role changes shall invalidate prior sessions and retain the assigned roles in the audit record. Existing single-role accounts shall retain their access. | Implemented |
+| FR-USER-009 | Role changes shall invalidate prior sessions and retain assigned roles in audit records. Permissions are the union of assigned built-in roles; legacy single-role accounts are backfilled to a one-element roles array. | Implemented |
 
 ### 4.2 Role navigation and route access
 
@@ -149,6 +150,7 @@ The detailed UI screen matrix is in `Maitribodh-UI/src/constants/navigation.js`;
 | FR-CAT-012 | Category create/update/schema/status operations shall be audited. | Implemented |
 | FR-CAT-013 | Category administration shall include the required named document schemas and mandatory document rules. | Not implemented |
 | FR-CAT-014 | Category administration shall expose permission-level assignment or category overstay-cutoff controls. | Not implemented; the former schema fields were removed by migrations 0010 and 0009 respectively. |
+| FR-CAT-015 | Admin/Super Admin shall permanently delete an unreferenced category; deletion of a category referenced by records shall be rejected. | Implemented |
 
 Built-in form fields are listed in section 5.2. Six form types in the current UI are Staff, Parivar, Visitor, Vendor, Contractor, and Participant; the API schema also includes Generic fallback.
 
@@ -162,15 +164,16 @@ Built-in form fields are listed in section 5.2. Six form types in the current UI
 | FR-MASTER-002 | Admin/Super Admin shall retrieve inactive lookup values and create/update lookup entries. | Implemented |
 | FR-MASTER-003 | System shall support Department, Job Role, Subcategory, Program/Batch, ID Proof Type, and Blacklist Reason lookup types. | Implemented |
 | FR-MASTER-004 | System shall validate parent/category/master references and reject duplicate/invalid values. | Implemented |
-| FR-MASTER-005 | Inactive values shall remain available to administrators for reference/reactivation; there is no hard-delete interface. | Implemented |
-| FR-MASTER-006 | System shall provide full master deletion, merge, and referential cleanup workflows. | Not implemented |
+| FR-MASTER-005 | Inactive values shall remain available to administrators for reference/reactivation; an unreferenced value may also be permanently deleted. | Implemented |
+| FR-MASTER-006 | Admin/Super Admin shall permanently delete an unreferenced lookup value; deletion of a referenced value shall be rejected. Merge and referential-cleanup workflows are not implemented. | Partially implemented |
 
 #### Gates and areas
 
 | ID | Requirement | Status |
 |---|---|---|
-| FR-LOC-001 | Admin/Super Admin shall create/update/list active locations with name, location type, restricted flag, optional department, and status. | Implemented |
+| FR-LOC-001 | Admin/Super Admin shall create/update/list active locations with name, location type, restricted flag, optional department, maximum occupancy, and status. | Implemented |
 | FR-LOC-002 | Location type shall be Gate or Area; a Gate cannot be restricted. | Implemented |
+| FR-LOC-006 | An Area may have a positive maximum occupancy; a Gate cannot have an occupancy limit. | Implemented |
 | FR-LOC-003 | Visit workflows shall accept a Gate ID and Area/location ID separately. | Implemented |
 | FR-LOC-004 | Location records and edits shall be audited. | Implemented |
 | FR-LOC-005 | System shall administer gate/device/shift assignments and gate-scoped role grants. | Not implemented |
@@ -182,6 +185,7 @@ Built-in form fields are listed in section 5.2. Six form types in the current UI
 | ID | Requirement | Status |
 |---|---|---|
 | FR-REG-001 | Authenticated registration roles shall retrieve active categories, computed schemas, active lookup values, and active locations. | Implemented |
+| FR-REG-016 | Registration shall check whether the submitted mobile is already registered for the selected category. A mobile already linked to a shared identity may be used for a different category registration, but not a duplicate registration in the same category. | Implemented |
 | FR-REG-002 | Registration UI shall provide five steps: Category, Profile, Access, Documents, Review. | Implemented |
 | FR-REG-003 | UI shall render common profile fields and category-defined fields, supporting dependent Job Role options filtered by selected Department. | Implemented |
 | FR-REG-004 | Gate-originated and Security Guard registration shall offer Visitor categories only. | Implemented |
@@ -202,10 +206,10 @@ Built-in form fields are listed in section 5.2. Six form types in the current UI
 | ID | Requirement | Current rule |
 |---|---|---|
 | FR-REG-020 | First and last name shall each be 1–100 characters containing Unicode letters/marks, spaces, or hyphens. | Implemented |
-| FR-REG-021 | Primary mobile shall be a valid phone number; Visitor may use a valid international number and all other registration categories require a valid Indian number. Stored primary values use E.164 form. | Implemented |
-| FR-REG-022 | Alternate and emergency mobile numbers (when provided) shall match a 10-digit Indian mobile pattern beginning 6–9. | Implemented |
+| FR-REG-021 | Primary mobile shall be a valid phone number; Visitor may use a valid international number and all other registration categories require a valid Indian number. Stored primary values use E.164 form and identify the shared profile. | Implemented |
+| FR-REG-022 | Alternate and emergency mobile numbers (when provided) shall be valid Indian or international phone numbers and be stored in E.164 form. | Implemented |
 | FR-REG-023 | Gender shall be Male, Female, or Other; DOB cannot be in the future. | Implemented |
-| FR-REG-024 | Email, if provided, shall be valid and no longer than 150 characters. | Implemented |
+| FR-REG-024 | Registration shall require a valid email address no longer than 150 characters. | Implemented |
 | FR-REG-025 | Non-resident registration shall supply a 6–9 alphanumeric passport number. | Implemented |
 | FR-REG-026 | Supplying an ID-proof number requires an active ID-proof type; configured Aadhaar/PAN/Passport patterns shall be validated. | Implemented |
 | FR-REG-027 | Required schema fields shall be non-empty; date fields shall be valid ISO dates; number fields shall be positive whole numbers; select values shall be allowed. | Implemented |
@@ -248,7 +252,8 @@ Built-in form fields are listed in section 5.2. Six form types in the current UI
 | FR-PER-008 | Management roles shall append optional person documents subject to count/type/size validation. | Implemented |
 | FR-PER-009 | Admin/Super Admin shall change person status between Active and Deactivated with a required reason and audit. | Implemented |
 | FR-PER-010 | A profile in an ineligible state shall not be deactivated in a way that bypasses approval/reactivation controls. | Implemented |
-| FR-PER-011 | Person shall be soft-deleted with mandatory reason and recoverable deletion history. | Not implemented |
+| FR-PER-014 | Admin/Super Admin shall list the categories linked to a shared profile and add one or more category registrations without re-entering common profile data. Each new registration validates its schema, consent, active areas, and approval rule; category-specific state remains separate. | Implemented |
+| FR-PER-011 | Person shall be soft-deleted with mandatory reason and recoverable deletion history. | Not implemented. Current `DELETE /persons/:personId` permanently removes a category registration without a reason or restore workflow; related visits and blacklist rows are deleted, and the shared identity/files are removed when no registrations remain. |
 | FR-PER-012 | Full category-specific registration profile edit and edit/resubmit wizard shall be supported. | Not implemented |
 | FR-PER-013 | Person list shall provide full category/status/export parity with all source specification filters. | Partial / not complete |
 
@@ -293,6 +298,8 @@ Built-in form fields are listed in section 5.2. Six form types in the current UI
 | FR-VIS-007 | Check-out without a matching open visit shall return conflict/not-active-visit response. | Implemented |
 | FR-VIS-008 | Blacklisted person with an open visit shall be permitted to check out. | Implemented |
 | FR-VIS-009 | Admin/Super Admin shall reconcile an open visit with a required 1–500 character note and audit record. | Implemented |
+| FR-VIS-013 | An Area's configured maximum occupancy shall be checked transactionally against current open-visit occupancy plus the incoming person and accompanying count. | Implemented |
+| FR-VIS-014 | Participant program/batch end dates shall govern event completion. Entry after event completion is denied unless future check-in access is allowed for that registration; allowed post-event entry requires explicit guard acknowledgement. | Implemented |
 | FR-VIS-010 | Client shall store and replay offline gate events automatically. | Not implemented; use paper register. |
 | FR-VIS-011 | Gate workflow shall edit accompanying-person names/count at check-in and automatically check in walk-ins. | Not implemented |
 | FR-VIS-012 | Gate device/shift/torch and assigned-gate operations shall be configurable. | Not implemented |
@@ -303,7 +310,7 @@ Built-in form fields are listed in section 5.2. Six form types in the current UI
 |---|---|---|
 | FR-QR-001 | Active person QR shall encode person code and version with an HMAC-SHA256 signature. | Implemented |
 | FR-QR-002 | QR validation shall use timing-safe signature comparison and reject malformed, invalid, or stale version values. | Implemented |
-| FR-QR-003 | Active person's QR version shall advance when mobile changes. | Implemented |
+| FR-QR-003 | Shared identity QR version shall advance when its mobile changes, invalidating prior QR payloads across all linked registrations. | Implemented |
 | FR-QR-004 | Authorized user shall preview/download/print person QR where supported by screen. | Implemented |
 | FR-QR-005 | Public QR lookup shall use mobile, mask contact data, and return reduced multi-match identity/QR data rather than full profiles. | Implemented |
 | FR-QR-006 | Public lookup shall apply its configured request limiting/privacy key behavior. | Implemented |
@@ -326,12 +333,12 @@ Built-in form fields are listed in section 5.2. Six form types in the current UI
 | FR-OPS-001 | Dashboard shall show implemented summary metrics, occupancy/open visit data, activity, and category/location visualizations. | Implemented |
 | FR-OPS-002 | Admin shall explicitly confirm manual reconciliation actions and provide an audit-backed transaction. | Implemented |
 | FR-OPS-003 | Reports shall expose the six implemented report endpoints and render supported paginated/filterable views. | Implemented |
-| FR-OPS-004 | UI shall export supported report data to CSV where implemented. | Implemented |
-| FR-OPS-005 | System shall provide real XLSX export and complete report filter parity. | Not implemented |
+| FR-OPS-004 | UI shall export each supported report's filtered result set to XLSX without applying the current page limit; matching filters shall be used for tables, analytics, and exports. | Implemented |
+| FR-OPS-005 | System shall provide complete report filter parity with all prior source requirements. | Not implemented |
 | FR-AUD-001 | Admin/Super Admin shall browse paginated/filterable audit records and inspect a detail view. | Implemented |
 | FR-AUD-002 | Audit CSV export shall cover the currently displayed page. | Implemented |
-| FR-AUD-003 | Audit update/delete shall be unavailable through normal application behavior and rejected by database trigger. | Implemented |
-| FR-AUD-004 | Full matching-result export/print independent of displayed page shall be supported. | Not implemented |
+| FR-AUD-003 | Admin/Super Admin shall delete selected audit rows or all rows matching the submitted audit filters. | Implemented |
+| FR-AUD-004 | Full matching-result audit export/print independent of displayed page shall be supported. | Not implemented; audit CSV export covers the displayed page |
 | FR-NOT-001 | Authenticated user shall see their notifications and mark their own notifications read/all-read. | Implemented |
 | FR-NOT-002 | Notification read/write queries shall be scoped to authenticated user, not a user ID supplied by client. | Implemented |
 | FR-NOT-003 | Relevant registration/approval notifications shall be persisted in workflow transactions where implemented. | Implemented |
@@ -382,7 +389,7 @@ Persisted non-empty category form schema overrides the defaults below. These are
 
 Additionally, Staff and Parivar require address and emergency contact by default; Participant requires emergency contact. These rules may be overridden by a persisted category schema for that category.
 
-The Visitor screen also collects optional driver availability (`YES`/`NO`). When `YES` is selected, optional driver name and Indian 10-digit contact fields are shown. API validation rejects driver details when availability is not `YES`; these conditional fields are not part of the default schema field list above.
+The Visitor screen also collects optional driver availability (`YES`/`NO`). When `YES` is selected, optional driver name and contact fields are shown; a supplied driver number must be a valid Indian or international phone number. API validation rejects driver details when availability is not `YES`; these conditional fields are not part of the default schema field list above.
 
 ### 5.2 Registration payload/data lifecycle
 
@@ -407,7 +414,9 @@ The Visitor screen also collects optional driver availability (`YES`/`NO`). When
 | Location | Active/Inactive; type is Gate or Area; restricted is valid only for Area |
 | Visit | Open at check-in → Closed at check-out or authorized reconciliation; one current open visit prevents another check-in |
 | Blacklist | Open entry → Lifted/closed with note; duplicate open entry is rejected |
-| Audit row | Append-only; no update/delete transitions |
+| Person identity | One globally unique mobile and QR code; common profile and media data shared across category registrations |
+| Category registration | Per-category status, details, consent, expiry, assigned areas, and approval history; distinct registrations can share one identity |
+| Audit row | Admin/Super Admin can delete selected or filter-matching audit records; append-only protection is not active in the final schema |
 | Notification | Unread → Read, scoped to the owning user |
 
 ## 6. End-to-end scenarios
@@ -545,7 +554,7 @@ The API uses centralized error handling and does not intentionally silently conv
 | FR-SEC-003 | Private media shall not be served from a public static directory; routes shall verify person/file association and authorization. | Implemented |
 | FR-SEC-004 | Gate lookup shall mask mobile values in returned candidates and lookup log metadata. | Implemented |
 | FR-SEC-005 | Login/registration/approval/visit/admin operations shall retain audit information where implemented. | Implemented |
-| FR-SEC-006 | Audit rows shall be append-only and database-protected from update/delete. | Implemented |
+| FR-SEC-006 | Audit rows shall be append-only and database-protected from update/delete. | Not implemented in the current release: authorized administrators can delete audit rows, and migration `0012` removes the append-only trigger |
 | FR-SEC-007 | Temporary password API response shall disable caching. | Implemented |
 | FR-SEC-008 | Production must use stable, separate JWT/QR secrets, appropriate encryption secret, TLS database connection, exact UI origin, and configured trusted proxy hops/login limit. | Deployment configuration requirement |
 | FR-SEC-009 | Malware scanning, managed object storage, production retention automation, and online key rotation/migration shall be provided. | Not implemented |
@@ -598,7 +607,7 @@ The following shall not be inferred from schema structures, labels, or earlier m
 6. QR public lookup does not expose full person records and does not implement an account-enrollment OTP.
 7. A Gate visitor registration does not check the visitor in automatically.
 8. The included role matrix is not a custom role or permission matrix.
-9. CSV export does not imply XLSX generation or complete cross-page export.
+9. Report XLSX export uses the current report filters and is not limited to the displayed page; this does not imply full mockup filter parity. Audit CSV export remains limited to the displayed page.
 10. Passing mocked tests does not demonstrate hardware camera performance or production readiness.
 
 ## 13. Traceability to business outcomes

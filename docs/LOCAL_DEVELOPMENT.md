@@ -42,9 +42,9 @@ Apply migrations from `Maitribodh-API`. This npm command calls a local PowerShel
 npm run migrate:local
 ```
 
-Migration `0007_require_person_photo.sql` requires photos on new person registrations; existing photo-less records are retained so Security can capture a photo at first check-in. Photos must be JPG/PNG and no larger than 2 MB. Run migrations before restarting the API.
+The current registration API requires a photo for a new person registration; existing photo-less legacy records are not retroactively rejected by the database. Photos must be JPG/PNG and no larger than 2 MB. Migration `0018` moves the shared photo reference to `person_identity`; run all migrations before restarting the API.
 
-The current migration set also normalizes existing Indian primary person mobile numbers to E.164 and removes the legacy category overstay-cutoff and permission-level assignment fields. Visitor registration accepts valid international primary mobile numbers; other person categories require an Indian primary number. Review [MAMS_DATABASE_AND_API_REFERENCE.md](./MAMS_DATABASE_AND_API_REFERENCE.md) for the full migration history.
+The current migration set includes migrations `0001`–`0018`. The later migrations add multi-role accounts, allow administrator audit deletion, preserve operational history when users are deleted, and move shared person profile/QR data into `person_identity` while adding Area occupancy caps. Visitor registration accepts valid international primary mobile numbers; other person categories require an Indian primary number. The repository migration files describe intended schema evolution, not proof that this local database is current: check `public.schema_migrations` after running migrations. Review [MAMS_DATABASE_AND_API_REFERENCE.md](./MAMS_DATABASE_AND_API_REFERENCE.md) for the full migration history and final schema.
 
 Migrations are checksum-tracked and safe to rerun: already-applied migrations are skipped, and changed applied migrations cause an error. They create/update the `mams` schema and include the registration categories/master data.
 

@@ -1,10 +1,10 @@
 # MAMS Database, Schema, Tables, and API Reference
 
-Reference date: 2026-10-27.
+Repository source snapshot reviewed: 2026-11-18.
 
 ## 1. Scope and source of truth
 
-This document describes the database objects and API endpoints implemented in this repository. The table definitions below represent the final schema after migrations `0001` through `0010`, not just the initial migration.
+This document describes the database objects and API endpoints implemented in this repository. The table definitions below represent the final schema after migrations `0001` through `0018`, not just the initial migration. Migration files describe repository intent; confirm `public.schema_migrations` for any particular database.
 
 **Verification boundary:** this document was generated from source code and SQL migrations. It does not confirm that an AWS RDS instance exists, that migrations have run against a particular database, or that a deployed API is reachable. No database or AWS resources were created while preparing this reference.
 
@@ -122,7 +122,7 @@ The API does not automatically load an environment file in its server entry poin
 
 | Schema | Purpose |
 |---|---|
-| `mams` | Application tables, identity sequences, and append-only audit trigger/function |
+| `mams` | Application tables, identity sequences, and migration-created functions/triggers; audit deletion is permitted in the current release |
 | `public` | `schema_migrations`, created by the migration runner |
 
 Repositories generally reference application tables explicitly as `mams.<table>`. SQL migration files may set `search_path = mams`.
@@ -162,9 +162,20 @@ Do not manually edit an applied migration. Add a new numbered migration for futu
 | [0008_international_person_mobile.sql](../Maitribodh-API/db/migrations/0008_international_person_mobile.sql) | Expands person primary mobile to 16 characters, normalizes existing Indian values to `+91` E.164 form, and enforces an E.164 database check |
 | [0009_drop_overstay_cutoff.sql](../Maitribodh-API/db/migrations/0009_drop_overstay_cutoff.sql) | Removes the category `overstay_cutoff` column |
 | [0010_remove_permission_levels.sql](../Maitribodh-API/db/migrations/0010_remove_permission_levels.sql) | Removes permission-level lookup values and category/person columns and removes configured permission-level fields from saved schemas and drafts |
-| [0015_multiple_user_roles.sql](../Maitribodh-API/db/migrations/0015_multiple_user_roles.sql) | Backfills `app_user.roles` from each existing role, validates assignments, and synchronizes the representative role while preserving the one-Super-Admin constraint |
+| [0011_distinct_mobile_per_category.sql](../Maitribodh-API/db/migrations/0011_distinct_mobile_per_category.sql) | Adds a temporary uniqueness rule for mobile/category registrations; superseded by the shared-identity model in `0016` |
+| [0012_allow_audit_log_deletion.sql](../Maitribodh-API/db/migrations/0012_allow_audit_log_deletion.sql) | Removes the audit append-only trigger so administrators can delete audit rows |
+| [0013_international_phone_columns.sql](../Maitribodh-API/db/migrations/0013_international_phone_columns.sql) | Expands user and secondary/guardian phone columns for international numbers |
+| [0014_independent_user_lifecycle.sql](../Maitribodh-API/db/migrations/0014_independent_user_lifecycle.sql) | Detaches operational history from deleted users (`SET NULL`) and removes their notifications |
+| [0015_multiple_user_roles.sql](../Maitribodh-API/db/migrations/0015_multiple_user_roles.sql) | Adds and validates an assigned-role array; backfills existing users and maintains a representative legacy `role` |
+| [0016_person_identity_and_area_capacity.sql](../Maitribodh-API/db/migrations/0016_person_identity_and_area_capacity.sql) | Creates shared `person_identity` records keyed by unique mobile, links category registrations to identities, and adds Area `max_occupancy` |
+| [0017_remove_security_head.sql](../Maitribodh-API/db/migrations/0017_remove_security_head.sql) | Removes the obsolete `app_user.is_security_head` column |
+| [0018_normalize_person_identity_profile.sql](../Maitribodh-API/db/migrations/0018_normalize_person_identity_profile.sql) | Moves common profile, encrypted identity values, media metadata, and QR state from `person` to `person_identity`; creates the person-code sequence |
 
-**Final photo behavior:** existing records are not retroactively forced to have a photograph. New non-draft rows normally require a photo through `photo_required=true`. The registration API independently requires a valid photo.
+**Final photo behavior:** existing records are not retroactively forced to have a photograph. `person.photo_required` remains as registration metadata, but migration `0018` removes the old profile-completeness database constraint; the current registration API requires and validates a photo for a new registration.
+
+**Final identity model:** `person_identity` holds one shared profile, globally unique E.164 mobile and QR code. `person` now represents an individual category registration linked through `identity_id`; the person code and QR version belong to the shared identity, while category details, approval/status, expiry, consent, and area assignment belong to the registration. One identity can have multiple categories, but cannot have more than one `ACTIVE`, `PENDING`, or `DEACTIVATED` registration for a category. A mobile already linked to an identity is not available for a second identity.
+
+**Final audit behavior:** `audit_log` is no longer append-only. Administrators can delete audit records through the API; migration `0012` drops the database trigger that previously rejected row deletion.
 
 Migration files shown here are the repository's migration history, not proof that any particular database has applied them. Verify the target database's `public.schema_migrations` before relying on its schema.
 
@@ -179,14 +190,17 @@ Migration files shown here are the repository's migration history, not proof tha
 | `mams.category` | Person categories and configurable registration rules | `category_id` |
 | `mams.location` | Gates and areas | `location_id` |
 | `mams.bulk_upload` | Batch-import metadata and row processing results | `bulk_upload_id` |
-| `mams.person` | Registered people, drafts, access state, and document metadata | `person_id` |
+| `mams.person` | Category registrations, drafts, approval/status, access, and consent | `person_id` |
+| `mams.person_identity` | Shared profile/contact/media data and identity-level QR | `identity_id` |
 | `mams.person_location` | Person-to-location assignments | `(person_id, location_id)` |
 | `mams.approval_history` | Registration submission and approval decisions | `approval_id` |
 | `mams.blacklist` | Blacklist periods, reasons, and lifting details | `blacklist_id` |
 | `mams.visit` | Check-in/check-out records | `visit_id` |
 | `mams.notification` | Per-user notifications and read state | `notification_id` |
-| `mams.audit_log` | Append-only application activity history | `audit_id` |
+| `mams.audit_log` | Application activity history; administrator deletion is supported | `audit_id` |
 | `public.schema_migrations` | Applied migration filenames, checksums, and timestamps | `migration_name` |
+
+The final application schema has 13 `mams` tables; the initial migration created 12, and migration `0016` added `person_identity`.
 
 ### 4.2 Relationship overview
 
@@ -195,8 +209,8 @@ app_user -------< person (registered_by / approved_by / updated_by / consent_cap
 app_user -------< visit / approval_history / blacklist / notification / audit_log
 app_user -------< bulk_upload
 category -------< person
+person_identity -< person
 category -------< lookup_value
-category -------< category (broad_category_id)
 lookup_value ---< lookup_value (parent_id)
 lookup_value ---< category / location / person / blacklist
 bulk_upload ----< person
@@ -228,12 +242,11 @@ Purpose: administrative and operational accounts, role permissions, password sta
 | `user_id` | bigint | No | PK, identity |
 | `first_name` | varchar(100) | No | First name |
 | `last_name` | varchar(100) | No | Last name |
-| `mobile` | varchar(10) | No | Unique operator mobile |
+| `mobile` | varchar(16) | No | Unique operator mobile; valid international values are supported |
 | `email` | varchar(150) | Yes | Optional email |
 | `username` | varchar(50) | No | Case-insensitively unique username |
 | `role` | varchar(20) | No | Highest-precedence assigned role; maintained for audit and legacy compatibility |
 | `roles` | varchar(20)[] | No | Non-empty built-in role list, backfilled for existing users; API permissions combine all roles |
-| `is_security_head` | boolean | No | `false`; security-head flag |
 | `can_bulk_upload` | boolean | No | `false`; bulk-upload permission flag |
 | `status` | varchar(10) | No | `ACTIVE`; `ACTIVE` / `INACTIVE` |
 | `password_hash` | varchar(100) | Yes | Password hash, never plaintext |
@@ -251,7 +264,7 @@ Purpose: administrative and operational accounts, role permissions, password sta
 
 Constraints and indexes:
 
-- Roles: `SUPER_ADMIN`, `ADMIN`, `APPROVER`, `REG_OFFICER`, `SECURITY_GUARD`, `VIEWER`.
+- Roles: `SUPER_ADMIN`, `ADMIN`, `APPROVER`, `REG_OFFICER`, `SECURITY_GUARD`, `VIEWER`; `roles` contains one or more assignments and `role` is the first role in precedence order.
 - Unique mobile; unique `lower(username)`; unique `lower(email)` where email is not null.
 - Partial unique index allows at most one `SUPER_ADMIN`.
 - Temporary-password state requires either a normal account with both temporary timestamps null, or a forced-change account with a password hash and expiry.
@@ -275,7 +288,7 @@ Purpose: shared master-data values, including parent/child classifications.
 | `created_at` | timestamptz | No | `now()` |
 | `updated_at` | timestamptz | No | `now()` |
 
-Allowed types: `DEPARTMENT`, `JOB_ROLE`, `SUBCATEGORY`, `PROGRAM_BATCH`, `ID_PROOF_TYPE`, `BLACKLIST_REASON`.
+Allowed types: `DEPARTMENT`, `JOB_ROLE`, `SUBCATEGORY`, `PROGRAM_BATCH`, `ID_PROOF_TYPE`, `BLACKLIST_REASON`. `PERMISSION_LEVEL` was removed in migration `0010`.
 
 Uniqueness: `(lookup_type, COALESCE(parent_id, 0), COALESCE(category_id, 0), lower(name))`.
 
@@ -319,6 +332,7 @@ Purpose: gates and areas used for access assignment and visits.
 | `location_type` | varchar(10) | No | `GATE` / `AREA` |
 | `is_restricted` | boolean | No | `false` |
 | `department_id` | integer | Yes | FK -> `lookup_value.lookup_id` |
+| `max_occupancy` | integer | Yes | Positive cap for an Area; null means uncapped; added by migration `0016` |
 | `status` | varchar(10) | No | `ACTIVE`; `ACTIVE` / `INACTIVE` |
 | `created_at` | timestamptz | No | `now()` |
 | `updated_at` | timestamptz | No | `now()` |
@@ -341,85 +355,77 @@ Purpose: storage for batch-upload processing metadata. The table exists, but no 
 | `success_rows` | integer | No | `0` |
 | `error_rows` | integer | No | `0` |
 | `errors` | jsonb | No | `[]`; processing errors |
-| `uploaded_by` | bigint | No | FK -> `app_user.user_id` |
+| `uploaded_by` | bigint | Yes | FK -> `app_user.user_id`; detached on user deletion |
 | `uploaded_at` | timestamptz | No | `now()` |
 | `completed_at` | timestamptz | Yes | Completion timestamp |
 
 ### 5.6 `mams.person`
 
-Purpose: registered people, personal information, category-specific details, drafts, consent, access expiry, and QR state.
+Purpose: one person's category registration and its workflow, consent, access assignment, and draft data. Common identity/profile fields and QR state are in `mams.person_identity`.
 
 | Column | Type | Nullable | Default / meaning |
 |---|---|---|---|
-| `person_id` | bigint | No | PK, identity |
-| `person_code` | varchar(12) | Yes | Generated stored unique code: `MB-` plus ID left-padded to six characters; no explicit `NOT NULL`, but derived from non-null `person_id` |
+| `person_id` | bigint | No | PK, identity; registration identifier |
+| `identity_id` | bigint | Yes | FK -> `person_identity.identity_id`; shared profile/QR owner |
 | `category_id` | smallint | No | FK -> `category.category_id` |
-| `subcategory_id` | integer | Yes | FK -> `lookup_value.lookup_id` |
-| `first_name` | varchar(100) | Yes | Required by completion constraint outside drafts |
-| `last_name` | varchar(100) | Yes | Required by completion constraint outside drafts |
-| `mobile` | varchar(16) | Yes | Primary contact in E.164 form; indexed, not unique |
-| `alternate_mobile` | varchar(10) | Yes | Alternate Indian contact number |
-| `gender` | varchar(6) | Yes | `MALE` / `FEMALE` / `OTHER` |
-| `date_of_birth` | date | Yes | Birth date |
-| `resident_status` | varchar(12) | No | `RESIDENT`; `RESIDENT` / `NON_RESIDENT` |
-| `passport_number_enc` | text | Yes | Encrypted passport data |
-| `passport_last4` | varchar(4) | Yes | Masking suffix |
-| `address` | varchar(500) | Yes | Address |
-| `email` | varchar(150) | Yes | Person email |
-| `photo_key` | varchar(300) | Yes | Private stored photo reference |
-| `id_proof_type_id` | integer | Yes | FK -> `lookup_value.lookup_id` |
-| `id_proof_number_enc` | text | Yes | Encrypted ID-proof data |
-| `id_proof_last4` | varchar(4) | Yes | Masking suffix |
-| `emergency_contact_name` | varchar(100) | Yes | Emergency contact |
-| `emergency_contact_mobile` | varchar(10) | Yes | Emergency Indian mobile |
-| `category_details` | jsonb | No | `{}`; dynamic form values |
+| `subcategory_id` | integer | Yes | Legacy FK -> `lookup_value.lookup_id` |
+| `category_details` | jsonb | No | `{}`; fields/settings for this category registration |
 | `accompanying` | jsonb | No | `[]`; accompanying-person metadata |
-| `accompanying_count` | smallint | No | `0` |
-| `documents` | jsonb | No | `[]`; private file key/name/type metadata |
+| `accompanying_count` | smallint | No | `0`; used in gate occupancy |
 | `remarks` | varchar(500) | Yes | Registration notes |
-| `status` | varchar(12) | No | `DRAFT`; person status enum below |
+| `status` | varchar(12) | No | `DRAFT`; `DRAFT` / `PENDING` / `ACTIVE` / `REJECTED` / `DEACTIVATED` |
 | `source` | varchar(12) | No | `MANUAL`; `MANUAL` / `BULK_UPLOAD` / `WALK_IN` |
 | `bulk_upload_id` | bigint | Yes | FK -> `bulk_upload.bulk_upload_id` |
-| `qr_version` | integer | No | `0`; QR invalidation/version state |
 | `deactivated_reason` | varchar(300) | Yes | Deactivation explanation |
 | `consent_at` | timestamptz | Yes | Registration consent timestamp |
 | `consent_notice_version` | varchar(50) | Yes | Notice version |
-| `consent_captured_by` | bigint | Yes | FK -> `app_user.user_id` |
-| `guardian_name` | varchar(100) | Yes | Guardian details |
-| `guardian_mobile` | varchar(10) | Yes | Guardian mobile |
-| `guardian_consent_at` | timestamptz | Yes | Guardian consent timestamp |
-| `guardian_consent_notice_version` | varchar(50) | Yes | Guardian notice version |
-| `registered_by` | bigint | No | FK -> `app_user.user_id` |
-| `approved_by` | bigint | Yes | FK -> `app_user.user_id` |
+| `consent_captured_by` | bigint | Yes | FK -> `app_user.user_id`, detached on user deletion |
+| `registered_by` | bigint | Yes | FK -> `app_user.user_id`, nullable after migration `0014` |
+| `approved_by` | bigint | Yes | FK -> `app_user.user_id`, detached on user deletion |
 | `approved_at` | timestamptz | Yes | Approval timestamp |
 | `created_at` | timestamptz | No | `now()` |
-| `updated_by` | bigint | Yes | FK -> `app_user.user_id` |
+| `updated_by` | bigint | Yes | FK -> `app_user.user_id`, detached on user deletion |
 | `updated_at` | timestamptz | No | `now()` |
-| `expires_on` | date | Yes | Access expiry |
+| `expires_on` | date | Yes | Registration access expiry |
 | `draft_data` | jsonb | Yes | Incomplete registration payload |
-| `photo_required` | boolean | No | `true` for newly inserted rows; existing rows initially set to `false` |
+| `photo_required` | boolean | No | `true` for new rows; existing rows were preserved with `false` |
 
-Statuses: `DRAFT`, `PENDING`, `ACTIVE`, `REJECTED`, `DEACTIVATED`.
-
-Important constraints:
-
-- Non-draft rows require non-null first name, last name, mobile, and gender.
-- Non-draft rows require `photo_key` unless `photo_required=false`.
-- Resident records cannot store encrypted passport data; non-resident non-drafts require it.
-- Registration consent fields must be all null or all populated.
-- Non-draft, non-bulk-upload records require registration consent.
-- `mobile` is constrained to E.164 format by migration `0008`; Visitor registration may use a valid international primary number, while non-Visitor categories require an Indian number.
-- Alternate and emergency mobile validation remains limited to the supported Indian 10-digit format.
-- Guardian consent fields must be all null or all populated.
-- Duplicate person mobiles are allowed; operator account mobiles are not.
-
-Indexes: unique generated person code; `mobile`; `(status, category_id)`; `lower(first_name || ' ' || last_name)`; `created_at`.
-
-The photo/document bytes are not stored in this table. Registration stores files on private disk and keeps references in `photo_key` and `documents`.
+Statuses: `DRAFT`, `PENDING`, `ACTIVE`, `REJECTED`, `DEACTIVATED`. Active, pending, and deactivated registrations are unique per shared identity/category; drafts are outside the partial unique index. `person_code`, profile/contact data, encrypted passport/ID-proof data, documents/photo references, and `qr_version` are not columns of the final `person` table; they belong to `person_identity`. Each registration owns its own area assignment, approval history, visit, and blacklist associations. Deleting a registration removes its approval history/area assignments by FK cascade; the application also deletes its visits and blacklist rows. If no registrations remain, the shared identity and files are removed.
 
 Related APIs: persons, registration, approvals, QR, gate, visits, blacklist, reports, dashboard.
 
-### 5.7 `mams.person_location`
+### 5.7 `mams.person_identity`
+
+Purpose: shared person profile, globally unique mobile/QR identity, and common private-media/identity data used by one or more category registrations.
+
+| Column | Type | Nullable | Default / meaning |
+|---|---|---|---|
+| `identity_id` | bigint | No | PK, identity |
+| `mobile` | varchar(16) | No | Unique normalized E.164 primary mobile; identity lookup key |
+| `qr_code` | varchar(12) | Yes | Unique `MB-...` identity code |
+| `qr_version` | integer | No | `1`; version used to invalidate old signed QR values |
+| `first_name`, `last_name` | varchar(100) | Yes | Shared names; both null or both present |
+| `alternate_mobile` | varchar(16) | Yes | Shared alternate number |
+| `gender` | varchar(6) | Yes | `MALE` / `FEMALE` / `OTHER` |
+| `date_of_birth` | date | Yes | Shared date of birth |
+| `resident_status` | varchar(12) | No | `RESIDENT`; `RESIDENT` / `NON_RESIDENT` |
+| `passport_number_enc`, `id_proof_number_enc` | text | Yes | AES-256-GCM encrypted values |
+| `passport_last4`, `id_proof_last4` | varchar(4) | Yes | Display masking suffixes |
+| `address` | varchar(500) | Yes | Shared address |
+| `email` | varchar(150) | Yes | Shared email; nullable in database, required by current registration API |
+| `photo_key` | varchar(300) | Yes | Private shared photo file reference |
+| `id_proof_type_id` | integer | Yes | FK -> `lookup_value.lookup_id` |
+| `emergency_contact_name` | varchar(100) | Yes | Shared emergency contact |
+| `emergency_contact_mobile` | varchar(16) | Yes | Shared emergency phone |
+| `documents` | jsonb | No | `[]`; shared private-file metadata |
+| `guardian_name`, `guardian_mobile` | varchar(100), varchar(16) | Yes | Guardian profile fields; database support exists, but current registration UI/API does not collect them |
+| `guardian_consent_at` | timestamptz | Yes | Guardian-consent timestamp; constrained with the guardian fields |
+| `guardian_consent_notice_version` | varchar(50) | Yes | Guardian-consent notice version |
+| `created_at` | timestamptz | No | `now()` |
+
+`person_code_seq` generates new identity QR codes. Primary mobile is globally unique across person identities; a new registration for the same mobile reuses the identity for a different category, while duplicate registrations within that identity/category are rejected. Profile edits and files are shared by all linked registrations.
+
+### 5.8 `mams.person_location`
 
 Purpose: many-to-many person access assignments.
 
@@ -432,7 +438,7 @@ Purpose: many-to-many person access assignments.
 
 A person cannot have the same location assigned twice. Related APIs: registration and person access updates.
 
-### 5.8 `mams.approval_history`
+### 5.9 `mams.approval_history`
 
 Purpose: chronological submission and decision history.
 
@@ -442,14 +448,14 @@ Purpose: chronological submission and decision history.
 | `person_id` | bigint | No | FK -> `person.person_id`, `ON DELETE CASCADE` |
 | `action` | varchar(12) | No | `SUBMITTED` / `APPROVED` / `REJECTED` / `RESUBMITTED` |
 | `reason` | varchar(500) | Yes | Required for rejection by constraint |
-| `acted_by` | bigint | No | FK -> `app_user.user_id` |
+| `acted_by` | bigint | Yes | FK -> `app_user.user_id`; detached on user deletion |
 | `acted_at` | timestamptz | No | `now()` |
 
 Constraint: rejected entries need a reason of at least 10 characters. Index: `person_id`.
 
 Related APIs: approvals, resubmissions, person activity, approval reports.
 
-### 5.9 `mams.blacklist`
+### 5.10 `mams.blacklist`
 
 Purpose: blacklist periods and lifting history.
 
@@ -461,7 +467,7 @@ Purpose: blacklist periods and lifting history.
 | `remarks` | varchar(500) | No | Reason details |
 | `start_date` | date | No | `CURRENT_DATE` |
 | `end_date` | date | Yes | Optional end date |
-| `added_by` | bigint | No | FK -> `app_user.user_id` |
+| `added_by` | bigint | Yes | FK -> `app_user.user_id`; detached on user deletion |
 | `added_at` | timestamptz | No | `now()` |
 | `lifted_by` | bigint | Yes | FK -> `app_user.user_id` |
 | `lifted_at` | timestamptz | Yes | Null while unlifted |
@@ -471,7 +477,7 @@ Constraints: end date cannot precede start date. Partial unique index on `person
 
 Related APIs: blacklist administration, blacklist reports, gate/visit eligibility.
 
-### 5.10 `mams.visit`
+### 5.11 `mams.visit`
 
 Purpose: person entry, exit, and administrative reconciliation.
 
@@ -483,7 +489,7 @@ Purpose: person entry, exit, and administrative reconciliation.
 | `checkin_at` | timestamptz | No | `now()` |
 | `checkin_gate_id` | smallint | No | FK -> `location.location_id` |
 | `checkin_location_id` | smallint | No | FK -> `location.location_id` |
-| `checkin_by` | bigint | No | FK -> `app_user.user_id` |
+| `checkin_by` | bigint | Yes | FK -> `app_user.user_id`; detached on user deletion |
 | `checkin_device` | varchar(100) | Yes | Entry device metadata |
 | `accompanying_count` | smallint | No | `0` |
 | `accompanying_names` | jsonb | No | `[]` |
@@ -507,7 +513,7 @@ Other indexes: `checkin_at`, `checkout_at`.
 
 Related APIs: visits, gate lookup, visit reports, occupancy, dashboard.
 
-### 5.11 `mams.notification`
+### 5.12 `mams.notification`
 
 Purpose: notifications associated with an operator account.
 
@@ -525,9 +531,9 @@ Purpose: notifications associated with an operator account.
 
 Index: `(user_id, is_read, created_at)`. APIs limit notification access and read updates to the authenticated user.
 
-### 5.12 `mams.audit_log`
+### 5.13 `mams.audit_log`
 
-Purpose: append-only record of application activity.
+Purpose: application activity history. Authorized administrators may delete records.
 
 | Column | Type | Nullable | Default / meaning |
 |---|---|---|---|
@@ -546,11 +552,9 @@ Purpose: append-only record of application activity.
 
 Indexes: `occurred_at`; `(entity_type, entity_id)`; `(user_id, occurred_at)`.
 
-Migration `0004` creates `mams.prevent_audit_changes()` and the row-level `audit_append_only` trigger. It rejects `UPDATE` and `DELETE`. This trigger is not protection against privileged administrators disabling triggers or using `TRUNCATE`; production database privileges must also be restricted.
+Migration `0004` originally created an append-only trigger; migration `0012` drops it. The API exposes administrator-only deletion for selected audit IDs or all rows matching submitted filters. Audit record deletion is permanent.
 
-No audit creation, modification, or deletion endpoint is exposed directly.
-
-### 5.13 `public.schema_migrations`
+### 5.14 `public.schema_migrations`
 
 Purpose: migration execution tracking; created by the JavaScript runner rather than an SQL migration file.
 
@@ -603,7 +607,7 @@ These are insertion defaults; existing conflicting category rows are not compreh
 | `PARIVAR` | `subcategory_id` | Address and emergency contact required; optional membership date, seva area, referral |
 | `GENERIC` | None in default schema | Optional `details` |
 
-Custom category schemas may change these requirements. Always fetch registration options before constructing a form. The Visitor UI also collects optional `driver_available` (`YES`/`NO`) and, only when `YES`, optional `driver_name` and `driver_mobile`. Driver mobile is validated as an Indian 10-digit number; these conditional fields are not part of the default schema list.
+Custom category schemas may change these requirements. Always fetch registration options before constructing a form. The Visitor UI also collects optional `driver_available` (`YES`/`NO`) and, only when `YES`, optional `driver_name` and `driver_mobile`. Driver mobile accepts a valid Indian or international phone number; these conditional fields are not part of the default schema list.
 
 ## 7. API conventions and permissions
 
@@ -726,12 +730,13 @@ Source: [user routes](../Maitribodh-API/src/modules/users/users.routes.js).
 | Method | Path | Access | Input / filters | Success |
 |---|---|---|---|---|
 | GET | `/api/v1/users` | ADMIN | `query`, `role`, `status`, pagination | `200`, user list |
-| POST | `/api/v1/users` | ADMIN | Required: `firstName`, `lastName`, `mobile`, `username`, `roles` (non-empty array); optional: `email`, `isSecurityHead`, `canBulkUpload` | `201`, created user |
+| POST | `/api/v1/users` | ADMIN | Required: `firstName`, `lastName`, `mobile`, `username`, and exactly one of `role` or `roles`; optional: `email`, `canBulkUpload` | `201`, created user |
 | GET | `/api/v1/users/:userId` | ADMIN | User ID | `200`, user detail |
-| PATCH | `/api/v1/users/:userId` | ADMIN | Profile fields, `roles`, `isSecurityHead`, `canBulkUpload`, `activate: true` or `deactivate: true` | `200`, updated user |
+| PATCH | `/api/v1/users/:userId` | ADMIN | Profile fields, `role` or `roles`, `canBulkUpload`, `activate: true` or `deactivate: true` | `200`, updated user |
 | POST | `/api/v1/users/:userId/password-reset` | ADMIN | User ID; no required body | `201`, `temporaryPassword`, `expiresAt`; no-store headers |
+| DELETE | `/api/v1/users/:userId` | ADMIN | User ID; self-delete prohibited; only Super Admin may delete Admin/Super Admin accounts | `204`; user removed and actor references detached from operational history |
 
-Create and PATCH accept either the legacy `role` string or the new `roles` array, never both. Arrays must contain one or more distinct built-in roles; for example, `{"roles":["APPROVER","SECURITY_GUARD"]}` grants approvals and Security Gate access. The role filter matches any assignment, not just the representative role. User responses include both `role` and `roles`. Only a Super Admin may assign `SUPER_ADMIN` or change the roles of the existing Super Admin; the existing single-Super-Admin limit is retained. Changing assignments increments the token version and requires the affected user to sign in again. Newly created accounts still require credential issuance before login.
+Create and PATCH accept either the legacy `role` string or the `roles` array, never both. Arrays must contain one or more distinct built-in roles; for example, `{"roles":["APPROVER","SECURITY_GUARD"]}` grants approvals and Security Gate access. The role filter matches any assignment, not just the representative role. User responses include both `role` and `roles`. Only a Super Admin may assign `SUPER_ADMIN`, change the roles of an existing Super Admin, or delete an Admin/Super Admin account; the single-Super-Admin limit is retained. Changing assignments increments the token version and requires the affected user to sign in again. Newly created accounts still require credential issuance before login. Deleting a user removes their notifications, retains operational/audit records with nullable actor references, and records the deletion audit event.
 
 ### 8.4 Categories
 
@@ -743,6 +748,7 @@ Source: [category routes](../Maitribodh-API/src/modules/categories/categories.ro
 | POST | `/api/v1/categories` | ADMIN | Required: `name`; optional configuration fields below | `201`, category |
 | GET | `/api/v1/categories/:categoryId` | ADMIN | Category ID | `200`, category |
 | PATCH | `/api/v1/categories/:categoryId` | ADMIN | At least one supported field | `200`, updated category |
+| DELETE | `/api/v1/categories/:categoryId` | ADMIN | Category ID | `204`; only unreferenced categories can be deleted |
 
 Create fields: `name`, `icon`, `description`, `formType`, and `approvalRequired`.
 
@@ -757,6 +763,7 @@ Source: [lookup routes](../Maitribodh-API/src/modules/lookups/lookups.routes.js)
 | GET | `/api/v1/lookups/:lookupType` | AUTHENTICATED | `parentId`, `query`, `includeInactive`, optional pagination | `200`, items or paginated result |
 | POST | `/api/v1/lookups/:lookupType` | ADMIN | Required: `name`; optional: `parentId`, `categoryId`, `extra` | `201`, lookup value |
 | PATCH | `/api/v1/lookups/:lookupType/:lookupId` | ADMIN | At least one of `name`, `extra`, `status` | `200`, updated lookup |
+| DELETE | `/api/v1/lookups/:lookupType/:lookupId` | ADMIN | Lookup type and ID | `204`; deletion is rejected while referenced |
 
 Lookup types are normalized to uppercase. `includeInactive=true` is administrator-only. The list route does not implement a `categoryId` filter; category-scoped lookup metadata is available through registration options.
 
@@ -767,9 +774,9 @@ Source: [location routes](../Maitribodh-API/src/modules/locations/locations.rout
 | Method | Path | Access | Input / filters | Success |
 |---|---|---|---|---|
 | GET | `/api/v1/locations` | ADMIN | `query`, `locationType`, pagination | `200`, active location list |
-| POST | `/api/v1/locations` | ADMIN | Required: `name`, `locationType`; optional: `isRestricted`, `departmentId` | `201`, location |
+| POST | `/api/v1/locations` | ADMIN | Required: `name`, `locationType`; optional: `isRestricted`, `departmentId`, positive `maxOccupancy` for Areas | `201`, location |
 | GET | `/api/v1/locations/:locationId` | ADMIN | Location ID | `200`, location |
-| PATCH | `/api/v1/locations/:locationId` | ADMIN | At least one of `name`, `locationType`, `isRestricted`, `departmentId`, `status` | `200`, updated location |
+| PATCH | `/api/v1/locations/:locationId` | ADMIN | At least one of `name`, `locationType`, `isRestricted`, `departmentId`, `maxOccupancy`, `status` | `200`, updated location |
 
 The list endpoint returns active locations; it does not expose a status filter for inactive locations.
 
@@ -781,9 +788,12 @@ Sources: [person routes](../Maitribodh-API/src/modules/persons/persons.routes.js
 |---|---|---|---|---|
 | GET | `/api/v1/persons` | MANAGEMENT | `q`, `categoryId`, `status`, pagination | `200`, search results |
 | GET | `/api/v1/persons/registration/options` | REGISTRATION | None | `200`, `categories`, `lookups`, `locations`; effective form schema per category |
+| GET | `/api/v1/persons/registration/check-mobile` | REGISTRATION | `mobile`, `categoryId`, optional `personId` | `200`, category-specific duplicate check |
 | GET | `/api/v1/persons/drafts` | REGISTRATION | None | `200`, `{ "items": [...] }` for current user |
 | POST | `/api/v1/persons/drafts` | REGISTRATION | `categoryId`, optional `draftId`, incomplete registration fields | `201`, saved draft |
 | POST | `/api/v1/persons` | REGISTRATION | Multipart `metadata`, required `photo`, optional `documents` | `201`, `person_id`, `person_code`, `status`, `qr_version` |
+| GET | `/api/v1/persons/:personId/category-assignments` | ADMIN | Person registration ID | `200`, shared profile and linked categories |
+| POST | `/api/v1/persons/:personId/category-assignments` | ADMIN | `registrations` array (1–50); category details, areas, accompanying count, and consent per registration | `201`, created category registrations |
 | GET | `/api/v1/persons/:personId` | MANAGEMENT | Person ID | `200`, person detail with category and location IDs |
 | GET | `/api/v1/persons/:personId/activity` | MANAGEMENT | Person ID | `200`, `{ "items": [...] }` |
 | PATCH | `/api/v1/persons/:personId` | MANAGEMENT | Profile fields described below | `200`, updated profile result |
@@ -794,6 +804,9 @@ Sources: [person routes](../Maitribodh-API/src/modules/persons/persons.routes.js
 | POST | `/api/v1/persons/:personId/files` | MANAGEMENT | Multipart `documents` | `200`, updated document result |
 | GET | `/api/v1/persons/:personId/qr` | REGISTRATION | Person ID | `200`, PNG; `X-Person-Code`, `X-QR-Version`, no-store headers |
 | POST | `/api/v1/persons/:personId/resubmissions` | MANAGEMENT | Person ID; no required body | `200`, resubmitted person |
+| DELETE | `/api/v1/persons/:personId` | MANAGEMENT | Person registration ID; no reason required | `204`; permanently deletes that registration, visits, and blacklist rows |
+
+Category assignments use one shared identity/profile and QR. Each added category receives its own category fields, status/approval history, consent, expiry, and area assignment. If deleting a registration leaves no linked registrations, its shared profile and files are deleted as well.
 
 Search status values: `PENDING`, `ACTIVE`, `REJECTED`, `DEACTIVATED`, `BLACKLISTED`; `BLACKLISTED` reflects a current, unlifted blacklist entry within its date range and takes precedence over the registration status. Drafts are accessed separately.
 
@@ -803,14 +816,14 @@ Registration `metadata` is a JSON string containing:
 |---|---|
 | `categoryId` | Required positive integer |
 | `firstName`, `lastName` | Required, 1-100 characters; Unicode letters/marks, spaces, and hyphens |
-| `mobile` | Required valid phone number. Visitor registrations may use a valid international number; other form types require a valid Indian number. Persisted primary values use E.164 form. |
+| `mobile` | Required valid phone number. Visitor registrations may use a valid international number; other form types require a valid Indian number. Persisted primary values use E.164 form and identify the shared profile. |
 | `gender` | Required: `MALE`, `FEMALE`, `OTHER` |
 | `consent` | Required literal `true` |
 | `residentStatus` | `RESIDENT` (default) or `NON_RESIDENT` |
 | `passportNumber` | Non-residents require 6-9 alphanumeric characters |
-| `alternateMobile`, `emergencyMobile` | Indian 10-digit mobile beginning with 6-9, or empty string |
+| `alternateMobile`, `emergencyMobile` | Valid Indian or international phone number, normalized to E.164, or empty string |
 | `dateOfBirth` | ISO date or empty string; future dates rejected |
-| `email` | Valid email up to 150 characters or empty string |
+| `email` | Required valid email up to 150 characters |
 | `address`, `remarks` | Up to 500 characters |
 | `emergencyName` | Up to 100 characters |
 | `idProofTypeId` | Positive integer or null |
@@ -823,11 +836,12 @@ Registration `metadata` is a JSON string containing:
 Further registration behavior:
 
 - Approval-required categories produce `PENDING`; others produce `ACTIVE`.
+- The primary mobile identifies/reuses a shared person identity. One identity can register in additional categories, but cannot repeat a current registration in the same category.
 - Category rules, lookup type/status, job-role department membership, and location eligibility are validated.
 - Participant registration optionally stores `categoryDetails.future_checkin_access` as `YES` or `NO`. The checkbox is unchecked by default and is not required; missing values, including older registrations, do not grant future access. The registration review shows the chosen permission.
 - Photo: JPG/PNG, at most 2 MiB; processed to JPEG with maximum dimensions 600 x 600 without enlargement.
 - Documents: PDF/JPG/PNG, at most 5 MiB each; at most 12 documents. Document images are converted to JPEG.
-- Files are stored under `UPLOAD_DIRECTORY`, not S3.
+- Common profile, encrypted identity values, photo, and document metadata are stored against the shared `person_identity`; the category record refers to that identity. Files are stored under `UPLOAD_DIRECTORY`, not S3.
 - Person detail removes encrypted passport/ID values and draft payload from its response.
 - Draft payloads blank passport/ID numbers; photo/document bytes are not saved in drafts. Draft listing returns only the current user's drafts updated during the preceding seven days. The UI clears consent on resume and requires fresh consent at submission.
 - Profile PATCH requires `firstName`, `lastName`, and `mobile`; it is not a fully optional partial patch. Optional supported fields are `alternateMobile`, `email`, `address`, `emergencyName`, `emergencyMobile`; omitted optional fields receive validation defaults.
@@ -873,11 +887,13 @@ Source: [visit routes](../Maitribodh-API/src/modules/visits/visits.routes.js).
 
 | Method | Path | Access | Input | Success |
 |---|---|---|---|---|
-| POST | `/api/v1/visits` | VISIT | `personId`, `checkinGateId`, `checkinLocationId`; optional `device` | `201`, visit |
+| POST | `/api/v1/visits` | VISIT | `personId`, `checkinGateId`, `checkinLocationId`; optional `categoryId`, `accompanyingCount`, `eventAcknowledged`, `device` | `201`, visit |
 | POST | `/api/v1/visits/:visitId/check-outs` | VISIT | `checkoutGateId`, `checkoutLocationId`; optional `device` | `200`, closed visit |
 | POST | `/api/v1/visits/:visitId/reconciliation` | ADMIN | Required `note` (1-500 chars) | `200`, administratively reconciled visit |
 
 IDs in visit JSON bodies must be positive integer numbers. Visit workflows enforce person eligibility and open/closed state. There is no standalone GET visits endpoint; use reports and dashboard views.
+
+Check-in enforces an Area `max_occupancy` cap against its locked current open occupancy plus the incoming person and accompanying count; over-cap requests return `409 AREA_CAPACITY_REACHED`.
 
 Check-in independently enforces the participant event rule inside its transaction; it returns HTTP `409` with `EVENT_ACCESS_EXPIRED` when future access was not granted. For permitted post-event entry, the gate displays "EVENT COMPLETED - CONFIRM CHECK-IN" and requires the guard to check "I acknowledge that the event has ended and confirm this participant may check in" in addition to photo verification and any restricted-area acknowledgement. This checkbox resets on every person selection. The request must include boolean `eventAcknowledged: true`; missing or false acknowledgement returns HTTP `409` with `EVENT_ACKNOWLEDGEMENT_REQUIRED`. Acknowledgement cannot override denied future access. Permitted post-event entries return `eventWarning: true` and record `event_warning: true` and `event_acknowledged: true` in the check-in audit payload. No re-registration or QR regeneration is needed for permitted future entry.
 
@@ -931,6 +947,8 @@ Source: [activity routes](../Maitribodh-API/src/modules/activity/activity.routes
 | GET | `/api/v1/notifications` | AUTHENTICATED | None | `200`, `{ "items": [...], "unreadCount": n }`; latest 100 notifications |
 | POST | `/api/v1/notifications/read` | AUTHENTICATED | No required body | `200`, `{ "unreadCount": 0 }`; marks all current-user unread notifications read |
 | GET | `/api/v1/audit` | ADMIN | `query`, `userId`, `action`, `personId`, pagination | `200`, paginated activity plus `actions` and `users` filter options |
+| DELETE | `/api/v1/audit` | ADMIN | `auditIds` for selected records, or `allMatching` with audit filters | `200`, deleted count |
+| DELETE | `/api/v1/audit/:auditId` | ADMIN | Audit ID | `200`, deleted count |
 
 Notification operations do not accept another user's ID. Audit search includes module/action/entity identifiers, actor username, and related person name/mobile.
 
