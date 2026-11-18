@@ -177,6 +177,13 @@ export function calculateTicks(maxValue) {
   return { yMax, yTicks };
 }
 
+function percentageOf(count, total) {
+  const denominator = Number(total) || 0;
+  return denominator > 0
+    ? Math.min(100, Math.max(0, Math.round(((Number(count) || 0) / denominator) * 100)))
+    : 0;
+}
+
 export function formatDelta(current, previous, { unit = '%', label = 'vs previous period' } = {}) {
   const curr = Number(current) || 0;
   const prev = Number(previous) || 0;
@@ -184,7 +191,7 @@ export function formatDelta(current, previous, { unit = '%', label = 'vs previou
     if (curr === 0) return `0${unit} ${label}`;
     return `+100${unit} ${label}`;
   }
-  const pct = Math.round(((curr - prev) / prev) * 100);
+  const pct = Math.min(100, Math.max(-100, Math.round(((curr - prev) / prev) * 100)));
   const sign = pct >= 0 ? '+' : '';
   return `${sign}${pct}${unit} ${label}`;
 }
@@ -221,16 +228,12 @@ export function buildVisitsAnalytics({ summary = {}, daily = [], byCategory = []
     ? byCategory.map((c) => ({
       label: c.category_name,
       count: Number(c.count) || 0,
-      percentage: Math.round(((Number(c.count) || 0) / total) * 100),
+      percentage: percentageOf(c.count, total),
       color: colors.get(c.category_name),
     }))
     : [{ label: 'No visits', count: 0, percentage: 100, color: '#E5E7EB' }];
 
-  const durationDelta = (Number(summary.avg_duration_min) || 0) - (Number(summary.prev_avg_duration_min) || 0);
-  const durationSign = durationDelta >= 0 ? '+' : '';
-  const openOver24hStr = (summary.open_over_24h || 0) > 0
-    ? `${summary.open_over_24h} open more than 24 h`
-    : (summary.inside_now > 0 ? 'All within 24 h' : 'None inside');
+  const openOver24hStr = `${summary.open_over_24h || 0} Present for More Than 24 Hours`;
 
   const kpis = [
     {
@@ -240,19 +243,13 @@ export function buildVisitsAnalytics({ summary = {}, daily = [], byCategory = []
       isTotal: true,
     },
     {
-      label: 'Inside right now',
+      label: 'People Inside Premises',
       value: String(summary.inside_now || 0),
       delta: openOver24hStr,
     },
     {
-      label: 'Avg. visit duration',
-      value: `${summary.avg_duration_min || 0} min`,
-      delta: `${durationSign}${durationDelta} min vs previous`,
-    },
-    {
       label: 'Accompanying guests',
       value: String(summary.accompanying || 0),
-      delta: formatDelta(summary.accompanying, summary.prev_accompanying, { label: 'vs previous' }),
     },
   ];
 
@@ -311,17 +308,12 @@ export function buildRegistrationsAnalytics({ summary = {}, daily = [], byCatego
     ? byCategory.map((c) => ({
       label: c.category_name,
       count: Number(c.count) || 0,
-      percentage: Math.round(((Number(c.count) || 0) / total) * 100),
+      percentage: percentageOf(c.count, total),
       color: colors.get(c.category_name),
     }))
     : [{ label: 'No registrations', count: 0, percentage: 100, color: '#E5E7EB' }];
 
-  const visitorPct = total > 0 ? Math.round(((summary.visitor_count || 0) / total) * 100) : 0;
-  const oldestDays = Number(summary.oldest_pending_days) || 0;
-  const pendingDelta = (summary.pending_approvals || 0) > 0
-    ? `Oldest waiting ${oldestDays} ${oldestDays === 1 ? 'day' : 'days'}`
-    : 'None waiting';
-
+  const visitorPct = percentageOf(summary.visitor_count, total);
   const kpis = [
     {
       label: 'New registrations',
@@ -342,7 +334,6 @@ export function buildRegistrationsAnalytics({ summary = {}, daily = [], byCatego
     {
       label: 'Pending approvals',
       value: String(summary.pending_approvals || 0),
-      delta: pendingDelta,
     },
   ];
 
@@ -396,24 +387,21 @@ export function buildOccupancyAnalytics({ summary = {}, hourly = [], byLocation 
 
   const kpis = [
     {
-      label: 'On campus now',
+      label: 'Currently Inside',
       value: String(summary.on_campus_now || 0),
       delta: peakLabel,
     },
     {
-      label: isToday ? 'Fullest location' : 'Busiest location',
+      label: isToday ? 'Most Occupied Location' : 'Busiest Location',
       value: fullest ? fullest.label : 'None',
-      delta: fullest ? `${fullest.value} ${isToday ? 'inside' : 'checked in'}` : 'No activity',
+      delta: fullest
+        ? `${fullest.value} ${isToday ? 'Currently Inside' : 'Checked In'}`
+        : (isToday ? 'No Occupancy Recorded' : 'No Check-ins Recorded'),
     },
     {
-      label: `Checked in ${dayLabel}`,
+      label: isToday ? 'Checked In Today' : `Checked In on ${formatDisplayDate(dateRange.endStr)}`,
       value: String(summary.checked_in_day || 0),
-      delta: `${summary.still_inside_from_day || 0} still inside`,
-    },
-    {
-      label: 'Open > 24 h',
-      value: String(summary.open_over_24h || 0),
-      delta: (summary.open_over_24h || 0) > 0 ? 'Needs follow-up' : 'All within 24 h',
+      delta: `${summary.still_inside_from_day || 0} of ${isToday ? "Today's" : "This Day's"} Check-ins Still Inside`,
     },
   ];
 
@@ -474,7 +462,7 @@ export function buildStaffAnalytics({ summary = {}, daily = [], onDutyByLocation
   }));
   const maxStaffLoc = Math.max(5, ...items.map((it) => it.value));
 
-  const attendancePct = activeStaff > 0 ? Math.round(((summary.present_today || 0) / activeStaff) * 100) : 0;
+  const attendancePct = percentageOf(summary.present_today, activeStaff);
   const kpis = [
     {
       label: 'Active staff',
@@ -493,11 +481,11 @@ export function buildStaffAnalytics({ summary = {}, daily = [], onDutyByLocation
       ],
     },
     {
-      label: 'Avg. hours on site',
+      label: 'Average Visit Duration',
       value: `${(Number(summary.avg_hours) || 0).toFixed(1)} h`,
       lines: [
-        { label: 'Avg. hours on site', value: `${(Number(summary.avg_hours) || 0).toFixed(1)} h` },
-        { label: 'Completed visits', value: String(summary.completed_visits || 0) },
+        { label: 'Average Visit Duration', value: `${(Number(summary.avg_hours) || 0).toFixed(1)} h` },
+        { label: 'Staff Visits Completed', value: String(summary.completed_visits || 0) },
       ],
     },
     {
@@ -569,7 +557,7 @@ export function buildApprovalsAnalytics({ summary = {}, daily = [], byOutcome = 
       return {
         label: style.label,
         count: Number(c.count) || 0,
-        percentage: Math.round(((Number(c.count) || 0) / totalActions) * 100),
+        percentage: percentageOf(c.count, totalActions),
         color: style.color,
       };
     })
@@ -577,18 +565,8 @@ export function buildApprovalsAnalytics({ summary = {}, daily = [], byOutcome = 
 
   const approved = Number(summary.approved_count) || 0;
   const decisions = approved + (Number(summary.rejected_count) || 0);
-  const approvalRate = decisions > 0 ? Math.round((approved / decisions) * 100) : 0;
+  const approvalRate = percentageOf(approved, decisions);
   const pendingCount = Number(summary.pending_count) || 0;
-
-  const avgDecisionMin = Number(summary.avg_decision_min) || 0;
-  const decisionTimeStr = avgDecisionMin >= 60
-    ? `${(avgDecisionMin / 60).toFixed(1)} h`
-    : `${avgDecisionMin} min`;
-
-  const pendingLines = [{ label: 'Pending request', value: String(pendingCount) }];
-  if (pendingCount > 0) {
-    pendingLines.push({ label: 'Waiting over 1 hour', value: String(summary.waiting_over_1h || 0) });
-  }
 
   const kpis = [
     {
@@ -614,11 +592,6 @@ export function buildApprovalsAnalytics({ summary = {}, daily = [], byOutcome = 
     {
       label: 'Pending request',
       value: String(pendingCount),
-      lines: pendingLines,
-    },
-    {
-      label: 'Average approval time',
-      value: decisions > 0 ? decisionTimeStr : '—',
     },
   ];
 
@@ -668,7 +641,6 @@ export function buildBlacklistAnalytics({ summary = {}, daily = [], reasons = []
   const maxReasonVal = Math.max(5, ...items.map((it) => it.value));
 
   const blocked = Number(summary.blocked_attempts) || 0;
-  const screenings = Number(summary.gate_screenings) || 0;
 
   const kpis = [
     {
@@ -691,14 +663,6 @@ export function buildBlacklistAnalytics({ summary = {}, daily = [], reasons = []
     {
       label: 'Blocked entry attempts',
       value: String(blocked),
-    },
-    {
-      label: 'Total gate checks',
-      value: String(screenings),
-      lines: [
-        { label: 'Total gate checks', value: String(screenings) },
-        { label: 'Not blocked', value: String(Math.max(0, screenings - blocked)) },
-      ],
     },
   ];
 

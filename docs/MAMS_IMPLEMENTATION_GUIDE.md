@@ -514,6 +514,12 @@ An authorized person-detail page can show identity/profile, category fields, doc
 
 **Reports**
 
+- Visit History shows Total visits, People Inside Premises, and Accompanying guests. The second card shows a dynamic "[count] Present for More Than 24 Hours" detail, including zero. Accompanying guests sums the saved guest count on currently open visits, regardless of the selected check-in date range; person, category, and location filters still apply. It excludes the primary person and guests from closed visits, and has no "Currently inside" subtitle.
+- Occupancy, Approvals, and Blacklist each show three KPI cards; Open > 24 h, Average approval time, and Total gate checks are no longer separate cards. Pending request has no waiting-over-one-hour line, and Person Registrations retains Pending approvals without the oldest-waiting text.
+- Staff uses the labels Average Visit Duration (hours per completed visit) and Staff Visits Completed.
+- Occupancy uses Currently Inside, Most Occupied Location, and Checked In Today for current-day cards. Empty locations show No Occupancy Recorded; the check-in card identifies how many of today's check-ins are still inside. Historical reports use Busiest Location, No Check-ins Recorded, and the selected check-in date instead of implying live location occupancy.
+- Visit History, Person Registrations, and Occupancy KPI cards use the same compact label/value row grouping and spacing as Staff. Existing labels, values, and secondary detail text are unchanged.
+- Report period comparisons use the percentage change from the previous period, rounded to whole percentages and capped at -100% to +100% for display. A zero previous count displays +100% when the current count is positive, or 0% when both are zero. Attendance, category shares, and approval rates are bounded to 0-100%; underlying counts are unchanged.
 - Reports screen loads six existing API report sections/endpoints, renders paged result sets, and offers the implemented CSV export behavior.
 - In implemented UI tests, registration status and visit-history date filters are applied; pagination uses requested page/page size; overlapping requests do not replace a newer selected page with stale data.
 - Exact mockup parity for filters and real XLSX output is not present; CSV is the supported export in the tested flows.

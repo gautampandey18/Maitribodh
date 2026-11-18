@@ -2742,7 +2742,7 @@ body.notifications-panel-open .top-bar .top-toolbar>.MuiIconButton-root {
 /* Tier 1: KPI Grid */
 .reports-kpi-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(var(--report-kpi-columns, 4), 1fr);
   gap: 12px;
   margin-bottom: 12px;
 }
@@ -5448,7 +5448,7 @@ body.notifications-panel-open .app-navigation-drawer .MuiDrawer-paper::after {
 /* Tier 1: KPI Grid */
 .reports-kpi-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(var(--report-kpi-columns, 4), 1fr);
   gap: 12px;
   margin-bottom: 12px;
 }

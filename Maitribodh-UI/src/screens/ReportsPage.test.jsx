@@ -33,6 +33,60 @@ it('gives every report tab dashboard-colored KPI tiles', () => {
   }
 });
 
+it('keeps fallback cards consistent with the revised analytics metrics', () => {
+  const expectedLabels = {
+    visits: ['Total visits', 'People Inside Premises', 'Accompanying guests'],
+    registrations: ['New registrations', 'Visitors', 'Vendors / Staff', 'Pending approvals'],
+    occupancy: ['Currently Inside', 'Most Occupied Location', 'Checked In Today'],
+    staff: ['Active staff', 'Present today', 'Average Visit Duration', 'Missed checkouts'],
+    approvals: ['Approval requests', 'Approved request', 'Pending request'],
+    blacklist: ['Currently blacklisted', 'New Blacklisted Persons', 'Blocked entry attempts'],
+  };
+  const { container, rerender } = render(<KpiGrid kpis={[]} />);
+  for (const [tab, labels] of Object.entries(expectedLabels)) {
+    const { kpis } = REPORT_TABS_CONFIG[tab];
+    expect(kpis.map(({ label }) => label)).toEqual(labels);
+    rerender(<KpiGrid kpis={kpis} />);
+    expect(container.querySelector('.reports-kpi-grid').style.getPropertyValue('--report-kpi-columns'))
+      .toBe(String(labels.length));
+    if (tab === 'registrations') expect(kpis[3].delta).toBeUndefined();
+    if (tab === 'approvals') expect(kpis[2].lines).toBeUndefined();
+    if (tab === 'staff') expect(screen.getByText('Staff Visits Completed')).toBeInTheDocument();
+    if (tab === 'visits') {
+      expect(screen.getByText('0 Present for More Than 24 Hours')).toBeInTheDocument();
+      expect(screen.queryByText('Currently inside')).not.toBeInTheDocument();
+      expect(kpis[2].delta).toBeUndefined();
+    }
+  }
+});
+
+it('aligns Visit History, Person Registrations, and Occupancy card content using the Staff layout', () => {
+  const { container, rerender } = render(<KpiGrid kpis={REPORT_TABS_CONFIG.staff.kpis} />);
+  const staffGroup = container.querySelector('.reports-kpi-card > .reports-kpi-lines');
+  expect(staffGroup).toBeInTheDocument();
+  for (const tab of ['visits', 'registrations', 'occupancy']) {
+    const kpis = REPORT_TABS_CONFIG[tab].kpis.map((kpi, index) => ({
+      ...kpi,
+      value: String(index + 12),
+    }));
+    rerender(<KpiGrid kpis={kpis} />);
+    const cards = container.querySelectorAll('.reports-kpi-card');
+    cards.forEach((card, index) => {
+      const group = card.querySelector(':scope > .reports-kpi-lines');
+      expect(group).toBeInTheDocument();
+      expect(card.children).toHaveLength(1);
+      const row = group.querySelector(':scope > .reports-kpi-line');
+      expect(row.querySelector('.reports-kpi-label')).toHaveTextContent(`${kpis[index].label}:`);
+      expect(row.querySelector('.reports-kpi-line-value')).toHaveTextContent(kpis[index].value);
+      if (kpis[index].delta) {
+        expect(group.querySelector(':scope > .reports-kpi-delta')).toHaveTextContent(kpis[index].delta);
+      } else {
+        expect(group.querySelector('.reports-kpi-delta')).not.toBeInTheDocument();
+      }
+    });
+  }
+});
+
 it('automatically loads every report section without applying filters', async () => {
   const get = vi.spyOn(api, 'get').mockImplementation((path, config) => {
     if (path === '/reports/analytics') {
@@ -296,9 +350,8 @@ it('renders KPI metric cards and graphical charts for active tabs matching live 
     tableCounter: '42 records',
     kpis: [
       { label: 'Total visits', value: '42', delta: '+15% vs previous 14 days', isTotal: true },
-      { label: 'Inside right now', value: '5', delta: 'All within 24 h' },
-      { label: 'Avg. visit duration', value: '45 min', delta: '+5 min vs previous' },
-      { label: 'Accompanying guests', value: '18', delta: '+2 vs previous' },
+      { label: 'People Inside Premises', value: '5', delta: '3 Present for More Than 24 Hours' },
+      { label: 'Accompanying guests', value: '18' },
     ],
     chartLeft: {
       type: 'stacked-bar',
@@ -335,15 +388,23 @@ it('renders KPI metric cards and graphical charts for active tabs matching live 
   // Live Visit History tab KPIs and charts
   expect((await screen.findAllByText('42')).length).toBeGreaterThanOrEqual(1);
   expect(screen.getByText('+15% vs previous 14 days')).toBeInTheDocument();
-  expect(screen.getByText('45 min')).toBeInTheDocument();
+  expect(screen.getByText('Accompanying guests').closest('.reports-kpi-card')).toHaveTextContent('18');
+  expect(screen.getByText('People Inside Premises')).toBeInTheDocument();
+  expect(screen.getByText('3 Present for More Than 24 Hours')).toBeInTheDocument();
+  expect(screen.queryByText('Currently inside')).not.toBeInTheDocument();
+  expect(screen.queryByText('Avg. visit duration')).not.toBeInTheDocument();
   expect(screen.getByText('Last 14 days · 17 Oct – 31 Oct 2026 · times in IST')).toBeInTheDocument();
   expect(screen.getByText('Daily check-ins by category')).toBeInTheDocument();
   expect(screen.getByText('Visits by category')).toBeInTheDocument();
 
   // Switch to Occupancy tab
   await user.click(screen.getByRole('tab', { name: 'Occupancy' }));
-  expect(await screen.findByText('On campus now')).toBeInTheDocument();
-  expect(screen.getByText('Fullest location')).toBeInTheDocument();
+  expect(await screen.findByText('Currently Inside')).toBeInTheDocument();
+  expect(screen.getByText('Most Occupied Location')).toBeInTheDocument();
+  expect(screen.getByText('Checked In Today')).toBeInTheDocument();
+  expect(screen.getByText('No Occupancy Recorded')).toBeInTheDocument();
+  expect(screen.getByText("0 of Today's Check-ins Still Inside")).toBeInTheDocument();
+  expect(screen.queryByText('0 still inside')).not.toBeInTheDocument();
   expect(screen.getByText('People on campus today')).toBeInTheDocument();
   expect(screen.getByText('Occupancy by location (now)')).toBeInTheDocument();
 
@@ -406,9 +467,8 @@ it('scopes the table and the KPI charts to a searched person', async () => {
     subtitle: 'Last 14 days \u00b7 times in IST',
     kpis: [
       { label: 'Total visits', value: '3', delta: '+50% vs previous 14 days', isTotal: true },
-      { label: 'Inside right now', value: '1', delta: 'All within 24 h' },
-      { label: 'Avg. visit duration', value: '25 min', delta: '+5 min vs previous' },
-      { label: 'Accompanying guests', value: '0', delta: '0% vs previous' },
+      { label: 'People Inside Premises', value: '1', delta: '0 Present for More Than 24 Hours' },
+      { label: 'Accompanying guests', value: '0' },
     ],
     chartLeft: { type: 'stacked-bar', title: 'Daily check-ins by category', xLabels: ['1'], yMax: 4, yTicks: [0, 1, 2, 3, 4], series: [] },
     chartRight: { type: 'donut', title: 'Visits by category', totalValue: '3', totalLabel: 'visits', segments: [] },
@@ -431,7 +491,7 @@ it('scopes the table and the KPI charts to a searched person', async () => {
   await user.click(screen.getByRole('button', { name: 'Apply' }));
 
   expect(await screen.findByText('Asha Patel')).toBeInTheDocument();
-  expect(await screen.findByText('25 min')).toBeInTheDocument();
+  expect(await screen.findByText('0 Present for More Than 24 Hours')).toBeInTheDocument();
   expect(screen.getByText('+50% vs previous 14 days')).toBeInTheDocument();
   expect(get).toHaveBeenCalledWith('/reports/visit-history', { params: { search: 'MB-000007', page: 1, pageSize: 5 } });
   expect(get).toHaveBeenCalledWith('/reports/analytics', { params: { tab: 'visits', search: 'MB-000007' } });

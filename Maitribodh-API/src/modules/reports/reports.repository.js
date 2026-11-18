@@ -129,10 +129,7 @@ export function createReportsRepository(pool) {
              count(*) FILTER (WHERE ${checkinDay} BETWEEN $3::date AND $4::date)::int AS prev_visits,
              count(*) FILTER (WHERE v.status = 'OPEN')::int AS inside_now,
              count(*) FILTER (WHERE v.status = 'OPEN' AND v.checkin_at < (now() - interval '24 hours'))::int AS open_over_24h,
-             coalesce(round(avg(extract(epoch FROM (v.checkout_at - v.checkin_at)) / 60) FILTER (WHERE ${checkinDay} BETWEEN $1::date AND $2::date AND v.checkout_at IS NOT NULL)), 0)::int AS avg_duration_min,
-             coalesce(round(avg(extract(epoch FROM (v.checkout_at - v.checkin_at)) / 60) FILTER (WHERE ${checkinDay} BETWEEN $3::date AND $4::date AND v.checkout_at IS NOT NULL)), 0)::int AS prev_avg_duration_min,
-             coalesce(sum(v.accompanying_count) FILTER (WHERE ${checkinDay} BETWEEN $1::date AND $2::date), 0)::int AS accompanying,
-             coalesce(sum(v.accompanying_count) FILTER (WHERE ${checkinDay} BETWEEN $3::date AND $4::date), 0)::int AS prev_accompanying
+             coalesce(sum(v.accompanying_count) FILTER (WHERE v.status = 'OPEN'), 0)::int AS accompanying
            FROM mams.visit AS v
            JOIN mams.person AS p ON p.person_id = v.person_id
           WHERE ${visitScopeSql(5)}`,

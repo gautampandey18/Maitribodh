@@ -7,9 +7,8 @@ export const REPORT_TABS_CONFIG = {
     tableCounter: '0 records',
     kpis: [
       { label: 'Total visits', value: '0', delta: '0% vs previous period', isTotal: true },
-      { label: 'Inside right now', value: '0', delta: 'None inside' },
-      { label: 'Avg. visit duration', value: '0 min', delta: '0 min vs previous' },
-      { label: 'Accompanying guests', value: '0', delta: '0% vs previous' },
+      { label: 'People Inside Premises', value: '0', delta: '0 Present for More Than 24 Hours' },
+      { label: 'Accompanying guests', value: '0' },
     ],
     chartLeft: {
       type: 'stacked-bar',
@@ -37,7 +36,7 @@ export const REPORT_TABS_CONFIG = {
       { label: 'New registrations', value: '0', delta: '0% vs previous period', isTotal: true },
       { label: 'Visitors', value: '0', delta: '0% of new' },
       { label: 'Vendors / Staff', value: '0 / 0', delta: 'This period' },
-      { label: 'Pending approvals', value: '0', delta: 'None waiting' },
+      { label: 'Pending approvals', value: '0' },
     ],
     chartLeft: {
       type: 'stacked-bar',
@@ -62,10 +61,9 @@ export const REPORT_TABS_CONFIG = {
     tableTitle: 'Locations',
     tableCounter: '0 locations',
     kpis: [
-      { label: 'On campus now', value: '0', delta: 'Nobody on campus today' },
-      { label: 'Fullest location', value: 'None', delta: 'No activity' },
-      { label: 'Checked in today', value: '0', delta: '0 still inside' },
-      { label: 'Open > 24 h', value: '0', delta: 'All within 24 h' },
+      { label: 'Currently Inside', value: '0', delta: 'Nobody on campus today' },
+      { label: 'Most Occupied Location', value: 'None', delta: 'No Occupancy Recorded' },
+      { label: 'Checked In Today', value: '0', delta: "0 of Today's Check-ins Still Inside" },
     ],
     chartLeft: {
       type: 'area-line',
@@ -101,9 +99,9 @@ export const REPORT_TABS_CONFIG = {
         lines: [{ label: 'Present today', value: '0' }, { label: 'Attendance', value: '0%' }],
       },
       {
-        label: 'Avg. hours on site',
+        label: 'Average Visit Duration',
         value: '0 h',
-        lines: [{ label: 'Avg. hours on site', value: '0 h' }, { label: 'Completed visits', value: '0' }],
+        lines: [{ label: 'Average Visit Duration', value: '0 h' }, { label: 'Staff Visits Completed', value: '0' }],
       },
       {
         label: 'Missed checkouts',
@@ -144,7 +142,6 @@ export const REPORT_TABS_CONFIG = {
         lines: [{ label: 'Approved request', value: '0' }, { label: 'Approval rate', value: '—' }],
       },
       { label: 'Pending request', value: '0' },
-      { label: 'Average approval time', value: '—' },
     ],
     chartLeft: {
       type: 'stacked-bar',
@@ -181,11 +178,6 @@ export const REPORT_TABS_CONFIG = {
         lines: [{ label: 'New Blacklisted Persons', value: '0' }, { label: 'Blacklist Removed', value: '0' }],
       },
       { label: 'Blocked entry attempts', value: '0' },
-      {
-        label: 'Total gate checks',
-        value: '0',
-        lines: [{ label: 'Total gate checks', value: '0' }, { label: 'Not blocked', value: '0' }],
-      },
     ],
     chartLeft: {
       type: 'stacked-bar',
@@ -215,31 +207,22 @@ const kpiColors = [
 export function KpiGrid({ kpis }) {
   if (!kpis || !kpis.length) return null;
   return (
-    <Box className="reports-kpi-grid" aria-label="Key Performance Indicators">
+    <Box className="reports-kpi-grid" aria-label="Key Performance Indicators" style={{ '--report-kpi-columns': Math.min(kpis.length, 4) }}>
       {kpis.map((kpi, index) => (
         <Box key={kpi.label} className="reports-kpi-card" style={{
           '--report-kpi-accent': kpiColors[index % kpiColors.length][0],
           '--report-kpi-background': kpiColors[index % kpiColors.length][1],
           '--report-kpi-border': kpiColors[index % kpiColors.length][2],
         }}>
-          {kpi.lines ? (
-            <Box className="reports-kpi-lines">
-              {kpi.lines.map((line) => (
-                <Box key={line.label} className="reports-kpi-line">
-                  <Typography className="reports-kpi-label">{line.label}<span>:</span></Typography>
-                  <Typography className="reports-kpi-line-value">{line.value}</Typography>
-                </Box>
-              ))}
-            </Box>
-          ) : (
-            <>
-              <Box className="reports-kpi-line">
-                <Typography className="reports-kpi-label">{kpi.label}<span>:</span></Typography>
-                <Typography className="reports-kpi-line-value">{kpi.value}</Typography>
+          <Box className="reports-kpi-lines">
+            {(kpi.lines || [kpi]).map((line) => (
+              <Box key={line.label} className="reports-kpi-line">
+                <Typography className="reports-kpi-label">{line.label}<span>:</span></Typography>
+                <Typography className="reports-kpi-line-value">{line.value}</Typography>
               </Box>
-              {kpi.delta && <Typography className="reports-kpi-delta">{kpi.delta}</Typography>}
-            </>
-          )}
+            ))}
+            {!kpi.lines && kpi.delta && <Typography className="reports-kpi-delta">{kpi.delta}</Typography>}
+          </Box>
         </Box>
       ))}
     </Box>
@@ -611,4 +594,3 @@ export function ReportChartsSection({ selectedKey, liveConfig, loading }) {
     </Box>
   );
 }
-
