@@ -9,10 +9,78 @@ import { createReportsService } from '../src/modules/reports/reports.service.js'
 import { createReportsRepository } from '../src/modules/reports/reports.repository.js';
 import {
   buildApprovalsAnalytics,
+  buildBlacklistAnalytics,
   buildOccupancyAnalytics,
+  buildRegistrationsAnalytics,
+  buildStaffAnalytics,
   buildVisitsAnalytics,
+  formatDelta,
   getIstDateRange,
 } from '../src/modules/reports/reports.analytics.js';
+
+test('percentage comparisons preserve normal changes and cap growth at 100 percent', () => {
+  const cases = [
+    [11, 4, '+100%'],
+    [200, 1, '+100%'],
+    [8, 4, '+100%'],
+    [7, 4, '+75%'],
+    [4, 4, '+0%'],
+    [1, 4, '-75%'],
+    [0, 4, '-100%'],
+    [4, 0, '+100%'],
+    [0, 0, '0%'],
+    ['7', '4', '+75%'],
+    [2, 3, '-33%'],
+  ];
+  for (const [current, previous, expected] of cases) {
+    assert.equal(formatDelta(current, previous), `${expected} vs previous period`);
+  }
+});
+
+test('all period-comparison cards cap percentages and preserve comparison labels', () => {
+  for (const days of [1, 14]) {
+    const dateRange = getIstDateRange({ fromDate: '2026-10-01', toDate: `2026-10-${String(days).padStart(2, '0')}` });
+    const label = days === 1 ? 'vs previous day' : 'vs previous 14 days';
+    const visits = buildVisitsAnalytics({ summary: { current_visits: 11, prev_visits: 4 }, dateRange });
+    const registrations = buildRegistrationsAnalytics({
+      summary: { current_registrations: 11, prev_registrations: 4 }, dateRange,
+    });
+    const approvals = buildApprovalsAnalytics({ summary: { total_requests: 11, prev_requests: 4 }, dateRange });
+    assert.equal(visits.kpis[0].delta, `+100% ${label}`);
+    assert.equal(registrations.kpis[0].delta, `+100% ${label}`);
+    assert.deepEqual(approvals.kpis[0].lines[1], { label: `Change ${label}`, value: '+100%' });
+    assert.equal(visits.kpis[0].value, '11');
+    assert.equal(registrations.kpis[0].value, '11');
+    assert.equal(approvals.kpis[0].value, '11');
+  }
+});
+
+test('report share and attendance percentages stay within zero to 100 without changing counts', () => {
+  const dateRange = getIstDateRange();
+  for (const [count, expected] of [[11, 100], [3, 75], [0, 0]]) {
+    const byCategory = [{ category_name: 'Visitor', count }];
+    const visits = buildVisitsAnalytics({ summary: { current_visits: 4 }, byCategory, dateRange });
+    const registrations = buildRegistrationsAnalytics({
+      summary: { current_registrations: 4, visitor_count: count }, byCategory, dateRange,
+    });
+    const staff = buildStaffAnalytics({ summary: { active_staff: 4, present_today: count }, dateRange });
+    assert.equal(visits.chartRight.segments[0].percentage, expected);
+    assert.equal(visits.chartRight.segments[0].count, count);
+    assert.equal(registrations.chartRight.segments[0].percentage, expected);
+    assert.equal(registrations.kpis[1].delta, `${expected}% of new`);
+    assert.equal(staff.kpis[1].lines[1].value, `${expected}%`);
+    assert.equal(staff.kpis[1].value, String(count));
+  }
+  const staff = buildStaffAnalytics({ summary: { active_staff: 0, present_today: 0 }, dateRange });
+  assert.equal(staff.kpis[1].lines[1].value, '0%');
+  const approvals = buildApprovalsAnalytics({
+    summary: { approved_count: 3, rejected_count: 1 },
+    byOutcome: [{ action: 'APPROVED', count: 3 }, { action: 'REJECTED', count: 1 }],
+    dateRange,
+  });
+  assert.equal(approvals.kpis[1].lines[1].value, '75%');
+  assert.deepEqual(approvals.chartRight.segments.map(({ percentage }) => percentage), [75, 25]);
+});
 
 test('visit history uses the approved date, category, and location filters', async () => {
   let call;
@@ -497,10 +565,7 @@ test('reports repository analytics generates structured config for each tab', as
             prev_visits: 10,
             inside_now: 2,
             open_over_24h: 1,
-            avg_duration_min: 35,
-            prev_avg_duration_min: 30,
             accompanying: 4,
-            prev_accompanying: 2,
           }],
         };
       }
@@ -510,7 +575,8 @@ test('reports repository analytics generates structured config for each tab', as
 
   const analytics = await repository.analytics({ tab: 'visits', fromDate: '2026-10-01', toDate: '2026-10-14' });
   assert.equal(typeof analytics.subtitle, 'string');
-  assert.equal(analytics.kpis.length, 4);
+  assert.equal(analytics.kpis.length, 3);
+  assert.deepEqual(analytics.kpis[2], { label: 'Accompanying guests', value: '4' });
   assert.equal(analytics.chartLeft.type, 'stacked-bar');
   assert.equal(analytics.chartRight.type, 'donut');
 });
@@ -564,7 +630,7 @@ test('analytics queries are scoped by person search and tab filters', async () =
         assert.ok(call.values.includes(value), `${tab} query should include ${value}`);
       }
     }
-    assert.equal(analytics.kpis.length, 4);
+    assert.equal(analytics.kpis.length, ['registrations', 'staff'].includes(tab) ? 4 : 3);
   }
   await assert.rejects(createReportsRepository({ async query() { return { rows: [] }; } }).analytics({ tab: 'nope' }), { statusCode: 400 });
 });
@@ -632,15 +698,14 @@ test('visit analytics zero-fill empty days and use one color per category in bot
 
 test('approval analytics compute the rate from decisions only', () => {
   const analytics = buildApprovalsAnalytics({
-    summary: { total_requests: 10, approved_count: 3, rejected_count: 1, pending_count: 0, avg_decision_min: 90 },
+    summary: { total_requests: 10, approved_count: 3, rejected_count: 1, pending_count: 2, waiting_over_1h: 1, avg_decision_min: 90 },
     byOutcome: [{ action: 'SUBMITTED', count: 10 }, { action: 'APPROVED', count: 3 }, { action: 'REJECTED', count: 1 }],
     dateRange: getIstDateRange({ fromDate: '2026-10-01', toDate: '2026-10-02' }),
   });
 
-  assert.equal(analytics.kpis[1].delta, '75% approval rate');
-  assert.equal(analytics.kpis[2].delta, 'None waiting');
-  assert.equal(analytics.kpis[3].label, 'Avg. decision time');
-  assert.equal(analytics.kpis[3].value, '1.5 h');
+  assert.deepEqual(analytics.kpis[1].lines[1], { label: 'Approval rate', value: '75%' });
+  assert.equal(analytics.kpis.length, 3);
+  assert.deepEqual(analytics.kpis[2], { label: 'Pending request', value: '2' });
   assert.equal(analytics.chartRight.totalValue, '14');
 });
 
@@ -655,7 +720,96 @@ test('occupancy analytics describe a past day instead of live data', () => {
   assert.equal(analytics.subtitle, '1 Oct 2026 · times in IST');
   assert.deepEqual(analytics.chartLeft.xLabels, ['12a', '9a']);
   assert.equal(analytics.chartLeft.peakLabel, 'Peak 3 at 9a');
-  assert.equal(analytics.kpis[1].label, 'Busiest location');
+  assert.equal(analytics.kpis[0].label, 'Currently Inside');
+  assert.equal(analytics.kpis[1].label, 'Busiest Location');
   assert.equal(analytics.kpis[1].value, 'Main Hall');
+  assert.equal(analytics.kpis[1].delta, '3 Checked In');
+  assert.equal(analytics.kpis[2].label, 'Checked In on 1 Oct');
+  assert.equal(analytics.kpis[2].delta, "1 of This Day's Check-ins Still Inside");
   assert.equal(analytics.chartRight.title, 'Check-ins by location');
+});
+
+test('occupancy cards use clear current-day labels and meaningful zero-state details', () => {
+  const dateRange = { ...getIstDateRange(), endStr: '2026-10-01', todayStr: '2026-10-01' };
+  const empty = buildOccupancyAnalytics({ dateRange });
+  assert.deepEqual(empty.kpis[1], {
+    label: 'Most Occupied Location', value: 'None', delta: 'No Occupancy Recorded',
+  });
+  assert.deepEqual(empty.kpis[2], {
+    label: 'Checked In Today', value: '0', delta: "0 of Today's Check-ins Still Inside",
+  });
+  const populated = buildOccupancyAnalytics({
+    summary: { on_campus_now: 5, checked_in_day: 8, still_inside_from_day: 3 },
+    byLocation: [{ name: 'Main Hall', count: 4 }], dateRange,
+  });
+  assert.equal(populated.kpis[0].label, 'Currently Inside');
+  assert.equal(populated.kpis[0].value, '5');
+  assert.deepEqual(populated.kpis[1], {
+    label: 'Most Occupied Location', value: 'Main Hall', delta: '4 Currently Inside',
+  });
+  assert.deepEqual(populated.kpis[2], {
+    label: 'Checked In Today', value: '8', delta: "3 of Today's Check-ins Still Inside",
+  });
+  const historical = buildOccupancyAnalytics({
+    dateRange: { ...dateRange, todayStr: '2026-10-02' },
+  });
+  assert.equal(historical.kpis[1].delta, 'No Check-ins Recorded');
+});
+
+test('accompanying guests sum open visits independently of check-in dates and retain person filters', async () => {
+  const calls = [];
+  const repository = createReportsRepository({
+    async query(sql, values) {
+      calls.push({ sql, values });
+      return { rows: sql.includes('AS accompanying') ? [{ accompanying: 7 }] : [] };
+    },
+  });
+  const analytics = await repository.analytics({
+    tab: 'visits', fromDate: '2026-10-01', toDate: '2026-10-02',
+    search: 'Asha', categoryId: 3, locationId: 5,
+  });
+  const summary = calls.find(({ sql }) => sql.includes('AS accompanying'));
+  assert.match(summary.sql, /sum\(v\.accompanying_count\) FILTER \(WHERE v\.status = 'OPEN'\), 0\)::int AS accompanying/);
+  assert.doesNotMatch(summary.sql, /prev_accompanying/);
+  assert.match(summary.sql, /p\.category_id = \$6/);
+  assert.match(summary.sql, /v\.checkin_location_id = \$7/);
+  assert.deepEqual(summary.values.slice(4), ['Asha', 3, 5]);
+  assert.deepEqual(analytics.kpis[2], { label: 'Accompanying guests', value: '7' });
+
+  const empty = buildVisitsAnalytics({ dateRange: getIstDateRange() });
+  assert.deepEqual(empty.kpis[2], { label: 'Accompanying guests', value: '0' });
+});
+
+test('Visit History labels the people inside and dynamically counts stays over 24 hours', () => {
+  for (const [inside, overdue] of [[5, 3], [2, 0], [0, 0]]) {
+    const analytics = buildVisitsAnalytics({
+      summary: { inside_now: inside, open_over_24h: overdue },
+      dateRange: getIstDateRange(),
+    });
+    assert.deepEqual(analytics.kpis[1], {
+      label: 'People Inside Premises',
+      value: String(inside),
+      delta: `${overdue} Present for More Than 24 Hours`,
+    });
+  }
+});
+
+test('report cards omit removed metrics and use the requested staff labels', () => {
+  const dateRange = getIstDateRange();
+  const registrations = buildRegistrationsAnalytics({
+    summary: { pending_approvals: 4, oldest_pending_days: 3 }, dateRange,
+  });
+  assert.deepEqual(registrations.kpis[3], { label: 'Pending approvals', value: '4' });
+  const occupancy = buildOccupancyAnalytics({ summary: { open_over_24h: 4 }, dateRange });
+  assert.equal(occupancy.kpis.length, 3);
+  assert.ok(occupancy.kpis.every(({ label }) => label !== 'Open > 24 h'));
+  const blacklist = buildBlacklistAnalytics({ summary: { gate_screenings: 51, blocked_attempts: 3 }, dateRange });
+  assert.equal(blacklist.kpis.length, 3);
+  assert.deepEqual(blacklist.kpis[2], { label: 'Blocked entry attempts', value: '3' });
+  const staff = buildStaffAnalytics({ summary: { avg_hours: 20.5, completed_visits: 4 }, dateRange });
+  assert.equal(staff.kpis[2].label, 'Average Visit Duration');
+  assert.deepEqual(staff.kpis[2].lines, [
+    { label: 'Average Visit Duration', value: '20.5 h' },
+    { label: 'Staff Visits Completed', value: '4' },
+  ]);
 });

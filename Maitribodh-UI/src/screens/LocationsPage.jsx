@@ -113,6 +113,8 @@ export default function LocationsPage() {
     loadData(0, rowsPerPage, { query: '', locationType: '' });
   }
 
+  const filtersUnchanged = query.trim() === activeFilters.query && locationTypeFilter === activeFilters.locationType;
+
   function openCreate() {
     setEditing(null);
     setLocationForm(emptyLocation);
@@ -206,7 +208,7 @@ export default function LocationsPage() {
           <TextField label="Type" select value={locationTypeFilter} onChange={(event) => setLocationTypeFilter(event.target.value)} sx={{ minWidth: 150 }}>
             <MenuItem value="">Gates and areas</MenuItem>{locationTypes.map((item) => <MenuItem key={item} value={item}>{item === 'GATE' ? 'Gates' : 'Areas'}</MenuItem>)}
           </TextField>
-          <Button type="submit" variant="contained" color="secondary" startIcon={<SearchOutlinedIcon />} disabled={loading}>Apply</Button>
+          <Button type="submit" variant="contained" color="secondary" startIcon={<SearchOutlinedIcon />} disabled={loading || filtersUnchanged}>Apply</Button>
           <Button type="button" onClick={clearFilters} disabled={loading || (!activeFilters.query && !activeFilters.locationType && !query && !locationTypeFilter)}>Clear</Button>
           <Button
             className="master-data-add-action"
