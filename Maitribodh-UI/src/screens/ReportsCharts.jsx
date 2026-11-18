@@ -7,9 +7,8 @@ export const REPORT_TABS_CONFIG = {
     tableCounter: '0 records',
     kpis: [
       { label: 'Total visits', value: '0', delta: '0% vs previous period', isTotal: true },
-      { label: 'Inside right now', value: '0', delta: 'None inside' },
-      { label: 'Avg. visit duration', value: '0 min', delta: '0 min vs previous' },
-      { label: 'Accompanying guests', value: '0', delta: '0% vs previous' },
+      { label: 'People Inside Premises', value: '0', delta: '0 Present for More Than 24 Hours' },
+      { label: 'Accompanying guests', value: '0' },
     ],
     chartLeft: {
       type: 'stacked-bar',
@@ -37,7 +36,7 @@ export const REPORT_TABS_CONFIG = {
       { label: 'New registrations', value: '0', delta: '0% vs previous period', isTotal: true },
       { label: 'Visitors', value: '0', delta: '0% of new' },
       { label: 'Vendors / Staff', value: '0 / 0', delta: 'This period' },
-      { label: 'Pending approvals', value: '0', delta: 'None waiting' },
+      { label: 'Pending approvals', value: '0' },
     ],
     chartLeft: {
       type: 'stacked-bar',
@@ -62,10 +61,9 @@ export const REPORT_TABS_CONFIG = {
     tableTitle: 'Locations',
     tableCounter: '0 locations',
     kpis: [
-      { label: 'On campus now', value: '0', delta: 'Nobody on campus today' },
-      { label: 'Fullest location', value: 'None', delta: 'No activity' },
-      { label: 'Checked in today', value: '0', delta: '0 still inside' },
-      { label: 'Open > 24 h', value: '0', delta: 'All within 24 h' },
+      { label: 'Currently Inside', value: '0', delta: 'Nobody on campus today' },
+      { label: 'Most Occupied Location', value: 'None', delta: 'No Occupancy Recorded' },
+      { label: 'Checked In Today', value: '0', delta: "0 of Today's Check-ins Still Inside" },
     ],
     chartLeft: {
       type: 'area-line',
@@ -90,10 +88,26 @@ export const REPORT_TABS_CONFIG = {
     tableTitle: 'Staff',
     tableCounter: '0 records',
     kpis: [
-      { label: 'Active staff', value: '0', delta: '0 registered this period' },
-      { label: 'Present today', value: '0', delta: '0% attendance' },
-      { label: 'Avg. hours on site', value: '0 h', delta: '0 completed visits' },
-      { label: 'Missed checkouts', value: '0', delta: 'All checked out' },
+      {
+        label: 'Active staff',
+        value: '0',
+        lines: [{ label: 'Active staff', value: '0' }, { label: 'New Staff Registered', value: '0' }],
+      },
+      {
+        label: 'Present today',
+        value: '0',
+        lines: [{ label: 'Present today', value: '0' }, { label: 'Attendance', value: '0%' }],
+      },
+      {
+        label: 'Average Visit Duration',
+        value: '0 h',
+        lines: [{ label: 'Average Visit Duration', value: '0 h' }, { label: 'Staff Visits Completed', value: '0' }],
+      },
+      {
+        label: 'Missed checkouts',
+        value: '0',
+        lines: [{ label: 'Missed checkouts (over 12 h)', value: '0' }, { label: 'Checked out today', value: '0' }],
+      },
     ],
     chartLeft: {
       type: 'stacked-bar',
@@ -116,10 +130,18 @@ export const REPORT_TABS_CONFIG = {
     tableTitle: 'Approval activity',
     tableCounter: '0 records',
     kpis: [
-      { label: 'Approval requests', value: '0', delta: '0% vs previous period', isTotal: true },
-      { label: 'Approved', value: '0', delta: 'No decisions yet' },
-      { label: 'Pending', value: '0', delta: 'None waiting' },
-      { label: 'Avg. decision time', value: '—', delta: '0 decisions this period' },
+      {
+        label: 'Approval requests',
+        value: '0',
+        lines: [{ label: 'Approval requests', value: '0' }, { label: 'Change vs previous period', value: '0%' }],
+        isTotal: true,
+      },
+      {
+        label: 'Approved request',
+        value: '0',
+        lines: [{ label: 'Approved request', value: '0' }, { label: 'Approval rate', value: '—' }],
+      },
+      { label: 'Pending request', value: '0' },
     ],
     chartLeft: {
       type: 'stacked-bar',
@@ -144,10 +166,18 @@ export const REPORT_TABS_CONFIG = {
     tableTitle: 'Blacklisted persons',
     tableCounter: '0 records',
     kpis: [
-      { label: 'On blacklist', value: '0', delta: '0 active', isTotal: true },
-      { label: 'Added this period', value: '0', delta: 'None added' },
-      { label: 'Blocked entry attempts', value: '0', delta: 'None blocked' },
-      { label: 'Gate screenings', value: '0', delta: '0 not blocked' },
+      {
+        label: 'Currently blacklisted',
+        value: '0',
+        lines: [{ label: 'Currently blacklisted', value: '0' }, { label: 'Expiring in 7 days', value: '0' }],
+        isTotal: true,
+      },
+      {
+        label: 'New Blacklisted Persons',
+        value: '0',
+        lines: [{ label: 'New Blacklisted Persons', value: '0' }, { label: 'Blacklist Removed', value: '0' }],
+      },
+      { label: 'Blocked entry attempts', value: '0' },
     ],
     chartLeft: {
       type: 'stacked-bar',
@@ -177,16 +207,22 @@ const kpiColors = [
 export function KpiGrid({ kpis }) {
   if (!kpis || !kpis.length) return null;
   return (
-    <Box className="reports-kpi-grid" aria-label="Key Performance Indicators">
+    <Box className="reports-kpi-grid" aria-label="Key Performance Indicators" style={{ '--report-kpi-columns': Math.min(kpis.length, 4) }}>
       {kpis.map((kpi, index) => (
         <Box key={kpi.label} className="reports-kpi-card" style={{
           '--report-kpi-accent': kpiColors[index % kpiColors.length][0],
           '--report-kpi-background': kpiColors[index % kpiColors.length][1],
           '--report-kpi-border': kpiColors[index % kpiColors.length][2],
         }}>
-          <Typography className="reports-kpi-label">{kpi.label}</Typography>
-          <Typography className="reports-kpi-value">{kpi.value}</Typography>
-          <Typography className="reports-kpi-delta">{kpi.delta}</Typography>
+          <Box className="reports-kpi-lines">
+            {(kpi.lines || [kpi]).map((line) => (
+              <Box key={line.label} className="reports-kpi-line">
+                <Typography className="reports-kpi-label">{line.label}<span>:</span></Typography>
+                <Typography className="reports-kpi-line-value">{line.value}</Typography>
+              </Box>
+            ))}
+            {!kpi.lines && kpi.delta && <Typography className="reports-kpi-delta">{kpi.delta}</Typography>}
+          </Box>
         </Box>
       ))}
     </Box>
@@ -558,4 +594,3 @@ export function ReportChartsSection({ selectedKey, liveConfig, loading }) {
     </Box>
   );
 }
-

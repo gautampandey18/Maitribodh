@@ -116,6 +116,8 @@ export default function CategoriesPage() {
     loadData(0, rowsPerPage, { query: '', formType: '', status: '' });
   }
 
+  const filtersUnchanged = query.trim() === activeFilters.query && formTypeFilter === activeFilters.formType && statusFilter === activeFilters.status;
+
   function openCreate() {
     setEditing(null);
     reset(emptyValues);
@@ -196,7 +198,7 @@ export default function CategoriesPage() {
           <TextField label="Status" select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} sx={{ minWidth: 145 }}>
             <MenuItem value="">All statuses</MenuItem>{categoryStatuses.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
           </TextField>
-          <Button type="submit" variant="contained" color="secondary" startIcon={<SearchOutlinedIcon />} disabled={loading}>Apply</Button>
+          <Button type="submit" variant="contained" color="secondary" startIcon={<SearchOutlinedIcon />} disabled={loading || filtersUnchanged}>Apply</Button>
           <Button type="button" onClick={clearFilters} disabled={loading || (!activeFilters.query && !activeFilters.formType && !activeFilters.status && !query && !formTypeFilter && !statusFilter)}>Clear</Button>
           <Button className="master-data-add-action" type="button" variant="contained" color="primary" startIcon={<AddIcon />} onClick={openCreate}>
             Add category

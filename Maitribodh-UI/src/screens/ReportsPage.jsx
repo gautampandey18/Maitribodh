@@ -21,7 +21,7 @@ import {
 } from '@mui/material';
 import CalendarTodayOutlinedIcon from '@mui/icons-material/CalendarTodayOutlined';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
-import RestartAltOutlinedIcon from '@mui/icons-material/RestartAltOutlined';
+import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined';
 import { api } from '../api.js';
 import { requestMessage } from '../utils/resources.js';
 import { REPORT_TABS_CONFIG, ReportChartsSection } from './ReportsCharts.jsx';
@@ -147,6 +147,7 @@ export default function ReportsPage() {
   const currentAnalytics = analyticsData[selectedKey];
   const tabConfig = currentAnalytics || REPORT_TABS_CONFIG[selectedKey] || REPORT_TABS_CONFIG.visits;
   const hasActiveFilters = Object.values(filters).some(Boolean);
+  const filtersUnchanged = Object.keys(emptyFilters).every((name) => filters[name] === appliedFilters.current[name]);
 
   function updateFilter(name, value) {
     setFilters((current) => ({ ...current, [name]: value }));
@@ -461,19 +462,12 @@ export default function ReportsPage() {
               />
             ))}
             <Box className="report-filter-actions">
-              <Button type="submit" variant="contained" color="secondary" disabled={loading}>
-                {loading && <CircularProgress size={18} sx={{ mr: 1 }} />}
-                Run report
+              <Button type="submit" variant="contained" color="secondary" startIcon={<SearchOutlinedIcon />} disabled={loading || filtersUnchanged}>
+                Apply
               </Button>
               {hasActiveFilters && (
-                <Button
-                  variant="outlined"
-                  color="inherit"
-                  onClick={resetFilters}
-                  disabled={loading}
-                  startIcon={<RestartAltOutlinedIcon />}
-                >
-                  Reset
+                <Button type="button" onClick={resetFilters} disabled={loading}>
+                  Clear
                 </Button>
               )}
             </Box>
@@ -501,13 +495,13 @@ export default function ReportsPage() {
             <TableContainer>
               <Table size="medium" aria-label={`${report.title} results`}>
                 <TableHead className="report-table-head">
-                  <TableRow>{columns.map((column) => <TableCell key={column}>{columnLabel(column)}</TableCell>)}</TableRow>
+                  <TableRow>{columns.map((column) => <TableCell key={column} align="center">{columnLabel(column)}</TableCell>)}</TableRow>
                 </TableHead>
                 <TableBody>
                   {items.map((item, index) => (
                     <TableRow key={`${item.person_code ?? item.day ?? 'row'}-${index}`} hover>
                       {columns.map((column) => (
-                        <TableCell key={column}>
+                        <TableCell key={column} align="center">
                           {renderCellContent(column, item[column])}
                         </TableCell>
                       ))}
@@ -570,9 +564,22 @@ function renderCellContent(column, value) {
 
 function formatCell(value) {
   if (value === null || value === undefined || value === '') return '—';
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
   const timestamp = value instanceof Date ? value.toISOString() : String(value);
-  const match = timestamp.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
-  if (!match) return timestamp;
-  const [, year, month, day, hour, minute, second] = match;
-  return `${day}-${month}-${year}/${hour}:${minute}:${second}`;
+  const dateOnly = timestamp.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (dateOnly) return `${dateOnly[3]}-${dateOnly[2]}-${dateOnly[1]}`;
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(timestamp)) return timestamp;
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return timestamp;
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date).map(({ type, value: part }) => [type, part]));
+  return `${parts.day}-${parts.month}-${parts.year}/${parts.hour}:${parts.minute}:${parts.second}`;
 }
